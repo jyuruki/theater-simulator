@@ -23,10 +23,12 @@ The official sources establish TITAN LUXE at the complex but do not identify its
 ## Coordinate system
 
 - One world unit equals one meter.
-- `+X` runs toward the sketch's right end of the main theater hall.
+- Layout data remains in hand-drawn **plan space**, where `+X` runs toward the sketch's right end of the main theater hall.
+- The rendered world reflects plan X about the entrance centerline at `X = 1.5`: `worldX = 3 - planX`. This is why sketch-left concessions are physically on an entering guest's left without mirroring signs or text.
+- The HUD and minimap transform both player position and look direction back into plan space; mouse input itself is not inverted.
 - `+Z` runs from the front entrance through the lobby toward the north-side auditoriums.
 - `+Y` is elevation.
-- The player begins outside the main lobby entrance at approximately `(1.5, 0, -5.2)`.
+- The player begins outside the main lobby entrance at approximately plan `(1.5, 0, -6.8)`.
 
 ## Auditorium families
 
@@ -37,17 +39,21 @@ The official sources establish TITAN LUXE at the complex but do not identify its
 | Large | 3, 6, 7, 8 | 17.5 × 23 m | 148, 148, 153, 152 |
 | Standard | 9–14 | 10.5 × 13.5 m | 50 each |
 
-Every auditorium has a procedural screen, raised seating tiers, a walkable stepped center aisle, acoustic panels, entry signage, and instanced seat components. Theater 3 uses the large-format/TITAN LUXE scale. These are proportional gameplay interpretations rather than real construction dimensions.
+Every auditorium has a procedural screen, raised seating tiers, walkable aisle elevations, acoustic panels, entry signage, and instanced seat components. Theater 3 uses the large-format/TITAN LUXE scale. These are proportional gameplay interpretations rather than real construction dimensions.
 
 ## Sketch interpretations
 
-- The entrance leads into the lobby/service block, then a narrower ticket approach, then the long east–west theater hall.
+- The entrance leads into a large gray-stone lobby/service block, then a long maroon-carpeted ticket approach, then the narrow east–west theater hall.
+- A self-serve court sits straight ahead beyond ticket check. Its first island carries `ICEE | soda | cups/lids/straws | soda | ICEE`; the equal-length counter behind it is intentionally empty for later gameplay. A support room occupies its sketch-left side.
 - The upper-right handwritten room is interpreted as **Candy Storage**.
 - `KS`, `K`, `B`, `C`, and `OFF` are Kitchen Storage, Kitchen, Bar, Concession, and Office.
 - `BB` and `GB` are represented as men's and women's restrooms. The supplied green/blue/yellow fixture key is translated to stalls/sinks/urinals.
 - The dotted `STOCK` area behind Theaters 4/5 is treated as lower-level usher/soda stock, not as a main-floor room.
-- Other dotted storage is represented as below-tier storage associated with the stadium rake. Doors are shown as spatial markers, but the lower floor is reserved for a later vertical-layout pass.
-- Theater 3 receives a narrow access passage around the restroom block. The dogleg entries around Theaters 7/8 are simplified until measurements are available.
+- Other dotted storage is represented as below-tier storage associated with the stadium rake. Theater 3's left-hand storage door and Theater 6's paired storage doors are present; final lower-floor elevations still need field confirmation.
+- Theater 3 has a long side passage, left-hand storage door, then a left turn into its seating area. Theater 6 has a long transverse hall followed by a left turn up its side aisle.
+- Theaters 4 and 5 are inset beyond the soda court with opposite left/right doglegs. Theaters 7 and 8 use recessed soundlocks and straight side aisles, with their seating banks on the right.
+- Theaters 1, 2, and 9–14 use recessed entry cubbies with side doors and trash cans rather than centered straight openings.
+- The main restrooms have privacy-entry returns. The explicit trash room and both doors to provisionally empty restroom shells are included even though their interior uses remain to be confirmed.
 - Red sketch marks are interpreted as public doors or egress points where the circulation context supports that reading. Door swing and exact handing are provisional.
 - The lobby mural is an original procedural island-botanical composition inspired by local design character; it is not a copy of an existing artwork.
 
@@ -60,7 +66,7 @@ The model will improve fastest with any of the following, even as phone photos o
 3. Which side of each auditorium door the seating aisle begins on
 4. Theater row counts, aisle locations, and accessible seating gaps
 5. A clearer service-block plan showing employee doors between concession, kitchen, storage, office, and bar
-6. Confirmation of the dotted lower-storage footprints and their stair/door access
+6. Confirmation of the dotted lower-storage footprints, elevations, and stair/door access
 7. Restroom entry turns and fixture counts/positions
 
 The complete spatial data is centralized in `src/layout-data.js`, so corrected measurements can be applied without rewriting the renderer or controller.

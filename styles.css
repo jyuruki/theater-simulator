@@ -395,9 +395,9 @@ button {
   letter-spacing: 0.18em;
 }
 
-#touch-run {
+#touch-run,
+#touch-jump {
   position: absolute;
-  right: 32px;
   bottom: 12px;
   width: 62px;
   height: 62px;
@@ -410,6 +410,16 @@ button {
   font-size: 9px;
   font-weight: 900;
   letter-spacing: 0.1em;
+}
+
+#touch-run {
+  right: 32px;
+}
+
+#touch-jump {
+  right: 108px;
+  border-color: rgba(104, 163, 216, 0.55);
+  background: rgba(47, 93, 132, 0.58);
 }
 
 @media (max-width: 760px), (pointer: coarse) {

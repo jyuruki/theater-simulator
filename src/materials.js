@@ -170,6 +170,181 @@ function createTileCanvas() {
   return canvas;
 }
 
+function createLobbyStoneCanvas() {
+  const size = 512;
+  const slabSize = size / 2;
+  const canvas = createCanvas(size, size);
+  const context = context2d(canvas);
+  const random = seededRandom("mililani-cool-gray-honed-stone-v3");
+
+  // The undercoat becomes a consistent grout line when the map repeats.
+  context.fillStyle = "#656866";
+  context.fillRect(0, 0, size, size);
+
+  for (let row = 0; row < 2; row += 1) {
+    for (let column = 0; column < 2; column += 1) {
+      const x = column * slabSize + 3;
+      const y = row * slabSize + 3;
+      const width = slabSize - 6;
+      const height = slabSize - 6;
+      const warmth = Math.floor(random() * 5);
+      const shade = 132 + Math.floor(random() * 14);
+      const stoneGradient = context.createLinearGradient(x, y, x + width, y + height);
+      stoneGradient.addColorStop(0, `rgb(${shade + warmth}, ${shade + warmth - 2}, ${shade + warmth - 7})`);
+      stoneGradient.addColorStop(0.52, `rgb(${shade + 7}, ${shade + 5}, ${shade + 1})`);
+      stoneGradient.addColorStop(1, `rgb(${shade + warmth - 3}, ${shade + warmth - 4}, ${shade + warmth - 8})`);
+      context.fillStyle = stoneGradient;
+      context.fillRect(x, y, width, height);
+
+      context.save();
+      context.beginPath();
+      context.rect(x, y, width, height);
+      context.clip();
+      for (let fleck = 0; fleck < 1100; fleck += 1) {
+        context.fillStyle = random() > 0.44 ? "#c5c6c2" : "#565a58";
+        context.globalAlpha = 0.025 + random() * 0.07;
+        context.fillRect(
+          x + random() * width,
+          y + random() * height,
+          0.35 + random() * 1.1,
+          0.35 + random() * 0.8,
+        );
+      }
+
+      for (let vein = 0; vein < 13; vein += 1) {
+        const startY = y + random() * height;
+        context.strokeStyle = random() > 0.48 ? "#5e6260" : "#cfd0ca";
+        context.globalAlpha = 0.04 + random() * 0.09;
+        context.lineWidth = 0.45 + random() * 1.15;
+        context.beginPath();
+        context.moveTo(x - 14, startY);
+        context.bezierCurveTo(
+          x + width * 0.28,
+          startY + (random() - 0.5) * 54,
+          x + width * 0.68,
+          startY + (random() - 0.5) * 48,
+          x + width + 14,
+          startY + (random() - 0.5) * 30,
+        );
+        context.stroke();
+      }
+      context.restore();
+    }
+  }
+
+  context.globalAlpha = 0.2;
+  context.strokeStyle = "#b5b7b3";
+  context.lineWidth = 1;
+  context.beginPath();
+  context.moveTo(slabSize + 2, 0);
+  context.lineTo(slabSize + 2, size);
+  context.moveTo(0, slabSize + 2);
+  context.lineTo(size, slabSize + 2);
+  context.stroke();
+  context.globalAlpha = 1;
+  return canvas;
+}
+
+function createCorridorCarpetCanvas() {
+  const size = 512;
+  const canvas = createCanvas(size, size);
+  const context = context2d(canvas);
+  const random = seededRandom("mililani-maroon-corridor-carpet-v2");
+  const fiberPalette = ["#2a121a", "#491925", "#692535", "#321822", "#751f34", "#24222b", "#84604d"];
+
+  context.fillStyle = "#4a1826";
+  context.fillRect(0, 0, size, size);
+
+  // Dense, mixed-value fibers deliberately hide tracked-in dirt and small debris.
+  for (let index = 0; index < 22000; index += 1) {
+    const x = random() * size;
+    const y = random() * size;
+    const length = 0.55 + random() * 2.25;
+    context.strokeStyle = fiberPalette[Math.floor(random() * fiberPalette.length)];
+    context.globalAlpha = 0.2 + random() * 0.55;
+    context.lineWidth = 0.32 + random() * 0.65;
+    context.beginPath();
+    context.moveTo(x, y);
+    context.lineTo(x + (random() - 0.5) * 1.6, y + length);
+    context.stroke();
+  }
+
+  // A fixed lattice makes a compact transit/cinema motif with matching tile edges.
+  context.lineCap = "round";
+  for (let row = -1; row <= 8; row += 1) {
+    for (let column = -1; column <= 8; column += 1) {
+      const x = column * 64 + (row % 2 ? 32 : 0);
+      const y = row * 64;
+      const patternRow = ((row % 8) + 8) % 8;
+      const patternColumn = ((column % 8) + 8) % 8;
+      const alternate = (patternRow + patternColumn) % 3 === 0;
+      context.strokeStyle = alternate ? "#9d4b51" : "#263747";
+      context.globalAlpha = alternate ? 0.22 : 0.27;
+      context.lineWidth = alternate ? 2.4 : 1.8;
+      context.beginPath();
+      context.moveTo(x - 17, y);
+      context.quadraticCurveTo(x, y - 13, x + 17, y);
+      context.quadraticCurveTo(x, y + 13, x - 17, y);
+      context.stroke();
+
+      context.strokeStyle = "#b58a68";
+      context.globalAlpha = 0.13;
+      context.beginPath();
+      context.moveTo(x - 8, y + 20);
+      context.lineTo(x + 8, y + 28);
+      context.stroke();
+    }
+  }
+
+  for (let index = 0; index < 760; index += 1) {
+    context.fillStyle = random() > 0.64 ? "#b97868" : "#17161b";
+    context.globalAlpha = 0.08 + random() * 0.2;
+    context.beginPath();
+    context.arc(random() * size, random() * size, 0.35 + random() * 1.45, 0, TAU);
+    context.fill();
+  }
+
+  context.globalAlpha = 1;
+  context.lineCap = "butt";
+  return canvas;
+}
+
+function createCounterStoneCanvas() {
+  const size = 256;
+  const canvas = createCanvas(size, size);
+  const context = context2d(canvas);
+  const random = seededRandom("charcoal-quartz-counter-v2");
+  const gradient = context.createLinearGradient(0, 0, size, size);
+  gradient.addColorStop(0, "#242527");
+  gradient.addColorStop(0.5, "#363638");
+  gradient.addColorStop(1, "#202124");
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, size, size);
+
+  const aggregate = ["#8c8982", "#d1cec4", "#17181a", "#6b5550"];
+  for (let index = 0; index < 4700; index += 1) {
+    context.fillStyle = aggregate[Math.floor(random() * aggregate.length)];
+    context.globalAlpha = 0.07 + random() * 0.2;
+    context.beginPath();
+    context.arc(random() * size, random() * size, 0.22 + random() * 1.1, 0, TAU);
+    context.fill();
+  }
+
+  for (let vein = 0; vein < 7; vein += 1) {
+    const startY = random() * size;
+    context.strokeStyle = random() > 0.4 ? "#b8b5ad" : "#755b58";
+    context.globalAlpha = 0.055 + random() * 0.075;
+    context.lineWidth = 0.45 + random() * 0.8;
+    context.beginPath();
+    context.moveTo(-8, startY);
+    context.bezierCurveTo(72, startY - 28 + random() * 56, 182, startY - 24 + random() * 48, size + 8, startY + (random() - 0.5) * 36);
+    context.stroke();
+  }
+
+  context.globalAlpha = 1;
+  return canvas;
+}
+
 function createAcousticCanvas(color = "#222126", seed = "acoustic-charcoal") {
   const size = 256;
   const canvas = createCanvas(size, size);
@@ -336,6 +511,9 @@ function createMaterialLibrary(renderer) {
   });
   const carpetMap = textureFrom(createCarpetCanvas(), { name: "cinema-carpet", repeat: [4, 4] });
   const tileMap = textureFrom(createTileCanvas(), { name: "lobby-tile", repeat: [4, 4] });
+  const lobbyStoneMap = textureFrom(createLobbyStoneCanvas(), { name: "warm-honed-lobby-stone", repeat: [3, 3] });
+  const corridorCarpetMap = textureFrom(createCorridorCarpetCanvas(), { name: "maroon-corridor-carpet", repeat: [4, 4] });
+  const counterStoneMap = textureFrom(createCounterStoneCanvas(), { name: "charcoal-quartz-counter", repeat: [2, 2] });
   const wallMap = textureFrom(
     makeNoiseCanvas({ size: 256, seed: "warm-wall-v1", base: "#c8c3b9", spread: 19, density: 0.52 }),
     { name: "warm-painted-wall", repeat: [4, 4] },
@@ -374,6 +552,29 @@ function createMaterialLibrary(renderer) {
       metalness: 0,
       clearcoat: 0.18,
       clearcoatRoughness: 0.35,
+    })),
+    lobbyStone: track(new THREE.MeshPhysicalMaterial({
+      name: "Stone / warm gray honed lobby slabs",
+      // The texture carries the slab variation; this multiplier keeps the
+      // finished floor in the requested medium warm-gray range under lobby
+      // lighting instead of reading as glossy white porcelain.
+      color: 0xb8b4ad,
+      map: lobbyStoneMap,
+      bumpMap: microBump,
+      bumpScale: 0.014,
+      roughness: 0.62,
+      metalness: 0,
+      clearcoat: 0.025,
+      clearcoatRoughness: 0.72,
+    })),
+    corridorCarpet: track(new THREE.MeshStandardMaterial({
+      name: "Carpet / maroon dirt-hiding corridor pattern",
+      color: 0xffffff,
+      map: corridorCarpetMap,
+      bumpMap: wovenBump,
+      bumpScale: 0.041,
+      roughness: 0.975,
+      metalness: 0,
     })),
     wall: track(new THREE.MeshStandardMaterial({
       name: "Wall / warm neutral",
@@ -462,6 +663,17 @@ function createMaterialLibrary(renderer) {
       roughness: 0.46,
       metalness: 0,
     })),
+    counterStone: track(new THREE.MeshPhysicalMaterial({
+      name: "Stone / charcoal quartz counter",
+      color: 0xffffff,
+      map: counterStoneMap,
+      bumpMap: microBump,
+      bumpScale: 0.012,
+      roughness: 0.32,
+      metalness: 0.02,
+      clearcoat: 0.24,
+      clearcoatRoughness: 0.31,
+    })),
     stainless: track(new THREE.MeshStandardMaterial({
       name: "Metal / brushed stainless",
       color: 0xffffff,
@@ -531,6 +743,34 @@ function createMaterialLibrary(renderer) {
       metalness: 0,
       toneMapped: false,
     })),
+    display: track(new THREE.MeshStandardMaterial({
+      name: "Display / subtle cool emissive",
+      color: 0x122027,
+      emissive: 0x5ba8bc,
+      emissiveIntensity: 0.52,
+      roughness: 0.24,
+      metalness: 0.03,
+    })),
+    iceeRed: track(new THREE.MeshStandardMaterial({
+      name: "Frozen drink / translucent cherry red",
+      color: 0xd12c49,
+      emissive: 0x761020,
+      emissiveIntensity: 0.18,
+      roughness: 0.4,
+      metalness: 0,
+      transparent: true,
+      opacity: 0.84,
+    })),
+    iceeBlue: track(new THREE.MeshStandardMaterial({
+      name: "Frozen drink / translucent electric blue",
+      color: 0x268bd2,
+      emissive: 0x0d416f,
+      emissiveIntensity: 0.2,
+      roughness: 0.38,
+      metalness: 0,
+      transparent: true,
+      opacity: 0.84,
+    })),
   };
 
   Object.defineProperties(library, {
@@ -575,8 +815,8 @@ function fitText(context, text, maximumWidth, initialSize, minimumSize, family, 
 }
 
 function createSignTexture(text, options = {}) {
-  const width = options.width ?? 256;
-  const height = options.height ?? 128;
+  const width = options.width ?? (options.small ? 256 : 512);
+  const height = options.height ?? (options.small ? 128 : 256);
   const canvas = createCanvas(width, height);
   const context = context2d(canvas);
   const background = options.background ?? "#171719";
