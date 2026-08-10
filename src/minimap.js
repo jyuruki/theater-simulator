@@ -32,6 +32,9 @@ const ZONE_COLORS = Object.freeze({
   kitchen: "rgba(111,68,39,0.9)",
   concession: "rgba(116,55,70,0.9)",
   bar: "rgba(94,47,72,0.92)",
+  "soda-service": "rgba(62,88,104,0.88)",
+  trash: "rgba(77,78,83,0.92)",
+  "restroom-empty": "rgba(43,71,91,0.6)",
 });
 
 const SERVICE_LABELS = Object.freeze({
@@ -160,9 +163,10 @@ function drawPublicSpaces(context, view) {
     const rectangle = fillZone(context, space, view);
     const label = {
       lobby: "LOBBY",
-      "lobby-neck": "APPROACH",
+      "lobby-approach": "LOBBY HALL",
       "ticket-check": "TICKETS",
       "main-corridor": "THEATER HALL",
+      "soda-service": "DRINKS",
     }[space.id];
 
     if (label) {
@@ -172,6 +176,42 @@ function drawPublicSpaces(context, view) {
         minimumSize: 4.5,
         weight: 700,
       });
+    }
+  }
+}
+
+function drawEntryRoutes(context, view) {
+  const routeFill = "rgba(224,166,102,0.14)";
+  const routeStroke = "rgba(244,201,145,0.72)";
+  const drawRoute = (bounds, dashed = false) => {
+    const rectangle = projectBounds(bounds, view);
+    context.save();
+    context.fillStyle = routeFill;
+    context.fillRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height);
+    context.strokeStyle = routeStroke;
+    context.lineWidth = 0.9;
+    context.setLineDash(dashed ? [2, 2] : []);
+    context.strokeRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height);
+    context.restore();
+  };
+
+  for (const auditorium of AUDITORIUMS) {
+    const { bounds, entry, number } = auditorium;
+    if (entry.type === "trash-cubby") {
+      drawRoute({ xMin: entry.center - 1.6, xMax: entry.center + 1.6, zMin: bounds.zMax - 2.2, zMax: bounds.zMax });
+    } else if (number === 3) {
+      drawRoute({ xMin: -18.4, xMax: -15.5, zMin: 62.2, zMax: 78.5 });
+    } else if (number === 4) {
+      drawRoute({ xMin: -5.75, xMax: -0.45, zMin: 68.2, zMax: 70.6 });
+      drawRoute({ xMin: -5.75, xMax: -3, zMin: 70.6, zMax: 85.3 });
+    } else if (number === 5) {
+      drawRoute({ xMin: -0.55, xMax: 4.75, zMin: 68.2, zMax: 70.6 });
+      drawRoute({ xMin: 2, xMax: 4.75, zMin: 70.6, zMax: 85.3 });
+    } else if (number === 6) {
+      drawRoute({ xMin: bounds.xMin, xMax: bounds.xMax, zMin: bounds.zMin, zMax: bounds.zMin + 3 });
+      drawRoute({ xMin: bounds.xMax - 2.8, xMax: bounds.xMax, zMin: bounds.zMin + 3, zMax: bounds.zMin + 10.1 });
+    } else if (number === 7 || number === 8) {
+      drawRoute({ xMin: bounds.xMin, xMax: bounds.xMin + 2.85, zMin: bounds.zMin, zMax: bounds.zMin + 10.2 });
     }
   }
 }
@@ -231,6 +271,7 @@ function drawServiceRooms(context, view) {
   for (const room of [...normalRooms, ...lowerStorage]) {
     const rectangle = fillZone(context, room, view);
     const label = SERVICE_LABELS[room.id] || room.short || room.name;
+    if (room.kind === "storage-lower" && (rectangle.width < 22 || rectangle.height < 10)) continue;
     drawCenteredLabel(context, label, rectangle, {
       preferredSize: room.kind === "storage-lower" ? 6 : 7.5,
       minimumSize: 4.5,
@@ -354,6 +395,7 @@ export function createMinimap(options = {}) {
     drawGrid(context, view);
     drawPublicSpaces(context, view);
     drawAuditoriums(context, view);
+    drawEntryRoutes(context, view);
     drawServiceRooms(context, view);
     drawPlayer(context, player, view);
   }

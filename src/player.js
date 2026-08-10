@@ -192,6 +192,41 @@ export class AABBCollisionWorld {
   }
 
   /**
+   * Returns true when the player's circular XZ footprint penetrates an
+   * enabled collider (or the configured world bounds) at the supplied
+   * vertical span. Merely touching a surface is not treated as overlap.
+   */
+  isOverlapping(position, radius, feetY = position?.y ?? 0, height = 1.8) {
+    if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.z)) {
+      throw new TypeError("isOverlapping requires a position with finite x and z values.");
+    }
+    if (!(radius > 0) || !(height > 0)) throw new RangeError("Player radius and height must be positive.");
+
+    if (this.bounds) {
+      if (
+        position.x < this.bounds.minX + radius - EPSILON
+        || position.x > this.bounds.maxX - radius + EPSILON
+        || position.z < this.bounds.minZ + radius - EPSILON
+        || position.z > this.bounds.maxZ - radius + EPSILON
+      ) {
+        return true;
+      }
+    }
+
+    const radiusSquared = radius * radius;
+    for (const box of this.colliders) {
+      if (!box.enabled || !this._overlapsVertically(box, feetY, height)) continue;
+      const nearestX = clamp(position.x, box.minX, box.maxX);
+      const nearestZ = clamp(position.z, box.minZ, box.maxZ);
+      const deltaX = position.x - nearestX;
+      const deltaZ = position.z - nearestZ;
+      if (deltaX * deltaX + deltaZ * deltaZ < radiusSquared - EPSILON) return true;
+    }
+
+    return false;
+  }
+
+  /**
    * Mutates `position` and returns collision flags. Long movements are
    * subdivided so a low frame rate cannot tunnel through a thin wall.
    */
@@ -259,8 +294,13 @@ export class FirstPersonController {
     acceleration = 24,
     deceleration = 30,
     gravity = 24,
+    jumpSpeed = 5.9,
+    coyoteTime = 0.08,
+    jumpBufferTime = 0.1,
     maxStepHeight = 0.34,
     groundSnapDistance = 0.42,
+    stuckDetectionTime = 0.75,
+    stuckInputThreshold = 0.25,
     mouseSensitivity = 0.0021,
     touchLookSensitivity = 0.0043,
     initialYaw = null,
@@ -270,13 +310,30 @@ export class FirstPersonController {
     moveStick = null,
     moveKnob = null,
     runButton = null,
+    touchJumpButton = null,
     onLockChange = null,
     onLockError = null,
+    onStuckRecovered = null,
   } = {}) {
     if (!camera?.isCamera) throw new TypeError("FirstPersonController requires a Three.js camera.");
     if (!domElement?.addEventListener) throw new TypeError("FirstPersonController requires a DOM element.");
     if (!(collisionWorld instanceof AABBCollisionWorld)) {
       throw new TypeError("collisionWorld must be an AABBCollisionWorld.");
+    }
+    if (!Number.isFinite(jumpSpeed) || jumpSpeed < 0) {
+      throw new RangeError("jumpSpeed must be a finite non-negative number.");
+    }
+    if (!Number.isFinite(coyoteTime) || coyoteTime < 0) {
+      throw new RangeError("coyoteTime must be a finite non-negative number.");
+    }
+    if (!Number.isFinite(jumpBufferTime) || jumpBufferTime < 0) {
+      throw new RangeError("jumpBufferTime must be a finite non-negative number.");
+    }
+    if (!Number.isFinite(stuckDetectionTime) || stuckDetectionTime <= 0) {
+      throw new RangeError("stuckDetectionTime must be a finite positive number.");
+    }
+    if (!Number.isFinite(stuckInputThreshold)) {
+      throw new RangeError("stuckInputThreshold must be finite.");
     }
 
     this.camera = camera;
@@ -292,14 +349,20 @@ export class FirstPersonController {
     this.acceleration = acceleration;
     this.deceleration = deceleration;
     this.gravity = gravity;
+    this.jumpSpeed = jumpSpeed;
+    this.coyoteTime = Math.max(0, coyoteTime);
+    this.jumpBufferTime = Math.max(0, jumpBufferTime);
     this.maxStepHeight = maxStepHeight;
     this.groundSnapDistance = groundSnapDistance;
+    this.stuckDetectionTime = Math.max(0.1, stuckDetectionTime);
+    this.stuckInputThreshold = clamp(stuckInputThreshold, 0, 1);
     this.mouseSensitivity = mouseSensitivity;
     this.touchLookSensitivity = touchLookSensitivity;
     this.groundHeight = groundHeight;
     this.groundSampler = groundSampler;
     this.onLockChange = onLockChange;
     this.onLockError = onLockError;
+    this.onStuckRecovered = onStuckRecovered;
 
     const fallbackSpawn = { x: camera.position.x, y: groundHeight, z: camera.position.z };
     this.position = vectorFrom(spawn, fallbackSpawn);
@@ -321,6 +384,7 @@ export class FirstPersonController {
     this.moveStick = moveStick ?? documentRef?.getElementById("move-stick") ?? null;
     this.moveKnob = moveKnob ?? documentRef?.getElementById("move-knob") ?? null;
     this.runButton = runButton ?? documentRef?.getElementById("touch-run") ?? null;
+    this.touchJumpButton = touchJumpButton ?? documentRef?.getElementById("touch-jump") ?? null;
 
     this.started = false;
     this.active = false;
@@ -332,6 +396,14 @@ export class FirstPersonController {
     this._lookPointerId = null;
     this._lastLookX = 0;
     this._lastLookY = 0;
+    this._simulationTime = 0;
+    this._lastGroundedTime = Number.NEGATIVE_INFINITY;
+    this._jumpQueuedUntil = Number.NEGATIVE_INFINITY;
+    this._stuckElapsed = 0;
+    this._stuckAnchorPosition = this.position.clone();
+    this._stuckDirection = new THREE.Vector2();
+    this._lastSafePosition = null;
+    this._safePositionHistory = [];
 
     this._onKeyDown = this._onKeyDown.bind(this);
     this._onKeyUp = this._onKeyUp.bind(this);
@@ -346,9 +418,20 @@ export class FirstPersonController {
     this._onLookPointerEnd = this._onLookPointerEnd.bind(this);
     this._onRunPointerDown = this._onRunPointerDown.bind(this);
     this._onRunPointerEnd = this._onRunPointerEnd.bind(this);
+    this._onJumpPointerDown = this._onJumpPointerDown.bind(this);
+    this._onJumpPointerEnd = this._onJumpPointerEnd.bind(this);
     this._onBlur = this._onBlur.bind(this);
 
     this.collisionWorld.depenetrate(this.position, this.radius, this.position.y, this.bodyHeight);
+    const initialGroundY = this._sampleGround(this.position.x, this.position.z, this.position.y);
+    if (initialGroundY !== null && Math.abs(this.position.y - initialGroundY) <= this.groundSnapDistance) {
+      this.position.y = initialGroundY;
+      this.grounded = true;
+      this._lastGroundedTime = this._simulationTime;
+    } else {
+      this.grounded = false;
+    }
+    this._rememberSafePosition(true);
     this._syncCamera();
   }
 
@@ -390,6 +473,11 @@ export class FirstPersonController {
     this._listen(this.runButton, "pointerup", this._onRunPointerEnd);
     this._listen(this.runButton, "pointercancel", this._onRunPointerEnd);
     this._listen(this.runButton, "lostpointercapture", this._onRunPointerEnd);
+
+    this._listen(this.touchJumpButton, "pointerdown", this._onJumpPointerDown);
+    this._listen(this.touchJumpButton, "pointerup", this._onJumpPointerEnd);
+    this._listen(this.touchJumpButton, "pointercancel", this._onJumpPointerEnd);
+    this._listen(this.touchJumpButton, "lostpointercapture", this._onJumpPointerEnd);
   }
 
   start({ requestPointerLock = !this.isTouchMode } = {}) {
@@ -479,6 +567,13 @@ export class FirstPersonController {
   _onKeyDown(event) {
     const target = event.target;
     if (target?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target?.tagName ?? "")) return;
+    if (event.code === "Space") {
+      if (this.active) {
+        event.preventDefault?.();
+        if (!event.repeat) this._queueJump();
+      }
+      return;
+    }
     this._keys.add(event.code);
   }
 
@@ -597,12 +692,30 @@ export class FirstPersonController {
     this._touchRunning = false;
   }
 
+  _queueJump() {
+    this._jumpQueuedUntil = this._simulationTime + this.jumpBufferTime;
+  }
+
+  _onJumpPointerDown(event) {
+    if (!this.isTouchMode || !this.active) return;
+    event.preventDefault();
+    this._queueJump();
+    this.touchJumpButton?.setPointerCapture?.(event.pointerId);
+  }
+
+  _onJumpPointerEnd(event) {
+    if (!this.isTouchMode) return;
+    event.preventDefault();
+  }
+
   _resetInput() {
     this._keys.clear();
     this._touchMove.set(0, 0);
     this._touchRunning = false;
     this._movePointerId = null;
     this._lookPointerId = null;
+    this._jumpQueuedUntil = Number.NEGATIVE_INFINITY;
+    this._resetStuckTracking();
     this._resetMoveKnob();
   }
 
@@ -613,6 +726,106 @@ export class FirstPersonController {
     if (Number.isFinite(sample)) return sample;
     if (sample && Number.isFinite(sample.height) && sample.walkable !== false) return sample.height;
     return null;
+  }
+
+  _resetStuckTracking() {
+    this._stuckElapsed = 0;
+    this._stuckAnchorPosition?.copy(this.position);
+    this._stuckDirection?.set(0, 0);
+  }
+
+  _isPlayerOverlapping(position = this.position) {
+    return this.collisionWorld.isOverlapping(
+      position,
+      this.radius,
+      position.y,
+      this.bodyHeight,
+    );
+  }
+
+  _rememberSafePosition(force = false) {
+    if (!this.grounded || this._isPlayerOverlapping()) return false;
+
+    if (!this._lastSafePosition) this._lastSafePosition = this.position.clone();
+    else this._lastSafePosition.copy(this.position);
+
+    const previous = this._safePositionHistory.at(-1);
+    const horizontalDistance = previous
+      ? Math.hypot(this.position.x - previous.x, this.position.z - previous.z)
+      : Number.POSITIVE_INFINITY;
+    const verticalDistance = previous ? Math.abs(this.position.y - previous.y) : Number.POSITIVE_INFINITY;
+    if (force || horizontalDistance >= 0.6 || verticalDistance >= 0.3) {
+      this._safePositionHistory.push(this.position.clone());
+      if (this._safePositionHistory.length > 12) this._safePositionHistory.shift();
+    }
+    return true;
+  }
+
+  /**
+   * Attempts collision depenetration, then optionally falls back to a recent
+   * grounded position. Automatic recovery only enables the fallback after an
+   * actual overlap; callers can invoke this method manually for a tight corner.
+   */
+  unstick({ fallback = true, reason = "manual" } = {}) {
+    const before = this.position.clone();
+    const wasGrounded = this.grounded;
+    const wasOverlapping = this._isPlayerOverlapping();
+    this.collisionWorld.depenetrate(
+      this.position,
+      this.radius,
+      this.position.y,
+      this.bodyHeight,
+      8,
+    );
+
+    let overlapping = this._isPlayerOverlapping();
+    let usedFallback = false;
+    if (fallback && (overlapping || !wasOverlapping)) {
+      const minimumDistance = wasOverlapping ? 0 : Math.max(0.5, this.radius * 1.5);
+      const candidates = [
+        this._lastSafePosition,
+        ...this._safePositionHistory.slice().reverse(),
+      ].filter(Boolean);
+      for (const candidate of candidates) {
+        const candidateDistance = Math.hypot(candidate.x - before.x, candidate.z - before.z);
+        if (candidateDistance < minimumDistance) continue;
+        if (this._isPlayerOverlapping(candidate)) continue;
+        this.position.copy(candidate);
+        overlapping = false;
+        usedFallback = true;
+        break;
+      }
+    }
+
+    const groundY = this._sampleGround(this.position.x, this.position.z, this.position.y);
+    if (
+      groundY !== null
+      && (wasGrounded || Math.abs(this.position.y - groundY) <= this.groundSnapDistance)
+    ) {
+      this.position.y = groundY;
+      this.grounded = true;
+      this._lastGroundedTime = this._simulationTime;
+    } else {
+      this.grounded = false;
+    }
+
+    this.velocity.set(0, 0, 0);
+    this.verticalVelocity = 0;
+    this._jumpQueuedUntil = Number.NEGATIVE_INFINITY;
+    this._resetStuckTracking();
+
+    const moved = before.distanceToSquared(this.position) > EPSILON * EPSILON;
+    const recovered = (wasOverlapping && !overlapping) || (!wasOverlapping && moved);
+    if (recovered) {
+      this._rememberSafePosition(usedFallback);
+      this.onStuckRecovered?.({
+        reason,
+        usedFallback,
+        position: this.position.clone(),
+      });
+    }
+    this._syncCamera();
+    return recovered;
   }
 
   setGroundSampler(sampler) {
@@ -631,6 +844,22 @@ export class FirstPersonController {
     }
     if (depenetrate) {
       this.collisionWorld.depenetrate(this.position, this.radius, this.position.y, this.bodyHeight);
+    }
+    this._jumpQueuedUntil = Number.NEGATIVE_INFINITY;
+    this._resetStuckTracking();
+    if (resetVelocity) {
+      const groundY = this._sampleGround(this.position.x, this.position.z, this.position.y);
+      if (groundY !== null && Math.abs(this.position.y - groundY) <= this.groundSnapDistance) {
+        this.position.y = groundY;
+        this.grounded = true;
+        this._lastGroundedTime = this._simulationTime;
+      } else {
+        this.grounded = false;
+      }
+    }
+    if (this.grounded && !this._isPlayerOverlapping()) {
+      this._safePositionHistory.length = 0;
+      this._rememberSafePosition(true);
     }
     this._syncCamera();
     return this;
@@ -679,7 +908,70 @@ export class FirstPersonController {
     return { strafe, forward, magnitude: Math.min(1, length) };
   }
 
+  _updateStuckRecovery({ input, targetX, targetZ, collision, deltaSeconds }) {
+    const intendedSpeed = Math.hypot(targetX, targetZ);
+    const sustainedAttempt = this.active
+      && this.grounded
+      && input.magnitude >= this.stuckInputThreshold
+      && intendedSpeed > 0.5;
+
+    if (!sustainedAttempt) {
+      this._resetStuckTracking();
+      return false;
+    }
+
+    const directionX = targetX / intendedSpeed;
+    const directionZ = targetZ / intendedSpeed;
+    const previousDirectionLength = this._stuckDirection.length();
+    const directionDot = previousDirectionLength > EPSILON
+      ? directionX * this._stuckDirection.x + directionZ * this._stuckDirection.y
+      : -1;
+    if (directionDot < 0.65) {
+      this._stuckAnchorPosition.copy(this.position);
+      this._stuckDirection.set(directionX, directionZ);
+      this._stuckElapsed = 0;
+      return false;
+    }
+
+    this._stuckDirection.set(directionX, directionZ);
+    const netProgress = (this.position.x - this._stuckAnchorPosition.x) * directionX
+      + (this.position.z - this._stuckAnchorPosition.z) * directionZ;
+    const usefulProgress = Math.max(0.18, this.radius * 0.55);
+    if (netProgress >= usefulProgress) {
+      this._stuckAnchorPosition.copy(this.position);
+      this._stuckElapsed = 0;
+      return false;
+    }
+
+    this._stuckElapsed += deltaSeconds;
+    if (this._stuckElapsed < this.stuckDetectionTime) return false;
+    this._resetStuckTracking();
+
+    // Contact with a flat wall is expected. Only use a stored-position
+    // fallback automatically when the capsule is actually penetrating.
+    if (this._isPlayerOverlapping()) {
+      return this.unstick({ fallback: true, reason: "automatic-overlap" });
+    }
+    if (collision.collidedX && collision.collidedZ) {
+      return this.unstick({ fallback: false, reason: "automatic-corner-depenetration" });
+    }
+    return false;
+  }
+
   _step(deltaSeconds) {
+    this._simulationTime += deltaSeconds;
+    if (this.grounded) this._lastGroundedTime = this._simulationTime;
+
+    const queuedJump = this._jumpQueuedUntil >= this._simulationTime;
+    const canUseCoyoteTime = this._simulationTime - this._lastGroundedTime <= this.coyoteTime;
+    if (this.active && queuedJump && (this.grounded || canUseCoyoteTime)) {
+      this.verticalVelocity = this.jumpSpeed;
+      this.grounded = false;
+      this._jumpQueuedUntil = Number.NEGATIVE_INFINITY;
+    } else if (this._jumpQueuedUntil < this._simulationTime) {
+      this._jumpQueuedUntil = Number.NEGATIVE_INFINITY;
+    }
+
     const input = this.active ? this._movementInput() : { strafe: 0, forward: 0, magnitude: 0 };
     const speed = this.isRunning ? this.runSpeed : this.walkSpeed;
     const sinYaw = Math.sin(this.yaw);
@@ -736,6 +1028,18 @@ export class FirstPersonController {
       this.verticalVelocity -= this.gravity * deltaSeconds;
       this.position.y += this.verticalVelocity * deltaSeconds;
       this.grounded = false;
+    }
+
+    if (this.grounded) this._lastGroundedTime = this._simulationTime;
+    const recovered = this._updateStuckRecovery({
+      input,
+      targetX,
+      targetZ,
+      collision,
+      deltaSeconds,
+    });
+    if (!recovered && this.grounded && !collision.collidedX && !collision.collidedZ) {
+      this._rememberSafePosition();
     }
   }
 

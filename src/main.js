@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { EQUIPMENT_ANCHORS, MAP_BOUNDS, validateLayoutData, zoneAt } from "./layout-data.js";
+import { EQUIPMENT_ANCHORS, PLAYER_SPAWN_PLAN, validateLayoutData, zoneAt } from "./layout-data.js";
+import { planToWorldX, worldToPlanDirection, worldToPlanPoint } from "./coordinates.js";
 import { createMaterialLibrary } from "./materials.js";
 import { createMinimap } from "./minimap.js";
 import { AABBCollisionWorld, FirstPersonController } from "./player.js";
@@ -53,7 +54,12 @@ try {
   scene.fog = new THREE.Fog(0x08080b, 92, 205);
 
   const camera = new THREE.PerspectiveCamera(67, window.innerWidth / window.innerHeight, 0.06, 260);
-  camera.position.set(1.5, 1.68, -5.2);
+  const spawnWorld = {
+    x: planToWorldX(PLAYER_SPAWN_PLAN.x),
+    y: PLAYER_SPAWN_PLAN.y,
+    z: PLAYER_SPAWN_PLAN.z,
+  };
+  camera.position.set(spawnWorld.x, 1.68, spawnWorld.z);
 
   const hemisphere = new THREE.HemisphereLight(0xdce8ff, 0x241414, 1.65);
   scene.add(hemisphere);
@@ -63,7 +69,7 @@ try {
 
   const materials = createMaterialLibrary(renderer);
   const world = createTheaterWorld({ scene, materials });
-  const collisionWorld = new AABBCollisionWorld({ bounds: MAP_BOUNDS });
+  const collisionWorld = new AABBCollisionWorld({ bounds: world.worldBounds });
   collisionWorld.addBoxes(world.colliders);
 
   let entered = false;
@@ -80,7 +86,7 @@ try {
     camera,
     domElement: canvas,
     collisionWorld,
-    spawn: [1.5, 0, -5.2],
+    spawn: [spawnWorld.x, spawnWorld.y, spawnWorld.z],
     initialYaw: Math.PI,
     groundSampler: world.groundHeight,
     onLockChange(active) {
@@ -90,10 +96,18 @@ try {
       showToast("Click the walkthrough to resume mouse look.", 2600);
       setPausedUi(true);
     },
+    onStuckRecovered() {
+      showToast("Moved you back to the last safe spot.", 2200);
+    },
   });
 
-  const minimap = createMinimap({ canvas: "#minimap", player: { x: 1.5, z: -5.2, directionZ: 1 } });
+  const minimap = createMinimap({
+    canvas: "#minimap",
+    player: { x: PLAYER_SPAWN_PLAN.x, z: PLAYER_SPAWN_PLAN.z, directionZ: 1 },
+  });
   const cameraDirection = new THREE.Vector3();
+  const planPosition = { x: PLAYER_SPAWN_PLAN.x, y: 0, z: PLAYER_SPAWN_PLAN.z };
+  const planDirection = { x: 0, y: 0, z: 1 };
 
   const enterWalkthrough = () => {
     if (!entered) {
@@ -122,7 +136,7 @@ try {
   window.addEventListener("keydown", (event) => {
     if (event.code === "KeyM" && !event.repeat) toggleMap();
     if (event.code === "KeyR" && !event.repeat && entered) {
-      controller.setPosition([1.5, 0, -5.2]);
+      controller.setPosition([spawnWorld.x, spawnWorld.y, spawnWorld.z]);
       controller.setLook(Math.PI, 0);
       showToast("Returned to the front entrance.");
     }
@@ -130,7 +144,8 @@ try {
 
   const updateHud = () => {
     const position = controller.position;
-    const zone = zoneAt(position.x, position.z);
+    worldToPlanPoint(position, planPosition);
+    const zone = zoneAt(planPosition.x, planPosition.z);
     if (zone.id !== currentZoneId) {
       currentZoneId = zone.id;
       locationName.textContent = zone.name;
@@ -140,7 +155,7 @@ try {
     let nearest = null;
     let nearestDistance = 2.25;
     for (const anchor of EQUIPMENT_ANCHORS) {
-      const distance = Math.hypot(anchor.position[0] - position.x, anchor.position[2] - position.z);
+      const distance = Math.hypot(anchor.position[0] - planPosition.x, anchor.position[2] - planPosition.z);
       if (distance < nearestDistance) {
         nearest = anchor;
         nearestDistance = distance;
@@ -166,7 +181,9 @@ try {
 
     camera.getWorldDirection(cameraDirection);
     if (frame % 3 === 0 && !minimapPanel.classList.contains("is-hidden")) {
-      minimap.updatePlayer(controller.position, cameraDirection);
+      worldToPlanPoint(controller.position, planPosition);
+      worldToPlanDirection(cameraDirection, planDirection);
+      minimap.updatePlayer(planPosition, planDirection);
     }
 
     renderer.render(scene, camera);
@@ -200,7 +217,7 @@ try {
     enumerable: false,
     writable: false,
     value: Object.freeze({
-      layoutVersion: "mililani-sketch-v1",
+      layoutVersion: "mililani-sketch-v2",
       validation: Object.freeze(validation),
       stats: world.stats,
       controller,

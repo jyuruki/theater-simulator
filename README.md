@@ -2,20 +2,23 @@
 
 ![First-person prototype preview](docs/preview.png)
 
-A first-person, browser-based layout prototype for a multiplayer movie-theater simulator. This first build reconstructs the relationship and approximate scale of the Consolidated Theatres Mililani 14 from a hand-drawn employee floor plan, public location details, and visual references.
+A first-person, browser-based layout prototype for a multiplayer movie-theater simulator. This build reconstructs the relationship and approximate scale of the Consolidated Theatres Mililani 14 from a hand-drawn employee floor plan, public location details, and visual references.
 
 This is a spatial prototype—not an official measured architectural plan. It is unaffiliated with Consolidated Theatres.
 
-## What is in v0.1
+## What is in v0.2
 
-- A walkable entrance, lobby, lobby approach, ticket checkpoint, and long auditorium hall
+- A physically corrected left/right plan: concessions are on the guest's left when entering, with the map and first-person heading using the same orientation
+- A much larger gray-stone lobby, longer ticket approach, and longer, narrower maroon-patterned auditorium hall
 - All 14 stadium-style auditoriums with 1,093 procedurally placed seats
 - Matching footprint families for Theaters 1/2, 4/5, 3/6/7/8, and 9–14
-- Concession backline, bar, kitchen, kitchen storage, office, box office, candy storage, and both restrooms
-- Restroom stalls, sinks, and urinals placed from the sketch
+- Sketch-specific auditorium circulation: Theater 3's storage/left turn, Theater 6's long dogleg, paired 4/5 soundlocks, straight side aisles for 7/8, and trash-can cubbies for 1/2 and 9–14
+- An extended concession counter with six POS stations, plus the self-serve island with two soda fountains, two ICEE bookends, cup/lid/straw caddies, and a matching rear counter
+- Concession backline, bar, kitchen, kitchen storage, office, box office, candy storage, trash room, soda support, both main restrooms, and two provisional rooms behind unlabeled doors
+- Restroom privacy-entry cubbies, stalls, sinks, and urinals placed from the sketch
 - Detail-ready placeholders and stable IDs for the popper, soda fountains, grill, fryer, turbo oven, and bar well
-- Dashed lower-storage volumes on the map, including the dotted usher/soda stock area
-- Desktop first-person controls, touch controls, collision, stadium aisle elevations, and a live floor-plan minimap
+- Dashed lower-storage volumes on the map, including Theater 3/6 under-tier storage and the dotted usher/soda stock area
+- Desktop and touch first-person controls, grounded jump, conservative stuck recovery, collision, stadium aisle elevations, and a live floor-plan minimap
 - Procedural materials, original island-botanical lobby art, room signs, screens, acoustic panels, and instanced seating
 
 The exact capacities represented are: 38 seats each in Theaters 1–2; 148 in 3; 58 each in 4–5; 148, 153, and 152 in 6–8; and 50 each in 9–14.
@@ -27,11 +30,12 @@ The exact capacities represented are: 38 seats each in Theaters 1–2; 148 in 3;
 | `W A S D` | Move |
 | Mouse | Look |
 | `Shift` | Run |
+| `Space` | Jump |
 | `M` | Show or hide the map |
 | `R` | Return to the entrance |
 | `Esc` | Pause / release mouse |
 
-Touch devices get a movement stick, drag-to-look, and hold-to-run button.
+Touch devices get a movement stick, drag-to-look, hold-to-run, and jump buttons.
 
 ## Run locally
 
@@ -49,7 +53,7 @@ npm test
 npm run build
 ```
 
-`npm test` protects the 14-theater grouping, exact 1,093-seat total, room IDs, bounds, and equipment anchors. GitHub Actions runs the same checks and deploys the built `dist` directory after changes reach `main` once the repository's Pages source is set to **GitHub Actions**.
+`npm test` protects the 14-theater grouping, exact 1,093-seat total, mirrored coordinate transform, route metadata, room IDs, bounds, equipment anchors, and six POS stations. GitHub Actions runs the same checks and deploys the built `dist` directory after changes reach `main` once the repository's Pages source is set to **GitHub Actions**.
 
 ## Layout decisions and current limits
 
