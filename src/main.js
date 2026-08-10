@@ -163,7 +163,7 @@ try {
     }
     const nextAnchorId = nearest?.id ?? "";
     if (nextAnchorId && nextAnchorId !== nearestAnchorId) {
-      showToast(`${nearest.type.replaceAll("-", " ").toUpperCase()} · detail-ready equipment anchor`);
+      showToast(nearest.type.replaceAll("-", " ").toUpperCase());
     }
     nearestAnchorId = nextAnchorId;
   };
@@ -217,7 +217,7 @@ try {
     enumerable: false,
     writable: false,
     value: Object.freeze({
-      layoutVersion: "mililani-sketch-v2",
+      layoutVersion: "mililani-sketch-v3",
       validation: Object.freeze(validation),
       stats: world.stats,
       controller,

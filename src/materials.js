@@ -377,31 +377,107 @@ function createSeatCanvas() {
   const size = 256;
   const canvas = createCanvas(size, size);
   const context = context2d(canvas);
-  const random = seededRandom("cinema-seat-burgundy-v1");
+  const random = seededRandom("cinema-seat-brown-leather-v3");
   const gradient = context.createLinearGradient(0, 0, size, size);
-  gradient.addColorStop(0, "#611d27");
-  gradient.addColorStop(0.5, "#841f2a");
-  gradient.addColorStop(1, "#4a1820");
+  gradient.addColorStop(0, "#3b2418");
+  gradient.addColorStop(0.46, "#6a422a");
+  gradient.addColorStop(1, "#2d1b13");
   context.fillStyle = gradient;
   context.fillRect(0, 0, size, size);
 
-  for (let index = 0; index < 8000; index += 1) {
+  // Fine pores and irregular tonal variation read as leather at normal seat
+  // distance without turning into the directional weave used by the old
+  // burgundy fabric material. The fixed seed keeps every build deterministic.
+  for (let index = 0; index < 10500; index += 1) {
     const x = random() * size;
     const y = random() * size;
-    context.fillStyle = random() > 0.5 ? "#c85a62" : "#2c0d13";
-    context.globalAlpha = 0.05 + random() * 0.16;
-    context.fillRect(x, y, 0.45 + random() * 0.8, 0.45 + random() * 1.4);
+    context.fillStyle = random() > 0.56 ? "#b07b50" : "#160e0a";
+    context.globalAlpha = 0.025 + random() * 0.105;
+    context.beginPath();
+    context.ellipse(
+      x,
+      y,
+      0.24 + random() * 0.72,
+      0.18 + random() * 0.48,
+      random() * Math.PI,
+      0,
+      TAU,
+    );
+    context.fill();
   }
 
-  context.globalAlpha = 0.16;
-  context.strokeStyle = "#e27779";
-  context.lineWidth = 0.6;
-  for (let x = 0; x < size; x += 12) {
+  // Soft, wandering creases break up broad cushions while avoiding a fabric
+  // stripe or tile-grid appearance.
+  for (let crease = 0; crease < 34; crease += 1) {
+    const startX = random() * size;
+    const startY = random() * size;
+    const length = 14 + random() * 42;
+    context.strokeStyle = random() > 0.3 ? "#160e0a" : "#bc8457";
+    context.globalAlpha = 0.025 + random() * 0.07;
+    context.lineWidth = 0.35 + random() * 0.8;
     context.beginPath();
-    context.moveTo(x, 0);
-    context.lineTo(x, size);
+    context.moveTo(startX, startY);
+    context.bezierCurveTo(
+      startX + length * 0.28,
+      startY + (random() - 0.5) * 9,
+      startX + length * 0.7,
+      startY + (random() - 0.5) * 13,
+      startX + length,
+      startY + (random() - 0.5) * 8,
+    );
     context.stroke();
   }
+
+  context.globalAlpha = 1;
+  return canvas;
+}
+
+function createSeatLeatherBumpCanvas() {
+  const size = 256;
+  const canvas = createCanvas(size, size);
+  const context = context2d(canvas);
+  const random = seededRandom("cinema-seat-brown-leather-bump-v3");
+
+  context.fillStyle = "#808080";
+  context.fillRect(0, 0, size, size);
+
+  for (let pore = 0; pore < 12000; pore += 1) {
+    const shade = random() > 0.48 ? 93 + Math.floor(random() * 25) : 137 + Math.floor(random() * 24);
+    context.fillStyle = `rgb(${shade}, ${shade}, ${shade})`;
+    context.globalAlpha = 0.16 + random() * 0.3;
+    context.beginPath();
+    context.ellipse(
+      random() * size,
+      random() * size,
+      0.2 + random() * 0.62,
+      0.16 + random() * 0.44,
+      random() * Math.PI,
+      0,
+      TAU,
+    );
+    context.fill();
+  }
+
+  for (let crease = 0; crease < 30; crease += 1) {
+    const startX = random() * size;
+    const startY = random() * size;
+    const length = 16 + random() * 38;
+    context.strokeStyle = random() > 0.25 ? "#555555" : "#a7a7a7";
+    context.globalAlpha = 0.18 + random() * 0.2;
+    context.lineWidth = 0.45 + random() * 0.7;
+    context.beginPath();
+    context.moveTo(startX, startY);
+    context.bezierCurveTo(
+      startX + length * 0.3,
+      startY + (random() - 0.5) * 10,
+      startX + length * 0.72,
+      startY + (random() - 0.5) * 12,
+      startX + length,
+      startY + (random() - 0.5) * 7,
+    );
+    context.stroke();
+  }
+
   context.globalAlpha = 1;
   return canvas;
 }
@@ -523,7 +599,12 @@ function createMaterialLibrary(renderer) {
     { name: "charcoal-painted-wall", repeat: [5, 5] },
   );
   const acousticMap = textureFrom(createAcousticCanvas(), { name: "acoustic-fabric", repeat: [7, 7] });
-  const seatMap = textureFrom(createSeatCanvas(), { name: "burgundy-seat-fabric", repeat: [3, 3] });
+  const seatMap = textureFrom(createSeatCanvas(), { name: "brown-seat-leather", repeat: [3, 3] });
+  const seatLeatherBump = textureFrom(createSeatLeatherBumpCanvas(), {
+    name: "brown-seat-leather-bump",
+    colorSpace: false,
+    repeat: [3, 3],
+  });
   const woodMap = textureFrom(createWoodCanvas(), { name: "warm-walnut-laminate", repeat: [2, 3] });
   const stainlessMap = textureFrom(createBrushedMetalCanvas(), { name: "brushed-stainless", repeat: [2, 4] });
   const floorDarkMap = textureFrom(
@@ -603,20 +684,33 @@ function createMaterialLibrary(renderer) {
       roughness: 1,
       metalness: 0,
     })),
-    seat: track(new THREE.MeshStandardMaterial({
-      name: "Seat / burgundy woven fabric",
+    seat: track(new THREE.MeshPhysicalMaterial({
+      name: "Seat / warm brown leather",
       color: 0xffffff,
       map: seatMap,
-      bumpMap: wovenBump,
-      bumpScale: 0.045,
-      roughness: 0.91,
+      bumpMap: seatLeatherBump,
+      bumpScale: 0.026,
+      roughness: 0.5,
       metalness: 0,
+      clearcoat: 0.1,
+      clearcoatRoughness: 0.66,
+      sheen: 0.12,
+      sheenRoughness: 0.78,
+      sheenColor: new THREE.Color(0x6d432b),
     })),
     seatMetal: track(new THREE.MeshStandardMaterial({
       name: "Seat / powder-coated steel",
       color: 0x202124,
       roughness: 0.42,
       metalness: 0.72,
+    })),
+    trayTable: track(new THREE.MeshPhysicalMaterial({
+      name: "Seat / dark espresso tray table",
+      color: 0x211a17,
+      roughness: 0.56,
+      metalness: 0.02,
+      clearcoat: 0.08,
+      clearcoatRoughness: 0.62,
     })),
     floorDark: track(new THREE.MeshStandardMaterial({
       name: "Floor / dark service concrete",

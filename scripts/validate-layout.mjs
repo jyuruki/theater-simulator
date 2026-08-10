@@ -7,6 +7,8 @@ import {
   AUDITORIUM_PRESETS,
   EQUIPMENT_ANCHORS,
   EXPECTED_SEAT_TOTAL,
+  HALL_END_EXITS,
+  LOBBY_PLAN,
   MAP_BOUNDS,
   PLAYER_SPAWN_PLAN,
   POS_STATIONS,
@@ -16,6 +18,12 @@ import {
   validateLayoutData,
 } from "../src/layout-data.js";
 import {
+  buildAuditoriumLayouts,
+  pointInRect,
+  sampleAuditoriumGround,
+  selectGroundCandidate,
+} from "../src/layout-geometry.js";
+import {
   planToWorldBounds,
   planToWorldDirection,
   planToWorldX,
@@ -24,20 +32,8 @@ import {
 } from "../src/coordinates.js";
 
 const EXPECTED_CAPACITIES = Object.freeze({
-  1: 38,
-  2: 38,
-  3: 148,
-  4: 58,
-  5: 58,
-  6: 148,
-  7: 153,
-  8: 152,
-  9: 50,
-  10: 50,
-  11: 50,
-  12: 50,
-  13: 50,
-  14: 50,
+  1: 38, 2: 38, 3: 148, 4: 58, 5: 58, 6: 148, 7: 153, 8: 152,
+  9: 50, 10: 50, 11: 50, 12: 50, 13: 50, 14: 50,
 });
 
 const EXPECTED_PRESET_GROUPS = Object.freeze({
@@ -54,27 +50,20 @@ function assertUnique(values, label) {
 function assertValidBounds(entity, label) {
   const { bounds } = entity;
   assert.ok(bounds, `${label} is missing bounds.`);
-  for (const key of ["xMin", "xMax", "zMin", "zMax"]) {
-    assert.ok(Number.isFinite(bounds[key]), `${label}.${key} must be finite.`);
-  }
+  for (const key of ["xMin", "xMax", "zMin", "zMax"]) assert.ok(Number.isFinite(bounds[key]), `${label}.${key} must be finite.`);
   assert.ok(bounds.xMin < bounds.xMax, `${label} must have positive width.`);
   assert.ok(bounds.zMin < bounds.zMax, `${label} must have positive depth.`);
-  assert.ok(bounds.xMin >= MAP_BOUNDS.xMin, `${label} extends west of MAP_BOUNDS.`);
-  assert.ok(bounds.xMax <= MAP_BOUNDS.xMax, `${label} extends east of MAP_BOUNDS.`);
-  assert.ok(bounds.zMin >= MAP_BOUNDS.zMin, `${label} extends south of MAP_BOUNDS.`);
-  assert.ok(bounds.zMax <= MAP_BOUNDS.zMax, `${label} extends north of MAP_BOUNDS.`);
+  assert.ok(bounds.xMin >= MAP_BOUNDS.xMin && bounds.xMax <= MAP_BOUNDS.xMax, `${label} extends beyond MAP_BOUNDS X.`);
+  assert.ok(bounds.zMin >= MAP_BOUNDS.zMin && bounds.zMax <= MAP_BOUNDS.zMax, `${label} extends beyond MAP_BOUNDS Z.`);
 }
 
-function boundsOverlap(a, b) {
-  return a.xMin < b.xMax && a.xMax > b.xMin && a.zMin < b.zMax && a.zMax > b.zMin;
+function boundsOverlap(first, second) {
+  return first.xMin < second.xMax && first.xMax > second.xMin
+    && first.zMin < second.zMax && first.zMax > second.zMin;
 }
 
 const validation = validateLayoutData();
-assert.equal(
-  validation.valid,
-  true,
-  `validateLayoutData failed:\n- ${validation.errors.join("\n- ")}`,
-);
+assert.equal(validation.valid, true, `validateLayoutData failed:\n- ${validation.errors.join("\n- ")}`);
 
 assert.equal(AUDITORIUMS.length, 14, "Exactly 14 auditoriums are required.");
 assert.deepEqual(
@@ -84,40 +73,23 @@ assert.deepEqual(
 );
 
 for (const auditorium of AUDITORIUMS) {
-  assert.equal(
-    auditorium.seats,
-    EXPECTED_CAPACITIES[auditorium.number],
-    `Theater ${auditorium.number} has the wrong capacity.`,
-  );
-
+  assert.equal(auditorium.seats, EXPECTED_CAPACITIES[auditorium.number], `Theater ${auditorium.number} has the wrong capacity.`);
+  assert.equal(auditorium.rows.reduce((sum, count) => sum + count, 0), auditorium.seats, `Theater ${auditorium.number} row total is wrong.`);
   const preset = AUDITORIUM_PRESETS[auditorium.preset];
   assert.ok(preset, `Theater ${auditorium.number} has an unknown preset.`);
-  assert.equal(
-    auditorium.bounds.xMax - auditorium.bounds.xMin,
-    preset.width,
-    `Theater ${auditorium.number} width differs from ${auditorium.preset}.`,
-  );
-  assert.equal(
-    auditorium.bounds.zMax - auditorium.bounds.zMin,
-    preset.depth,
-    `Theater ${auditorium.number} depth differs from ${auditorium.preset}.`,
-  );
-  assert.ok(auditorium.entry?.type, `Theater ${auditorium.number} needs an entry route type.`);
-  assert.ok(Number.isFinite(auditorium.entry.center), `Theater ${auditorium.number} needs a finite entry center.`);
+  assert.equal(auditorium.bounds.xMax - auditorium.bounds.xMin, preset.width, `Theater ${auditorium.number} width differs from ${auditorium.preset}.`);
+  assert.equal(auditorium.bounds.zMax - auditorium.bounds.zMin, preset.depth, `Theater ${auditorium.number} depth differs from ${auditorium.preset}.`);
+  assert.equal(auditorium.stadium.aisles, "dual-side", `Theater ${auditorium.number} must use dual side aisles.`);
 }
 
 for (const [preset, expectedNumbers] of Object.entries(EXPECTED_PRESET_GROUPS)) {
-  const actualNumbers = AUDITORIUMS
-    .filter((auditorium) => auditorium.preset === preset)
-    .map((auditorium) => auditorium.number)
-    .sort((a, b) => a - b);
-  assert.deepEqual(actualNumbers, expectedNumbers, `${preset} theater grouping is incorrect.`);
+  const actual = AUDITORIUMS.filter((room) => room.preset === preset).map((room) => room.number).sort((a, b) => a - b);
+  assert.deepEqual(actual, expectedNumbers, `${preset} theater grouping is incorrect.`);
 }
 
-const seatTotal = AUDITORIUMS.reduce((total, auditorium) => total + auditorium.seats, 0);
-assert.equal(EXPECTED_SEAT_TOTAL, 1093, "The declared expected seat total must remain 1,093.");
-assert.equal(seatTotal, 1093, "Auditorium capacities must total 1,093 seats.");
-assert.equal(validation.seatTotal, 1093, "Validator seat total must be 1,093.");
+assert.equal(EXPECTED_SEAT_TOTAL, 1093);
+assert.equal(AUDITORIUMS.reduce((sum, room) => sum + room.seats, 0), 1093);
+assert.equal(validation.seatTotal, 1093);
 
 const baseRooms = [...PUBLIC_SPACES, ...SERVICE_ROOMS, ...AUDITORIUMS];
 assertUnique(baseRooms.map(({ id }) => id), "Base room IDs");
@@ -125,114 +97,152 @@ assertUnique(ALL_ZONES.map(({ id }) => id), "ALL_ZONES IDs");
 assertUnique([...ALL_ZONES, ...AUDITORIUM_ENTRY_ZONES].map(({ id }) => id), "Navigable zone IDs");
 assertUnique(EQUIPMENT_ANCHORS.map(({ id }) => id), "Equipment anchor IDs");
 assertUnique(POS_STATIONS.map(({ id }) => id), "POS station IDs");
-assertUnique(
-  EQUIPMENT_ANCHORS.map(({ roomId, position }) => `${roomId}:${position.join(",")}`),
-  "Equipment anchor positions",
-);
-
 assertValidBounds({ bounds: MAP_BOUNDS }, "MAP_BOUNDS");
 for (const room of baseRooms) assertValidBounds(room, room.id);
 for (const zone of AUDITORIUM_ENTRY_ZONES) assertValidBounds(zone, zone.id);
 
-const roomsById = new Map(
-  [...PUBLIC_SPACES, ...SERVICE_ROOMS].map((room) => [room.id, room]),
-);
-
+const roomsById = new Map([...PUBLIC_SPACES, ...SERVICE_ROOMS].map((room) => [room.id, room]));
+const roomById = (id) => roomsById.get(id);
 for (const anchor of EQUIPMENT_ANCHORS) {
-  const room = roomsById.get(anchor.roomId);
+  const room = roomById(anchor.roomId);
   assert.ok(room, `${anchor.id} references missing room ${anchor.roomId}.`);
-  assert.equal(anchor.position.length, 3, `${anchor.id} must have an XYZ position.`);
-  assert.ok(anchor.position.every(Number.isFinite), `${anchor.id} position must be finite.`);
-  assert.equal(anchor.footprint.length, 2, `${anchor.id} must have a 2D footprint.`);
-  assert.ok(anchor.footprint.every((size) => Number.isFinite(size) && size > 0), `${anchor.id} footprint is invalid.`);
-  assert.ok(
-    pointInBounds(anchor.position[0], anchor.position[2], room.bounds),
-    `${anchor.id} center lies outside ${anchor.roomId}.`,
-  );
-
+  assert.equal(anchor.position.length, 3);
+  assert.equal(anchor.footprint.length, 2);
+  assert.ok(anchor.position.every(Number.isFinite));
+  assert.ok(anchor.footprint.every((value) => Number.isFinite(value) && value > 0));
+  assert.ok(pointInBounds(anchor.position[0], anchor.position[2], room.bounds), `${anchor.id} center lies outside ${anchor.roomId}.`);
   const cosine = Math.abs(Math.cos(anchor.rotation));
   const sine = Math.abs(Math.sin(anchor.rotation));
   const halfWidth = (anchor.footprint[0] * cosine + anchor.footprint[1] * sine) / 2;
   const halfDepth = (anchor.footprint[0] * sine + anchor.footprint[1] * cosine) / 2;
   const [x, , z] = anchor.position;
-  assert.ok(
-    x - halfWidth >= room.bounds.xMin && x + halfWidth <= room.bounds.xMax
-      && z - halfDepth >= room.bounds.zMin && z + halfDepth <= room.bounds.zMax,
-    `${anchor.id} footprint extends outside ${anchor.roomId}.`,
-  );
+  assert.ok(x - halfWidth >= room.bounds.xMin && x + halfWidth <= room.bounds.xMax
+    && z - halfDepth >= room.bounds.zMin && z + halfDepth <= room.bounds.zMax, `${anchor.id} footprint extends outside ${anchor.roomId}.`);
 }
 
+const topEntryNumbers = AUDITORIUMS.filter((room) => room.stadium.access === "top").map((room) => room.number);
+const bottomEntryNumbers = AUDITORIUMS.filter((room) => room.stadium.access === "bottom").map((room) => room.number);
+assert.deepEqual(topEntryNumbers, [1, 2, 9, 10, 11, 12, 13, 14], "Small auditoriums must be top-entry.");
+assert.deepEqual(bottomEntryNumbers, [3, 4, 5, 6, 7, 8], "Theaters 3–8 must be bottom-entry.");
 assert.deepEqual(
-  AUDITORIUMS.filter(({ entry }) => entry.type === "trash-cubby").map(({ number }) => number).sort((a, b) => a - b),
-  [1, 2, 9, 10, 11, 12, 13, 14],
-  "The small auditoriums must all use trash-can doorway cubbies.",
-);
-assert.equal(AUDITORIUMS.find(({ number }) => number === 3).entry.type, "storage-left-then-left");
-assert.equal(AUDITORIUMS.find(({ number }) => number === 6).entry.type, "right-then-left");
-assert.equal(AUDITORIUMS.find(({ number }) => number === 7).entry.type, "straight-side");
-assert.equal(AUDITORIUMS.find(({ number }) => number === 8).entry.type, "straight-side");
-assert.equal(AUDITORIUMS.find(({ number }) => number === 4).entry.type, "dogleg");
-assert.equal(AUDITORIUMS.find(({ number }) => number === 5).entry.type, "dogleg");
-assert.deepEqual(
-  AUDITORIUMS
-    .filter(({ entry }) => entry.type === "trash-cubby")
-    .map(({ number, entry }) => [number, entry.turnSide]),
-  [[1, "west"], [2, "west"], [9, "west"], [10, "east"], [11, "east"], [12, "east"], [13, "east"], [14, "east"]],
-  "Each small-theater cubby must keep the door side transcribed from the red sketch mark.",
-);
-assert.deepEqual(
-  AUDITORIUM_ENTRY_ZONES.map(({ id }) => id).sort(),
-  ["theater-3-entry", "theater-4-entry", "theater-5-entry"],
-  "The three vestibules that extend beyond their auditorium shells need explicit location zones.",
+  AUDITORIUMS.filter(({ entry }) => entry.type === "trash-cubby").map(({ number, entry }) => [number, entry.turnSide]),
+  [[1, "west"], [2, "west"], [9, "east"], [10, "east"], [11, "east"], [12, "east"], [13, "east"], [14, "west"]],
+  "Theater 9 and 14 cubby doors must use the v3 corrected sides.",
 );
 
-const lobby = PUBLIC_SPACES.find(({ id }) => id === "lobby");
-const approach = PUBLIC_SPACES.find(({ id }) => id === "lobby-approach");
-const hall = PUBLIC_SPACES.find(({ id }) => id === "main-corridor");
-const sodaService = PUBLIC_SPACES.find(({ id }) => id === "soda-service");
-assert.ok(lobby.bounds.zMax - lobby.bounds.zMin >= 24, "The V2 lobby must be substantially deeper than V1.");
-assert.ok(approach.bounds.zMax - approach.bounds.zMin >= 30, "The lobby-to-ticket hall must remain long.");
-assert.ok(hall.bounds.xMax - hall.bounds.xMin >= 200, "The main theater hall must remain long.");
-assert.ok(hall.bounds.zMax - hall.bounds.zMin <= 4.3, "The main theater hall must remain narrow.");
-assert.ok(sodaService.bounds.zMin >= hall.bounds.zMax, "The soda court must sit beyond ticket check and the main hall.");
-assert.ok(AUDITORIUMS.find(({ number }) => number === 4).bounds.zMin >= 72, "Theater 4 must be inset beyond the soda court.");
-assert.ok(AUDITORIUMS.find(({ number }) => number === 5).bounds.zMin >= 72, "Theater 5 must be inset beyond the soda court.");
-assert.ok(SERVICE_ROOMS.some(({ id }) => id === "trash-room"), "The labeled trash room must exist.");
-assert.ok(SERVICE_ROOMS.some(({ id }) => id === "approach-room"), "The secondary lobby-hall room must exist.");
-
-const roomById = (id) => SERVICE_ROOMS.find((room) => room.id === id);
-assert.equal(
-  boundsOverlap(roomById("under-storage-3").bounds, roomById("trash-room").bounds),
-  false,
-  "Theater 3 lower storage must not overlap the trash room.",
-);
-assert.equal(
-  boundsOverlap(roomById("under-storage-3").bounds, roomById("boys-restroom").bounds),
-  false,
-  "Theater 3 lower storage must not overlap the men's restroom.",
-);
-
-assert.equal(POS_STATIONS.length, 6, "The long concession desk needs six POS stations.");
-for (const station of POS_STATIONS) {
-  assert.ok(pointInBounds(station.position[0], station.position[2], lobby.bounds), `${station.id} must face the public lobby.`);
-}
-assert.equal(EQUIPMENT_ANCHORS.filter(({ type }) => type === "soda-fountain").length, 2, "The drink island needs two soda fountains.");
-assert.equal(EQUIPMENT_ANCHORS.filter(({ type }) => type === "icee-fountain").length, 2, "The drink island needs two ICEE bookends.");
-for (const anchor of EQUIPMENT_ANCHORS.filter(({ roomId }) => roomId === "soda-service")) {
-  assert.equal(anchor.rotation, 0, `${anchor.id} must face guests approaching from the ticket hall.`);
+const layouts = buildAuditoriumLayouts(AUDITORIUMS);
+for (const auditorium of AUDITORIUMS) {
+  const layout = layouts.get(auditorium.id);
+  assert.equal(layout.rows.length, auditorium.rows.length);
+  assert.equal(layout.sideStairTreads.length, (auditorium.rows.length - 1) * 2 * 2, `${auditorium.id} needs two half-steps per transition on both sides.`);
+  assert.ok(layout.halfStepRise <= 0.22, `${auditorium.id} half-step is too high for reliable walking.`);
+  assert.ok(layout.sideAisles.west.bounds.xMax <= layout.seatBounds.xMin + 1e-6);
+  assert.ok(layout.sideAisles.east.bounds.xMin >= layout.seatBounds.xMax - 1e-6);
+  if (layout.access === "top") {
+    assert.equal(layout.backElevation, 0, `${auditorium.id} must meet the hall at y=0.`);
+    assert.ok(layout.frontElevation < 0, `${auditorium.id} rows must descend toward its screen.`);
+    assert.ok(layout.routeSurfaces.some((surface) => surface.kind === "top-entry-landing"));
+    assert.ok(!layout.routeSurfaces.some((surface) => surface.kind === "corridor-ramp"), `${auditorium.id} cannot have an entry ramp.`);
+  } else {
+    assert.ok(layout.frontElevation >= 0, `${auditorium.id} bottom entry cannot descend below the hall.`);
+    assert.ok(layout.backElevation > layout.frontElevation, `${auditorium.id} rows must rise away from its screen.`);
+  }
 }
 
-for (const sample of [-40, -20, 1.5, 42, 164]) {
-  assert.equal(worldToPlanX(planToWorldX(sample)), sample, "Plan/world X transforms must be involutions.");
+const t1Layout = layouts.get("theater-1");
+const t1FrontGround = sampleAuditoriumGround(t1Layout, t1Layout.sideAisles.west.centerX, t1Layout.frontRowZ);
+const t1RearGround = sampleAuditoriumGround(t1Layout, t1Layout.sideAisles.west.centerX, t1Layout.backRowZ);
+assert.equal(selectGroundCandidate(t1FrontGround, 0).height, t1Layout.frontElevation, "T1 side stairs must descend below the hall.");
+assert.equal(selectGroundCandidate(t1RearGround, 0).height, 0, "T1 rear landing must remain level with the hall.");
+
+const t3 = AUDITORIUMS.find(({ number }) => number === 3);
+const t3Layout = layouts.get(t3.id);
+const t3RampMid = t3.entry.ramp.bounds;
+const midX = (t3RampMid.xMin + t3RampMid.xMax) / 2;
+const midZ = (t3RampMid.zMin + t3RampMid.zMax) / 2;
+const t3RampCandidate = selectGroundCandidate(sampleAuditoriumGround(t3Layout, midX, midZ), 0);
+assert.ok(Math.abs(t3RampCandidate.height - 0.12) < 0.001, "T3 route must use a subtle continuous incline.");
+assert.ok(
+  t3Layout.bowlBounds.xMax >= t3.entry.routeBounds.xMin,
+  "T3 route and front seating cross-aisle must meet without a ground seam.",
+);
+
+for (const number of [9, 14]) {
+  const auditorium = AUDITORIUMS.find((candidate) => candidate.number === number);
+  const halfWidth = auditorium.entry.cubbyHalfWidth ?? 1.6;
+  const sideClearance = auditorium.entry.turnSide === "east"
+    ? auditorium.bounds.xMax - (auditorium.entry.center + halfWidth)
+    : auditorium.entry.center - halfWidth - auditorium.bounds.xMin;
+  assert.ok(sideClearance >= 1.4, `Theater ${number} cubby door needs a full-width side passage into the bowl.`);
 }
-assert.equal(planToWorldX(PLAYER_SPAWN_PLAN.x), PLAYER_SPAWN_PLAN.x, "The entrance axis must remain fixed by the reflection.");
-assert.ok(planToWorldX(-19.35) > PLAYER_SPAWN_PLAN.x, "Plan-left concession must become physical player-left at the entrance.");
-assert.equal(worldToPlanDirection({ x: -1, z: 0 }).x, 1, "A physical right turn must point right in plan/minimap space.");
-assert.equal(planToWorldDirection({ x: 1, z: 0 }).x, -1, "Plan direction reflection must match position reflection.");
+
+const t6Storage = roomById("under-storage-6");
+const t6Layout = layouts.get("theater-6");
+const upperAtStorageBack = sampleAuditoriumGround(t6Layout, t6Layout.sideAisles.west.centerX, t6Storage.bounds.zMax)
+  .filter((candidate) => candidate.level === "seating-bowl");
+assert.ok(upperAtStorageBack.some((candidate) => candidate.height > t6Storage.ceilingHeight), "T6 storage roof must clear the seating deck above it.");
+assert.equal(t6Storage.doorCenters.length, 2, "T6 storage must have two doors to one room.");
+assert.equal(roomById("under-storage-3").doorCenters.length, 2, "T3 storage must have two doors to one room.");
+assert.ok(Number.isFinite(roomById("under-storage-3").ceilingHeight));
+assert.equal(boundsOverlap(roomById("under-storage-3").bounds, roomById("trash-room").bounds), false);
+assert.equal(boundsOverlap(roomById("under-storage-3").bounds, roomById("boys-restroom").bounds), false);
+
+const theater4 = AUDITORIUMS.find(({ number }) => number === 4);
+const theater5 = AUDITORIUMS.find(({ number }) => number === 5);
+assert.ok(theater4.bounds.zMin >= 75 && theater5.bounds.zMin >= 75, "T4/T5 must be recessed behind the fountain court.");
+assert.ok(Math.abs(theater4.entry.center - (theater4.bounds.xMax - 1.35)) >= 4.8, "T4 initial lateral leg must be about twice v2 length.");
+assert.ok(Math.abs(theater5.entry.center - (theater5.bounds.xMin + 1.35)) >= 4.8, "T5 initial lateral leg must mirror T4.");
+const theater8 = AUDITORIUMS.find(({ number }) => number === 8);
+const theater9 = AUDITORIUMS.find(({ number }) => number === 9);
+const theater10 = AUDITORIUMS.find(({ number }) => number === 10);
+assert.ok(theater8.entry.center > theater10.entry.center && theater8.entry.center < theater9.entry.center, "T8 entrance must fall after T10 and before T9.");
+assert.ok(Math.abs(roomById("candy-storage").doorCenter - theater9.entry.center) < 0.01, "Candy storage must be directly across from T9.");
+
+assert.equal(LOBBY_PLAN.customerCounter.length, 5, "Bent concession/bar counter must preserve every sketched vertex.");
+assert.deepEqual(LOBBY_PLAN.customerCounter[0], { x: -8.8, z: 20.4 });
+assert.deepEqual(LOBBY_PLAN.customerCounter.at(-1), { x: -20.1, z: 4.9 });
+assert.notEqual(LOBBY_PLAN.customerCounter[2].x, LOBBY_PLAN.customerCounter[3].x, "The POS face must retain its diagonal bend.");
+assert.equal(POS_STATIONS.length, 6, "The diagonal concession face needs six POS stations.");
+assert.ok(POS_STATIONS.every((station) => station.counterSegment === "diagonal-pos-run"));
+assert.equal(EQUIPMENT_ANCHORS.filter(({ type }) => type === "popper").length, 2, "The lobby sketch specifies two poppers.");
+assert.equal(EQUIPMENT_ANCHORS.filter(({ type }) => type === "fryer").length, 2, "The hot line needs two fryer placeholders.");
+assert.equal(LOBBY_PLAN.kiosks.length, 2, "The lobby needs two customer ticket kiosks.");
+assert.equal(LOBBY_PLAN.frontDoorCenters.length, 3, "The lobby front needs three double-door banks.");
+assert.deepEqual(LOBBY_PLAN.officePath, ["lobby", "office-overflow", "office"]);
+assert.equal(roomById("office-overflow").extraDoors[0].side, "north", "Office overflow must connect to the main office through a second door.");
+assert.equal(roomById("electrical-room").closed, true, "The extra approach door is a closed electrical room in v3.");
+assert.ok(pointInRect(21.4, 3.3, LOBBY_PLAN.envelope));
+
+const boys = roomById("boys-restroom");
+const girls = roomById("girls-restroom");
+assert.equal(boys.cubby.innerSide, "east", "Boys cubby door must be on the physical right.");
+assert.equal(girls.cubby.innerSide, "west", "Girls cubby door must be on the physical left.");
+assert.equal(HALL_END_EXITS.length, 2, "Both ends of the main hall need closed exterior doors.");
+
+const hall = publicById("main-corridor");
+const approach = publicById("lobby-approach");
+assert.ok(hall.bounds.xMax - hall.bounds.xMin >= 175, "The theater hall must remain long after spacing compression.");
+assert.ok(hall.bounds.zMax - hall.bounds.zMin <= 4.3, "The theater hall must remain narrow.");
+assert.ok(approach.bounds.zMax - approach.bounds.zMin >= 30, "The lobby-to-ticket approach must remain long.");
+assert.equal(roomById("future-task-room").bounds.zMin > 67, true, "Future task room must sit behind both fountain counters.");
+
+assert.equal(EQUIPMENT_ANCHORS.filter(({ type }) => type === "soda-fountain").length, 2);
+assert.equal(EQUIPMENT_ANCHORS.filter(({ type }) => type === "icee-fountain").length, 2);
+assert.ok(EQUIPMENT_ANCHORS.filter(({ roomId }) => roomId === "soda-service").every(({ rotation }) => rotation === 0));
+
+for (const sample of [-40, -20, 1.5, 42, 140]) assert.equal(worldToPlanX(planToWorldX(sample)), sample);
+assert.equal(planToWorldX(PLAYER_SPAWN_PLAN.x), PLAYER_SPAWN_PLAN.x);
+assert.ok(planToWorldX(-20) > PLAYER_SPAWN_PLAN.x, "Sketch-left concession must be physical player-left.");
+assert.equal(worldToPlanDirection({ x: -1, z: 0 }).x, 1);
+assert.equal(planToWorldDirection({ x: 1, z: 0 }).x, -1);
 const worldBounds = planToWorldBounds(MAP_BOUNDS);
-assert.ok(worldBounds.xMin < worldBounds.xMax, "Reflected world bounds must remain ordered.");
-assert.equal(worldBounds.xMax - worldBounds.xMin, MAP_BOUNDS.xMax - MAP_BOUNDS.xMin, "Reflection must preserve map width.");
+assert.ok(worldBounds.xMin < worldBounds.xMax);
+assert.equal(worldBounds.xMax - worldBounds.xMin, MAP_BOUNDS.xMax - MAP_BOUNDS.xMin);
 
 console.log(
-  `Layout valid: 14 theaters · 1,093 seats · 4 presets · ${EQUIPMENT_ANCHORS.length} equipment anchors · ${POS_STATIONS.length} POS stations.`,
+  `Layout valid: v3 · 14 theaters · 1,093 brown-leather tray seats · ${EQUIPMENT_ANCHORS.length} equipment anchors · ${POS_STATIONS.length} diagonal POS stations.`,
 );
+
+function publicById(id) {
+  return PUBLIC_SPACES.find((space) => space.id === id);
+}
