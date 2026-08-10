@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#09080d" />
+    <meta
+      name="description"
+      content="A first-person layout prototype of a fourteen-screen neighborhood movie theater."
+    />
+    <title>Mililani 14 — Theater Simulator</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main id="app" aria-label="First-person movie theater simulator">
+      <canvas id="game-canvas"></canvas>
+
+      <section id="loading-screen" class="screen-layer">
+        <div class="loading-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+        <p>Building Mililani 14</p>
+      </section>
+
+      <section id="intro" class="screen-layer intro-panel" aria-labelledby="intro-title">
+        <div class="eyebrow">LAYOUT PROTOTYPE · 14 SCREENS · 1,093 SEATS</div>
+        <h1 id="intro-title">MILILANI <span>14</span></h1>
+        <p>
+          Walk the first-pass theater shell reconstructed from Jacob's floor plan. This build focuses on
+          room relationships, scale, circulation, and equipment-ready work areas.
+        </p>
+        <button id="enter-button" type="button">ENTER THE THEATER</button>
+        <div class="control-list" aria-label="Controls">
+          <span><b>WASD</b> Move</span>
+          <span><b>Mouse</b> Look</span>
+          <span><b>Shift</b> Run</span>
+          <span><b>M</b> Map</span>
+          <span><b>Esc</b> Pause</span>
+        </div>
+      </section>
+
+      <section id="pause-card" class="pause-card" hidden>
+        <div class="eyebrow">SHIFT PAUSED</div>
+        <h2>Ready when you are.</h2>
+        <button id="resume-button" type="button">RESUME WALKTHROUGH</button>
+      </section>
+
+      <header id="hud" class="hud" hidden>
+        <div class="location-card">
+          <span class="location-kicker">CURRENT AREA</span>
+          <strong id="location-name">Front Walk</strong>
+          <small id="location-detail">Public entrance</small>
+        </div>
+        <div class="build-card">
+          <span>LAYOUT BUILD</span>
+          <strong>v0.1</strong>
+        </div>
+      </header>
+
+      <div id="crosshair" class="crosshair" hidden aria-hidden="true"></div>
+
+      <aside id="minimap-panel" class="minimap-panel" aria-label="Theater minimap">
+        <div class="minimap-header">
+          <span>FLOOR PLAN</span>
+          <button id="map-close" type="button" aria-label="Hide map">×</button>
+        </div>
+        <canvas id="minimap" width="700" height="360"></canvas>
+        <div class="map-legend"><i></i> You are here</div>
+      </aside>
+
+      <div id="touch-controls" class="touch-controls" hidden>
+        <div id="move-stick" class="move-stick" aria-label="Move joystick">
+          <div id="move-knob"></div>
+        </div>
+        <div class="touch-hint">DRAG TO LOOK</div>
+        <button id="touch-run" type="button">RUN</button>
+      </div>
+
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    </main>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
