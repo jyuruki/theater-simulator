@@ -36,25 +36,25 @@ The official sources establish TITAN LUXE at the complex but do not identify its
 | --- | --- | --- | --- |
 | Compact | 1, 2 | 9.5 × 13 m | 38, 38 |
 | Medium | 4, 5 | 11.5 × 15.5 m | 58, 58 |
-| Large | 3, 6, 7, 8 | 17.5 × 23 m | 148, 148, 153, 152 |
+| Large | 3, 6, 7, 8 | 17.5 × 27 m | 148, 148, 153, 152 |
 | Standard | 9–14 | 10.5 × 13.5 m | 50 each |
 
-Every auditorium has a procedural screen, raised seating tiers, walkable aisle elevations, acoustic panels, entry signage, and instanced seat components. Theater 3 uses the large-format/TITAN LUXE scale. These are proportional gameplay interpretations rather than real construction dimensions.
+Every auditorium has a procedural screen, brown leather seating with tray tables, acoustic panels, entry signage, and instanced seat components. Theaters 3–8 enter at the bottom/front of the bowl and rise toward the rear. Theaters 1/2 and 9–14 enter at a rear landing exactly level with the hall, then descend toward the screen. All rooms use stairs at both outer sides, with two half-height treads per row transition and no center aisle. Theater 3 uses the large-format/TITAN LUXE scale. These are proportional gameplay interpretations rather than real construction dimensions.
 
 ## Sketch interpretations
 
 - The entrance leads into a large gray-stone lobby/service block, then a long maroon-carpeted ticket approach, then the narrow east–west theater hall.
-- A self-serve court sits straight ahead beyond ticket check. Its first island carries `ICEE | soda | cups/lids/straws | soda | ICEE`; the equal-length counter behind it is intentionally empty for later gameplay. A support room occupies its sketch-left side.
+- A self-serve court sits straight ahead beyond ticket check. Its first island carries `ICEE | soda | cups/lids/straws | soda | ICEE`; the equal-length counter behind it is intentionally empty for later gameplay. The future-task room is directly behind both counters.
 - The upper-right handwritten room is interpreted as **Candy Storage**.
-- `KS`, `K`, `B`, `C`, and `OFF` are Kitchen Storage, Kitchen, Bar, Concession, and Office.
+- `KS`, `K`, `B`, `C`, and `OFF` are Kitchen Storage, Kitchen, Bar, Concession, and Office. The lobby counter retains all five traced vertices: its top horizontal segment is the guest bar, its diagonal run carries six POS systems, and its lower kink is intentional. The hot line includes two poppers and two fryer placeholders. The first office door enters an interim candy-overflow room; a second door reaches the manager office.
 - `BB` and `GB` are represented as men's and women's restrooms. The supplied green/blue/yellow fixture key is translated to stalls/sinks/urinals.
 - The dotted `STOCK` area behind Theaters 4/5 is treated as lower-level usher/soda stock, not as a main-floor room.
-- Other dotted storage is represented as below-tier storage associated with the stadium rake. Theater 3's left-hand storage door and Theater 6's paired storage doors are present; final lower-floor elevations still need field confirmation.
-- Theater 3 has a long side passage, left-hand storage door, then a left turn into its seating area. Theater 6 has a long transverse hall followed by a left turn up its side aisle.
-- Theaters 4 and 5 are inset beyond the soda court with opposite left/right doglegs. Theaters 7 and 8 use recessed soundlocks and straight side aisles, with their seating banks on the right.
+- Other dotted storage is represented as below-tier storage associated with the stadium rake. Theaters 3 and 6 each have two doors into one lower room, an explicit roof, and an elevation-aware floor sampler so the player stays on the correct stacked level.
+- Theater 3 has a long side passage, an initial left storage-hall door, two lower-room doors, a very gentle incline, and an open turn into the front seating apron. Theater 6 has a flat transverse hall, two doors along it into one lower room, then a long side passage to the front apron.
+- Theaters 4 and 5 are recessed in the court beyond and beside the fountain room. Their first lateral legs are approximately twice the previous length; their final corridors open directly into the bowl without an invented doorway. Theaters 7 and 8 use gently inclined straight side routes, with their seating banks on the right.
 - Theaters 1, 2, and 9–14 use recessed entry cubbies with side doors and trash cans rather than centered straight openings.
-- The main restrooms have privacy-entry returns. The explicit trash room and both doors to provisionally empty restroom shells are included even though their interior uses remain to be confirmed.
-- Red sketch marks are interpreted as public doors or egress points where the circulation context supports that reading. Door swing and exact handing are provisional.
+- The main restrooms have privacy-entry cubbies: the boys' inner door is on the physical right and the girls' is on the physical left. The unlabeled approach door is now a closed electrical-room door. The explicit trash room remains modeled.
+- Red sketch marks are interpreted as doors. Closed exterior doors are present at both ends of the main theater hall; the outdoor continuation remains a future phase. Door swing animation is still provisional.
 - The lobby mural is an original procedural island-botanical composition inspired by local design character; it is not a copy of an existing artwork.
 
 ## Best next corrections
