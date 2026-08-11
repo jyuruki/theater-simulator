@@ -123,7 +123,7 @@ export class AABBCollisionWorld {
     return feetY + height > collider.minY + EPSILON && feetY < collider.maxY - EPSILON;
   }
 
-  _resolveX(position, radius, direction, feetY, height) {
+  _resolveX(position, radius, direction, feetY, height, previousX = null) {
     let collided = false;
 
     for (const box of this.colliders) {
@@ -140,8 +140,14 @@ export class AABBCollisionWorld {
       if (position.x <= leftLimit || position.x >= rightLimit) continue;
 
       if (direction > 0) {
+        // Only the X movement that crossed the collider's left boundary may
+        // resolve to that boundary. If the capsule was already overlapping
+        // on another axis, treating its movement direction as the collision
+        // normal can eject it across the entire width of a long wall.
+        if (previousX !== null && previousX > leftLimit + EPSILON) continue;
         position.x = leftLimit;
       } else if (direction < 0) {
+        if (previousX !== null && previousX < rightLimit - EPSILON) continue;
         position.x = rightLimit;
       } else {
         position.x = position.x - leftLimit < rightLimit - position.x ? leftLimit : rightLimit;
@@ -152,7 +158,7 @@ export class AABBCollisionWorld {
     return collided;
   }
 
-  _resolveZ(position, radius, direction, feetY, height) {
+  _resolveZ(position, radius, direction, feetY, height, previousZ = null) {
     let collided = false;
 
     for (const box of this.colliders) {
@@ -169,8 +175,10 @@ export class AABBCollisionWorld {
       if (position.z <= nearLimit || position.z >= farLimit) continue;
 
       if (direction > 0) {
+        if (previousZ !== null && previousZ > nearLimit + EPSILON) continue;
         position.z = nearLimit;
       } else if (direction < 0) {
+        if (previousZ !== null && previousZ < farLimit - EPSILON) continue;
         position.z = farLimit;
       } else {
         position.z = position.z - nearLimit < farLimit - position.z ? nearLimit : farLimit;
@@ -243,14 +251,44 @@ export class AABBCollisionWorld {
     let collidedX = false;
     let collidedZ = false;
 
+    // Repair a shallow seam penetration locally before applying input. This
+    // uses the shortest escape path and never falls back to a stored position.
+    if (this.isOverlapping(position, radius, feetY, height)) {
+      const beforeX = position.x;
+      const beforeZ = position.z;
+      this.depenetrate(position, radius, feetY, height);
+      collidedX = Math.abs(position.x - beforeX) > EPSILON;
+      collidedZ = Math.abs(position.z - beforeZ) > EPSILON;
+    }
+
     for (let step = 0; step < steps; step += 1) {
+      const previousX = position.x;
       position.x += stepX;
-      collidedX = this._resolveX(position, radius, Math.sign(stepX), feetY, height) || collidedX;
+      if (Math.abs(stepX) > EPSILON) {
+        collidedX = this._resolveX(
+          position,
+          radius,
+          Math.sign(stepX),
+          feetY,
+          height,
+          previousX,
+        ) || collidedX;
+      }
       const xBounds = this._applyBounds(position, radius);
       collidedX = xBounds.x || collidedX;
 
+      const previousZ = position.z;
       position.z += stepZ;
-      collidedZ = this._resolveZ(position, radius, Math.sign(stepZ), feetY, height) || collidedZ;
+      if (Math.abs(stepZ) > EPSILON) {
+        collidedZ = this._resolveZ(
+          position,
+          radius,
+          Math.sign(stepZ),
+          feetY,
+          height,
+          previousZ,
+        ) || collidedZ;
+      }
       const zBounds = this._applyBounds(position, radius);
       collidedX = zBounds.x || collidedX;
       collidedZ = zBounds.z || collidedZ;
@@ -264,8 +302,39 @@ export class AABBCollisionWorld {
     for (let iteration = 0; iteration < iterations; iteration += 1) {
       const beforeX = position.x;
       const beforeZ = position.z;
-      this._resolveX(position, radius, 0, feetY, height);
-      this._resolveZ(position, radius, 0, feetY, height);
+
+      for (const box of this.colliders) {
+        if (!box.enabled || !this._overlapsVertically(box, feetY, height)) continue;
+
+        const nearestX = clamp(position.x, box.minX, box.maxX);
+        const nearestZ = clamp(position.z, box.minZ, box.maxZ);
+        const deltaX = position.x - nearestX;
+        const deltaZ = position.z - nearestZ;
+        const distanceSquared = deltaX * deltaX + deltaZ * deltaZ;
+        if (distanceSquared >= radius * radius - EPSILON) continue;
+
+        if (distanceSquared > EPSILON * EPSILON) {
+          const distance = Math.sqrt(distanceSquared);
+          const correction = radius - distance + EPSILON;
+          position.x += (deltaX / distance) * correction;
+          position.z += (deltaZ / distance) * correction;
+          continue;
+        }
+
+        // The center is inside the box (or exactly on one of its faces).
+        // Escape through the closest expanded face, rather than resolving X
+        // first and potentially jumping the length of a horizontal wall.
+        const escapes = [
+          { axis: "x", value: box.minX - radius, distance: Math.abs(position.x - (box.minX - radius)) },
+          { axis: "x", value: box.maxX + radius, distance: Math.abs(position.x - (box.maxX + radius)) },
+          { axis: "z", value: box.minZ - radius, distance: Math.abs(position.z - (box.minZ - radius)) },
+          { axis: "z", value: box.maxZ + radius, distance: Math.abs(position.z - (box.maxZ + radius)) },
+        ];
+        const escape = escapes.reduce((closest, candidate) => (
+          candidate.distance < closest.distance ? candidate : closest
+        ));
+        position[escape.axis] = escape.value;
+      }
       this._applyBounds(position, radius);
       if (Math.abs(beforeX - position.x) < EPSILON && Math.abs(beforeZ - position.z) < EPSILON) break;
     }
@@ -299,8 +368,6 @@ export class FirstPersonController {
     jumpBufferTime = 0.1,
     maxStepHeight = 0.34,
     groundSnapDistance = 0.42,
-    stuckDetectionTime = 0.75,
-    stuckInputThreshold = 0.25,
     mouseSensitivity = 0.0021,
     touchLookSensitivity = 0.0043,
     initialYaw = null,
@@ -329,13 +396,6 @@ export class FirstPersonController {
     if (!Number.isFinite(jumpBufferTime) || jumpBufferTime < 0) {
       throw new RangeError("jumpBufferTime must be a finite non-negative number.");
     }
-    if (!Number.isFinite(stuckDetectionTime) || stuckDetectionTime <= 0) {
-      throw new RangeError("stuckDetectionTime must be a finite positive number.");
-    }
-    if (!Number.isFinite(stuckInputThreshold)) {
-      throw new RangeError("stuckInputThreshold must be finite.");
-    }
-
     this.camera = camera;
     this.domElement = domElement;
     this.collisionWorld = collisionWorld;
@@ -354,8 +414,6 @@ export class FirstPersonController {
     this.jumpBufferTime = Math.max(0, jumpBufferTime);
     this.maxStepHeight = maxStepHeight;
     this.groundSnapDistance = groundSnapDistance;
-    this.stuckDetectionTime = Math.max(0.1, stuckDetectionTime);
-    this.stuckInputThreshold = clamp(stuckInputThreshold, 0, 1);
     this.mouseSensitivity = mouseSensitivity;
     this.touchLookSensitivity = touchLookSensitivity;
     this.groundHeight = groundHeight;
@@ -399,9 +457,6 @@ export class FirstPersonController {
     this._simulationTime = 0;
     this._lastGroundedTime = Number.NEGATIVE_INFINITY;
     this._jumpQueuedUntil = Number.NEGATIVE_INFINITY;
-    this._stuckElapsed = 0;
-    this._stuckAnchorPosition = this.position.clone();
-    this._stuckDirection = new THREE.Vector2();
     this._lastSafePosition = null;
     this._safePositionHistory = [];
 
@@ -715,7 +770,6 @@ export class FirstPersonController {
     this._movePointerId = null;
     this._lookPointerId = null;
     this._jumpQueuedUntil = Number.NEGATIVE_INFINITY;
-    this._resetStuckTracking();
     this._resetMoveKnob();
   }
 
@@ -726,12 +780,6 @@ export class FirstPersonController {
     if (Number.isFinite(sample)) return sample;
     if (sample && Number.isFinite(sample.height) && sample.walkable !== false) return sample.height;
     return null;
-  }
-
-  _resetStuckTracking() {
-    this._stuckElapsed = 0;
-    this._stuckAnchorPosition?.copy(this.position);
-    this._stuckDirection?.set(0, 0);
   }
 
   _isPlayerOverlapping(position = this.position) {
@@ -762,9 +810,9 @@ export class FirstPersonController {
   }
 
   /**
-   * Attempts collision depenetration, then optionally falls back to a recent
-   * grounded position. Automatic recovery only enables the fallback after an
-   * actual overlap; callers can invoke this method manually for a tight corner.
+   * Explicitly attempts collision depenetration, then optionally falls back
+   * to a recent grounded position. Normal wall contact never calls this
+   * automatically; callers can invoke it for a genuine stuck state.
    */
   unstick({ fallback = true, reason = "manual" } = {}) {
     const before = this.position.clone();
@@ -812,7 +860,6 @@ export class FirstPersonController {
     this.velocity.set(0, 0, 0);
     this.verticalVelocity = 0;
     this._jumpQueuedUntil = Number.NEGATIVE_INFINITY;
-    this._resetStuckTracking();
 
     const moved = before.distanceToSquared(this.position) > EPSILON * EPSILON;
     const recovered = (wasOverlapping && !overlapping) || (!wasOverlapping && moved);
@@ -846,7 +893,6 @@ export class FirstPersonController {
       this.collisionWorld.depenetrate(this.position, this.radius, this.position.y, this.bodyHeight);
     }
     this._jumpQueuedUntil = Number.NEGATIVE_INFINITY;
-    this._resetStuckTracking();
     if (resetVelocity) {
       const groundY = this._sampleGround(this.position.x, this.position.z, this.position.y);
       if (groundY !== null && Math.abs(this.position.y - groundY) <= this.groundSnapDistance) {
@@ -906,56 +952,6 @@ export class FirstPersonController {
       forward /= length;
     }
     return { strafe, forward, magnitude: Math.min(1, length) };
-  }
-
-  _updateStuckRecovery({ input, targetX, targetZ, collision, deltaSeconds }) {
-    const intendedSpeed = Math.hypot(targetX, targetZ);
-    const sustainedAttempt = this.active
-      && this.grounded
-      && input.magnitude >= this.stuckInputThreshold
-      && intendedSpeed > 0.5;
-
-    if (!sustainedAttempt) {
-      this._resetStuckTracking();
-      return false;
-    }
-
-    const directionX = targetX / intendedSpeed;
-    const directionZ = targetZ / intendedSpeed;
-    const previousDirectionLength = this._stuckDirection.length();
-    const directionDot = previousDirectionLength > EPSILON
-      ? directionX * this._stuckDirection.x + directionZ * this._stuckDirection.y
-      : -1;
-    if (directionDot < 0.65) {
-      this._stuckAnchorPosition.copy(this.position);
-      this._stuckDirection.set(directionX, directionZ);
-      this._stuckElapsed = 0;
-      return false;
-    }
-
-    this._stuckDirection.set(directionX, directionZ);
-    const netProgress = (this.position.x - this._stuckAnchorPosition.x) * directionX
-      + (this.position.z - this._stuckAnchorPosition.z) * directionZ;
-    const usefulProgress = Math.max(0.18, this.radius * 0.55);
-    if (netProgress >= usefulProgress) {
-      this._stuckAnchorPosition.copy(this.position);
-      this._stuckElapsed = 0;
-      return false;
-    }
-
-    this._stuckElapsed += deltaSeconds;
-    if (this._stuckElapsed < this.stuckDetectionTime) return false;
-    this._resetStuckTracking();
-
-    // Contact with a flat wall is expected. Only use a stored-position
-    // fallback automatically when the capsule is actually penetrating.
-    if (this._isPlayerOverlapping()) {
-      return this.unstick({ fallback: true, reason: "automatic-overlap" });
-    }
-    if (collision.collidedX && collision.collidedZ) {
-      return this.unstick({ fallback: false, reason: "automatic-corner-depenetration" });
-    }
-    return false;
   }
 
   _step(deltaSeconds) {
@@ -1031,14 +1027,10 @@ export class FirstPersonController {
     }
 
     if (this.grounded) this._lastGroundedTime = this._simulationTime;
-    const recovered = this._updateStuckRecovery({
-      input,
-      targetX,
-      targetZ,
-      collision,
-      deltaSeconds,
-    });
-    if (!recovered && this.grounded && !collision.collidedX && !collision.collidedZ) {
+    // A blocked movement direction is ordinary wall contact, not evidence
+    // that the player should be moved to a stored position. Recovery remains
+    // explicit through `unstick()`.
+    if (this.grounded && !this._isPlayerOverlapping()) {
       this._rememberSafePosition();
     }
   }

@@ -358,7 +358,9 @@ function addRouteReserveSurface(surfaces, auditorium, layout) {
   const startZ = entry.vestibuleBounds?.zMax
     ?? entry.transverseBounds?.zMax
     ?? auditorium.bounds.zMin;
-  const endZ = Math.max(startZ + 0.05, entry.arrivalZ + 0.35);
+  const endZ = auditorium.screenSide === "north"
+    ? auditorium.bounds.zMax - 0.2
+    : Math.max(startZ + 0.05, entry.arrivalZ + 0.35);
   surfaces.push(flatSurface(
     `${auditorium.id}-reserved-side-route`,
     {
