@@ -1,5 +1,6 @@
 import {
   AUDITORIUMS,
+  COURTYARD_PLAN,
   HALL_END_EXITS,
   MAP_BOUNDS,
   PUBLIC_SPACES,
@@ -44,7 +45,6 @@ const SERVICE_LABELS = Object.freeze({
   "electrical-room": "ELEC",
   "under-storage-3": "U/S 3",
   "under-storage-6": "U/S 6",
-  "usher-stock": "USHER",
 });
 
 const ROUTE_STYLE = Object.freeze({
@@ -178,14 +178,13 @@ function drawCenteredLabel(context, label, rectangle, options = {}) {
 
 function drawPublicSpaces(context, view) {
   for (const space of PUBLIC_SPACES) {
+    if (COURTYARD_PLAN.publicSpaceIds.includes(space.id)) continue;
     const rectangle = fillZone(context, space, view);
     const label = {
       lobby: "LOBBY",
       "lobby-approach": "LOBBY HALL",
       "ticket-check": "TICKETS",
       "main-corridor": "THEATER HALL",
-      "soda-service": "DRINKS",
-      "recessed-theater-court": "T4–5 COURT",
     }[space.id];
 
     if (label) {
@@ -197,6 +196,18 @@ function drawPublicSpaces(context, view) {
       });
     }
   }
+
+  const courtyardRectangle = fillZone(context, {
+    id: COURTYARD_PLAN.id,
+    bounds: COURTYARD_PLAN.bounds,
+    kind: "soda-service",
+  }, view);
+  drawCenteredLabel(context, "FOUNTAIN / T3–5 COURT", courtyardRectangle, {
+    color: "rgba(250,246,238,0.4)",
+    preferredSize: 7.2,
+    minimumSize: 4.5,
+    weight: 700,
+  });
 }
 
 function drawRouteRectangle(context, bounds, view, options = {}) {
@@ -240,6 +251,14 @@ function routeSegmentsFor(auditorium) {
     return [{ kind: "route", bounds: entry.routeBounds }];
   }
 
+  if (entry.transverseBounds || entry.longRouteBounds) {
+    return [
+      ...(entry.vestibuleBounds ? [{ kind: "vestibule", bounds: entry.vestibuleBounds }] : []),
+      ...(entry.transverseBounds ? [{ kind: "transverse", bounds: entry.transverseBounds }] : []),
+      ...(entry.longRouteBounds ? [{ kind: "route", bounds: entry.longRouteBounds }] : []),
+    ];
+  }
+
   if (entry.vestibuleBounds) {
     const routeWidth = Math.max(1.6, (entry.vestibuleBounds.xMax - entry.vestibuleBounds.xMin) * 0.24);
     const sideRoute = entry.routeSide === "east"
@@ -258,13 +277,6 @@ function routeSegmentsFor(auditorium) {
     return [
       { kind: "vestibule", bounds: entry.vestibuleBounds },
       { kind: "route", bounds: sideRoute },
-    ];
-  }
-
-  if (entry.transverseBounds || entry.longRouteBounds) {
-    return [
-      ...(entry.transverseBounds ? [{ kind: "transverse", bounds: entry.transverseBounds }] : []),
-      ...(entry.longRouteBounds ? [{ kind: "route", bounds: entry.longRouteBounds }] : []),
     ];
   }
 
@@ -327,7 +339,7 @@ function drawAuditoriumLabels(context, view) {
     const label = `T${auditorium.number}`;
     const fontSize = fitFontSize(label, rectangle, 9.5, 5.5);
     const centerX = rectangle.x + rectangle.width / 2;
-    const hasLowerStorage = auditorium.underStorage || auditorium.number === 4 || auditorium.number === 5;
+    const hasLowerStorage = auditorium.underStorage;
     const labelAnchorY = auditorium.screenSide === "north" && hasLowerStorage ? 0.22 : 0.5;
     const centerY = rectangle.y + rectangle.height * labelAnchorY;
 
@@ -421,11 +433,11 @@ function drawServiceDoors(context, view) {
   for (const room of SERVICE_ROOMS) {
     if (room.cubby?.bounds) {
       const cubby = room.cubby.bounds;
-      const outerCenter = (cubby.xMin + cubby.xMax) / 2;
+      const outerCenter = room.cubby.outerDoorCenter ?? (cubby.xMin + cubby.xMax) / 2;
       drawDoorMarker(context, "south", cubby.zMin, outerCenter, view);
       const innerSide = room.cubby.innerSide;
       const innerX = innerSide === "west" ? cubby.xMin : cubby.xMax;
-      drawDoorMarker(context, innerSide, innerX, (cubby.zMin + cubby.zMax) / 2, view);
+      drawDoorMarker(context, innerSide, innerX, room.cubby.innerDoorCenter ?? (cubby.zMin + cubby.zMax) / 2, view);
     } else if (room.entrySide && Number.isFinite(room.doorCenter)) {
       const coordinate = room.entrySide === "south" ? room.bounds.zMin
         : room.entrySide === "north" ? room.bounds.zMax
