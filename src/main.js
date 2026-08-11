@@ -51,7 +51,9 @@ try {
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x08080b);
-  scene.fog = new THREE.Fog(0x08080b, 92, 205);
+  // Keep atmospheric depth without making the far end of the authored
+  // complex look as if it is loading in by proximity.
+  scene.fog = new THREE.Fog(0x08080b, 220, 320);
 
   const camera = new THREE.PerspectiveCamera(67, window.innerWidth / window.innerHeight, 0.06, 260);
   const spawnWorld = {
@@ -176,7 +178,6 @@ try {
   function animate() {
     const delta = Math.min(clock.getDelta(), 0.1);
     controller.update(delta);
-    world.updateVisibility(controller.position.x, controller.position.z);
     updateHud();
 
     camera.getWorldDirection(cameraDirection);
@@ -217,7 +218,7 @@ try {
     enumerable: false,
     writable: false,
     value: Object.freeze({
-      layoutVersion: "mililani-sketch-v3",
+      layoutVersion: "mililani-sketch-v4",
       validation: Object.freeze(validation),
       stats: world.stats,
       controller,
