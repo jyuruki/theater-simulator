@@ -37,12 +37,14 @@ const GEOMETRY_EPSILON = 1e-4;
 
 const THREE = await import("three");
 const structuralFloors = [];
+const structuralCeilings = [];
 const structuralWalls = [];
 const originalAdd = THREE.Object3D.prototype.add;
 
 const isStructuralFloor = (name) => (
-  /-floor$|-tier-\d+$|-stair-\d+-\d+$|cross-aisle$|route-ramp$/.test(name)
+  /-floor$|-tier-\d+$|-riser-\d+$|-stair-\d+-\d+$|cross-aisle$|route-ramp$/.test(name)
 );
+const isStructuralCeiling = (name) => /-ceiling$/.test(name);
 
 THREE.Object3D.prototype.add = function captureStructuralMeshes(...objects) {
   for (const object of objects) {
@@ -50,6 +52,19 @@ THREE.Object3D.prototype.add = function captureStructuralMeshes(...objects) {
 
     if (isStructuralFloor(object.name)) {
       structuralFloors.push({
+        id: object.name,
+        x: object.position.x,
+        y: object.position.y,
+        z: object.position.z,
+        width: object.scale.x,
+        height: object.scale.y,
+        depth: object.scale.z,
+        rotationX: object.rotation.x,
+      });
+    }
+
+    if (isStructuralCeiling(object.name)) {
+      structuralCeilings.push({
         id: object.name,
         x: object.position.x,
         y: object.position.y,
@@ -84,9 +99,13 @@ const { createTheaterWorld } = await import("../src/world.js");
 const { worldToPlanX } = await import("../src/coordinates.js");
 const {
   AUDITORIUMS,
+  COURTYARD_PLAN,
   LOBBY_PLAN,
   MAP_BOUNDS,
   PLAYER_SPAWN_PLAN,
+  PUBLIC_SPACES,
+  SERVICE_ROOMS,
+  TICKET_APPROACH_PLAN,
 } = await import("../src/layout-data.js");
 
 const rendererStub = { capabilities: { getMaxAnisotropy: () => 4 } };
@@ -203,6 +222,9 @@ assert.deepEqual(duplicateColliders, [], `Exact duplicate colliders:\n${duplicat
 const floorOverlaps = coplanarFloorOverlaps(structuralFloors);
 assert.deepEqual(floorOverlaps, [], `Coplanar structural floor overlaps:\n${floorOverlaps.join("\n")}`);
 
+const ceilingOverlaps = coplanarFloorOverlaps(structuralCeilings);
+assert.deepEqual(ceilingOverlaps, [], `Coplanar structural ceiling overlaps:\n${ceilingOverlaps.join("\n")}`);
+
 const wallOverlaps = coplanarWallOverlaps(structuralWalls);
 assert.deepEqual(wallOverlaps, [], `Coplanar structural wall overlaps:\n${wallOverlaps.join("\n")}`);
 
@@ -210,7 +232,9 @@ const gridWidth = Math.round((MAP_BOUNDS.xMax - MAP_BOUNDS.xMin) / GRID_STEP) + 
 const gridDepth = Math.round((MAP_BOUNDS.zMax - MAP_BOUNDS.zMin) / GRID_STEP) + 1;
 const gridSize = gridWidth * gridDepth;
 const blocked = new Uint8Array(gridSize);
+const floorSupported = new Uint8Array(gridSize);
 const visited = new Uint8Array(gridSize);
+const floorVisited = new Uint8Array(gridSize);
 const queueX = new Int32Array(gridSize);
 const queueZ = new Int32Array(gridSize);
 
@@ -218,6 +242,31 @@ const gridIndex = (gridX, gridZ) => gridZ * gridWidth + gridX;
 const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, value));
 const planXAt = (gridX) => MAP_BOUNDS.xMin + gridX * GRID_STEP;
 const planZAt = (gridZ) => MAP_BOUNDS.zMin + gridZ * GRID_STEP;
+
+// Rasterize every authored walking surface separately from collision. The
+// main reachability flood intentionally ignores floors so it still catches a
+// missing containment wall even though groundHeight has a fallback plane.
+// A second flood below requires these rendered surfaces and catches holes in
+// actual routes rather than allowing that fallback to mask them.
+for (const floor of structuralFloors) {
+  const centerPlanX = worldToPlanX(floor.x);
+  const halfWidth = floor.width / 2;
+  const halfDepth = (
+    Math.abs(Math.cos(floor.rotationX)) * floor.depth
+    + Math.abs(Math.sin(floor.rotationX)) * floor.height
+  ) / 2;
+  const gridXMin = Math.max(0, Math.floor((centerPlanX - halfWidth - MAP_BOUNDS.xMin) / GRID_STEP));
+  const gridXMax = Math.min(gridWidth - 1, Math.ceil((centerPlanX + halfWidth - MAP_BOUNDS.xMin) / GRID_STEP));
+  const gridZMin = Math.max(0, Math.floor((floor.z - halfDepth - MAP_BOUNDS.zMin) / GRID_STEP));
+  const gridZMax = Math.min(gridDepth - 1, Math.ceil((floor.z + halfDepth - MAP_BOUNDS.zMin) / GRID_STEP));
+  for (let gridZ = gridZMin; gridZ <= gridZMax; gridZ += 1) {
+    if (Math.abs(planZAt(gridZ) - floor.z) > halfDepth + GEOMETRY_EPSILON) continue;
+    for (let gridX = gridXMin; gridX <= gridXMax; gridX += 1) {
+      if (Math.abs(planXAt(gridX) - centerPlanX) > halfWidth + GEOMETRY_EPSILON) continue;
+      floorSupported[gridIndex(gridX, gridZ)] = 1;
+    }
+  }
+}
 
 for (const collider of world.colliders) {
   const overlapsPlayerHeight = PLAYER_HEIGHT > collider.minY + GEOMETRY_EPSILON
@@ -294,7 +343,49 @@ while (queueHead < queueTail) {
   }
 }
 
-function isReachable(planX, planZ, tolerance = 0.31) {
+let uncoveredReachableCount = 0;
+const uncoveredReachableSamples = [];
+for (let gridZ = 0; gridZ < gridDepth; gridZ += 1) {
+  for (let gridX = 0; gridX < gridWidth; gridX += 1) {
+    const index = gridIndex(gridX, gridZ);
+    if (!visited[index] || blocked[index] || floorSupported[index]) continue;
+    uncoveredReachableCount += 1;
+    if (uncoveredReachableSamples.length < 20) {
+      uncoveredReachableSamples.push(`(${planXAt(gridX).toFixed(1)}, ${planZAt(gridZ).toFixed(1)})`);
+    }
+  }
+}
+assert.equal(
+  uncoveredReachableCount,
+  0,
+  `Reachable collision-free cells without rendered floor: ${uncoveredReachableSamples.join(", ")}`,
+);
+
+assert.equal(floorSupported[spawnIndex], 1, "Player spawn must stand on rendered floor geometry.");
+queueHead = 0;
+queueTail = 0;
+queueX[queueTail] = spawnGridX;
+queueZ[queueTail] = spawnGridZ;
+queueTail += 1;
+floorVisited[spawnIndex] = 1;
+while (queueHead < queueTail) {
+  const gridX = queueX[queueHead];
+  const gridZ = queueZ[queueHead];
+  queueHead += 1;
+  for (const [offsetX, offsetZ] of neighborOffsets) {
+    const nextX = gridX + offsetX;
+    const nextZ = gridZ + offsetZ;
+    if (nextX < 0 || nextX >= gridWidth || nextZ < 0 || nextZ >= gridDepth) continue;
+    const nextIndex = gridIndex(nextX, nextZ);
+    if (blocked[nextIndex] || !floorSupported[nextIndex] || floorVisited[nextIndex]) continue;
+    floorVisited[nextIndex] = 1;
+    queueX[queueTail] = nextX;
+    queueZ[queueTail] = nextZ;
+    queueTail += 1;
+  }
+}
+
+function isReachable(planX, planZ, tolerance = 0.31, reachability = visited) {
   const centerX = Math.round((planX - MAP_BOUNDS.xMin) / GRID_STEP);
   const centerZ = Math.round((planZ - MAP_BOUNDS.zMin) / GRID_STEP);
   const gridRadius = Math.ceil(tolerance / GRID_STEP);
@@ -303,7 +394,7 @@ function isReachable(planX, planZ, tolerance = 0.31) {
       const gridX = centerX + offsetX;
       const gridZ = centerZ + offsetZ;
       if (gridX < 0 || gridX >= gridWidth || gridZ < 0 || gridZ >= gridDepth) continue;
-      if (!visited[gridIndex(gridX, gridZ)]) continue;
+      if (!reachability[gridIndex(gridX, gridZ)]) continue;
       if (Math.hypot(planXAt(gridX) - planX, planZAt(gridZ) - planZ) <= tolerance) return true;
     }
   }
@@ -329,18 +420,76 @@ for (const auditorium of AUDITORIUMS) {
   });
 }
 
-navigationTargets.push(
-  { id: "courtyard-theater-3", x: -17, z: 69 },
-  { id: "courtyard-future-task", x: -5.4, z: 69 },
-  { id: "courtyard-theater-4", x: 20.2, z: 69 },
-  { id: "courtyard-theater-5", x: 23.3, z: 69 },
-  { id: "trash-room", x: -37, z: 64 },
-  { id: "boys-restroom", x: -31, z: 69 },
-  { id: "theater-3-storage-door-a", x: -22.1, z: 75.8 },
-  { id: "theater-3-storage-door-b", x: -22.1, z: 80.5 },
-  { id: "theater-6-storage-door-a", x: 48.5, z: 69.2 },
-  { id: "theater-6-storage-door-b", x: 55, z: 69.2 },
-);
+const serviceById = new Map(SERVICE_ROOMS.map((room) => [room.id, room]));
+const publicById = new Map(PUBLIC_SPACES.map((room) => [room.id, room]));
+const auditoriumByNumber = new Map(AUDITORIUMS.map((auditorium) => [auditorium.number, auditorium]));
+const boundsCenter = (bounds) => ({
+  x: (bounds.xMin + bounds.xMax) / 2,
+  z: (bounds.zMin + bounds.zMax) / 2,
+});
+const addBoundsTarget = (id, bounds) => navigationTargets.push({ id, ...boundsCenter(bounds) });
+
+for (const door of COURTYARD_PLAN.doors) {
+  navigationTargets.push({
+    id: `courtyard-${door.targetId}`,
+    x: door.center,
+    z: COURTYARD_PLAN.backWallZ + 0.8,
+  });
+}
+
+const theater3 = auditoriumByNumber.get(3);
+const storage3 = serviceById.get("under-storage-3");
+addBoundsTarget("theater-3-usher-nook", theater3.entry.usherNookBounds);
+addBoundsTarget("theater-3-storage-anteroom", storage3.accessHall);
+for (const side of [-1, 1]) {
+  navigationTargets.push({
+    id: `theater-3-anteroom-outer-door-side-${side}`,
+    x: storage3.accessHall.xMax + side * 0.7,
+    z: storage3.outerDoorCenter,
+  });
+}
+for (const center of storage3.doorCenters) {
+  navigationTargets.push(
+    { id: `theater-3-storage-south-${center}-anteroom`, x: center, z: storage3.bounds.zMin - 0.7 },
+    { id: `theater-3-storage-south-${center}-room`, x: center, z: storage3.bounds.zMin + 0.7 },
+  );
+}
+
+for (const number of [4, 5]) {
+  const entry = auditoriumByNumber.get(number).entry;
+  addBoundsTarget(`theater-${number}-stem`, entry.stemBounds);
+  addBoundsTarget(`theater-${number}-lateral`, entry.lateralBounds);
+  addBoundsTarget(`theater-${number}-long-route`, entry.longRouteBounds);
+}
+
+const theater6 = auditoriumByNumber.get(6);
+addBoundsTarget("theater-6-vestibule", theater6.entry.vestibuleBounds);
+addBoundsTarget("theater-6-transverse", theater6.entry.transverseBounds);
+addBoundsTarget("theater-6-long-route", theater6.entry.longRouteBounds);
+const storage6 = serviceById.get("under-storage-6");
+for (const center of storage6.doorCenters) {
+  navigationTargets.push({ id: `theater-6-storage-south-${center}`, x: center, z: storage6.bounds.zMin + 0.7 });
+}
+
+for (const number of [7, 8]) {
+  addBoundsTarget(`theater-${number}-usher-nook`, auditoriumByNumber.get(number).entry.usherNookBounds);
+}
+
+const trash = serviceById.get("trash-room");
+navigationTargets.push({ id: "trash-room", x: trash.doorCenter - 1.7, z: trash.bounds.zMin + 1.25 });
+const boys = serviceById.get("boys-restroom");
+addBoundsTarget("boys-restroom-entry-lobe", boys.footprintRects[1]);
+navigationTargets.push({ id: "boys-restroom-main", x: -29.75, z: 66.9 });
+addBoundsTarget("boys-water-fountain-alcove", publicById.get("boys-fountain-alcove").bounds);
+const girls = serviceById.get("girls-restroom");
+addBoundsTarget("girls-restroom-entry-lobe", girls.footprintRects[2]);
+navigationTargets.push({ id: "girls-restroom-main", x: 66.5, z: 69.5 });
+const candy = serviceById.get("candy-storage");
+navigationTargets.push({ id: "candy-storage", x: candy.doorCenter, z: candy.bounds.zMin + 1.2 });
+
+navigationTargets.push({ id: "fountain-working-aisle", x: 5.8, z: 65.7 });
+addBoundsTarget("ticket-poster-alcove", TICKET_APPROACH_PLAN.posterAlcove);
+addBoundsTarget("ticket-empty-alcove", TICKET_APPROACH_PLAN.emptyAlcove);
 
 const kitchenDoor = LOBBY_PLAN.kitchenStorageDoor;
 const kitchenSegmentStart = LOBBY_PLAN.kitchenPartition[kitchenDoor.partitionSegment];
@@ -366,10 +515,22 @@ assert.deepEqual(
   `Navigation targets are unreachable: ${unreachableTargets.map(({ id }) => id).join(", ")}`,
 );
 
+const floorRouteFailures = navigationTargets.filter(({ x, z }) => !isReachable(x, z, 0.31, floorVisited));
+assert.deepEqual(
+  floorRouteFailures.map(({ id }) => id),
+  [],
+  `Targets require missing/invisible floor geometry: ${floorRouteFailures.map(({ id }) => id).join(", ")}`,
+);
+
 const farVoidProbes = [
   { id: "rear-center", x: 0, z: 95 },
+  { id: "rear-of-theater-3-route", x: -17, z: 97 },
+  { id: "rear-of-theaters-4-5", x: 15, z: 94 },
   { id: "rear-between-5-and-6", x: 40, z: 95 },
   { id: "rear-east", x: 100, z: 95 },
+  { id: "rear-of-theater-8", x: 132, z: 94 },
+  { id: "behind-court-west-bay", x: -10, z: 70.5 },
+  { id: "behind-court-east-seam", x: 7.4, z: 72 },
   { id: "far-east", x: 140, z: 90 },
   { id: "far-west", x: -40, z: 90 },
 ];
@@ -384,5 +545,5 @@ world.dispose();
 materials.dispose();
 
 console.log(
-  `Navigation smoke valid: 14 bowls + ${navigationTargets.length - 14} service targets reachable · rear void contained · geometry overlap-free.`,
+  `Navigation smoke valid: 14 bowls + ${navigationTargets.length - 14} V5 route targets reachable on rendered floors · rear void contained · geometry overlap-free.`,
 );
