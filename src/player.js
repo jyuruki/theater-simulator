@@ -355,6 +355,7 @@ export class FirstPersonController {
     spawn = null,
     groundHeight = 0,
     groundSampler = null,
+    ceilingSampler = null,
     eyeHeight = 1.68,
     bodyHeight = 1.78,
     radius = 0.34,
@@ -396,6 +397,9 @@ export class FirstPersonController {
     if (!Number.isFinite(jumpBufferTime) || jumpBufferTime < 0) {
       throw new RangeError("jumpBufferTime must be a finite non-negative number.");
     }
+    if (ceilingSampler !== null && typeof ceilingSampler !== "function") {
+      throw new TypeError("Ceiling sampler must be a function or null.");
+    }
     this.camera = camera;
     this.domElement = domElement;
     this.collisionWorld = collisionWorld;
@@ -418,6 +422,7 @@ export class FirstPersonController {
     this.touchLookSensitivity = touchLookSensitivity;
     this.groundHeight = groundHeight;
     this.groundSampler = groundSampler;
+    this.ceilingSampler = ceilingSampler;
     this.onLockChange = onLockChange;
     this.onLockError = onLockError;
     this.onStuckRecovered = onStuckRecovered;
@@ -782,6 +787,13 @@ export class FirstPersonController {
     return null;
   }
 
+  _sampleCeiling(x, z, feetY = this.position.y) {
+    if (typeof this.ceilingSampler !== "function") return null;
+
+    const underside = this.ceilingSampler(x, z, feetY);
+    return Number.isFinite(underside) ? underside : null;
+  }
+
   _isPlayerOverlapping(position = this.position) {
     return this.collisionWorld.isOverlapping(
       position,
@@ -880,6 +892,14 @@ export class FirstPersonController {
       throw new TypeError("Ground sampler must be a function or null.");
     }
     this.groundSampler = sampler;
+    return this;
+  }
+
+  setCeilingSampler(sampler) {
+    if (sampler !== null && typeof sampler !== "function") {
+      throw new TypeError("Ceiling sampler must be a function or null.");
+    }
+    this.ceilingSampler = sampler;
     return this;
   }
 
@@ -1002,6 +1022,8 @@ export class FirstPersonController {
       this.velocity.z = 0;
     }
 
+    const verticalStartY = this.position.y;
+    const startedMovingUpward = this.verticalVelocity > 0;
     const groundY = this._sampleGround(this.position.x, this.position.z, this.position.y);
     if (groundY !== null) {
       const groundDelta = groundY - this.position.y;
@@ -1024,6 +1046,22 @@ export class FirstPersonController {
       this.verticalVelocity -= this.gravity * deltaSeconds;
       this.position.y += this.verticalVelocity * deltaSeconds;
       this.grounded = false;
+    }
+
+    if (startedMovingUpward && this.position.y > verticalStartY) {
+      const ceilingUnderside = this._sampleCeiling(
+        this.position.x,
+        this.position.z,
+        verticalStartY,
+      );
+      const maximumFeetY = ceilingUnderside === null
+        ? Number.POSITIVE_INFINITY
+        : ceilingUnderside - this.bodyHeight;
+      if (this.position.y > maximumFeetY) {
+        this.position.y = maximumFeetY;
+        this.verticalVelocity = 0;
+        this.grounded = false;
+      }
     }
 
     if (this.grounded) this._lastGroundedTime = this._simulationTime;

@@ -91,6 +91,7 @@ try {
     spawn: [spawnWorld.x, spawnWorld.y, spawnWorld.z],
     initialYaw: Math.PI,
     groundSampler: world.groundHeight,
+    ceilingSampler: world.ceilingHeight,
     onLockChange(active) {
       setPausedUi(!active);
     },
@@ -218,7 +219,7 @@ try {
     enumerable: false,
     writable: false,
     value: Object.freeze({
-      layoutVersion: "mililani-sketch-v4",
+      layoutVersion: "mililani-sketch-v5",
       validation: Object.freeze(validation),
       stats: world.stats,
       controller,

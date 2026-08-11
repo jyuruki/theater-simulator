@@ -125,7 +125,11 @@ function inferRouteReserve(auditorium) {
   }
 
   const defaultWidth = auditorium.preset === "medium58" ? 2.5 : 2.5;
-  const width = clamp(Math.max(overlapWidth, defaultWidth), 0, (bounds.xMax - bounds.xMin) * 0.34);
+  const inferredWidth = Math.max(overlapWidth, defaultWidth);
+  const requestedWidth = Number.isFinite(entry.routeWidth)
+    ? finite(entry.routeWidth, `${auditorium.id}.entry.routeWidth`)
+    : inferredWidth;
+  const width = clamp(requestedWidth, 0, (bounds.xMax - bounds.xMin) * 0.34);
   if (width <= EPSILON) return null;
   return entry.routeSide === "west"
     ? { side: "west", width, bounds: { xMin: bounds.xMin, xMax: bounds.xMin + width, zMin: bounds.zMin, zMax: bounds.zMax } }
@@ -356,6 +360,8 @@ function addRouteReserveSurface(surfaces, auditorium, layout) {
   if (!layout.routeReserve || !Number.isFinite(auditorium.entry?.arrivalZ)) return;
   const entry = auditorium.entry;
   const startZ = entry.vestibuleBounds?.zMax
+    ?? entry.lateralBounds?.zMax
+    ?? entry.stemBounds?.zMax
     ?? entry.transverseBounds?.zMax
     ?? auditorium.bounds.zMin;
   const endZ = auditorium.screenSide === "north"
@@ -415,9 +421,12 @@ export function buildRouteSurfaceDescriptors(auditorium, layout) {
   }
 
   for (const [field, label] of [
+    ["stemBounds", "stem"],
+    ["lateralBounds", "lateral"],
     ["transverseBounds", "transverse-route"],
     ["longRouteBounds", "long-route"],
     ["vestibuleBounds", "vestibule"],
+    ["usherNookBounds", "usher-nook"],
   ]) {
     if (entry[field]) surfaces.push(flatSurface(`${auditorium.id}-${label}`, entry[field], layout.corridorRise, auditorium.id));
   }
@@ -435,14 +444,24 @@ export function buildRouteSurfaceDescriptors(auditorium, layout) {
   }
 
   if (entry.type === "trash-cubby") {
-    const halfWidth = entry.cubbyHalfWidth ?? 1.6;
-    const depth = entry.cubbyDepth ?? 2.2;
-    surfaces.push(flatSurface(`${auditorium.id}-cubby-landing`, {
-      xMin: entry.center - halfWidth,
-      xMax: entry.center + halfWidth,
-      zMin: auditorium.bounds.zMax - depth,
-      zMax: auditorium.bounds.zMax,
-    }, layout.backElevation, auditorium.id, "top-entry-landing"));
+    let cubbyBounds = entry.cubbyBounds;
+    if (!cubbyBounds) {
+      const halfWidth = entry.cubbyHalfWidth ?? 1.6;
+      const depth = entry.cubbyDepth ?? 2.2;
+      cubbyBounds = {
+        xMin: entry.center - halfWidth,
+        xMax: entry.center + halfWidth,
+        zMin: auditorium.bounds.zMax - depth,
+        zMax: auditorium.bounds.zMax,
+      };
+    }
+    surfaces.push(flatSurface(
+      `${auditorium.id}-cubby-landing`,
+      cubbyBounds,
+      layout.backElevation,
+      auditorium.id,
+      "top-entry-landing",
+    ));
   }
 
   addRouteReserveSurface(surfaces, auditorium, layout);

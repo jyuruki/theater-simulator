@@ -35,7 +35,13 @@ function createDomStub() {
   };
 }
 
-function createController({ collisionWorld, spawn, yaw = 0, onStuckRecovered = null }) {
+function createController({
+  collisionWorld,
+  spawn,
+  yaw = 0,
+  ceilingSampler = null,
+  onStuckRecovered = null,
+}) {
   const controller = new FirstPersonController({
     camera: new THREE.PerspectiveCamera(70, 1, 0.1, 100),
     domElement: createDomStub(),
@@ -43,10 +49,53 @@ function createController({ collisionWorld, spawn, yaw = 0, onStuckRecovered = n
     spawn,
     initialYaw: yaw,
     touchMode: false,
+    ceilingSampler,
     onStuckRecovered,
   });
   controller.active = true;
   return controller;
+}
+
+// A sampled ceiling limits jump headroom, cancels the upward velocity at
+// contact, and therefore keeps both the body and the lower camera below it.
+{
+  const ceilingUnderside = 2.12;
+  let ceilingSamples = 0;
+  const controller = createController({
+    collisionWorld: new AABBCollisionWorld(),
+    spawn: [0, 0, 0],
+    ceilingSampler: (worldX, worldZ, feetY) => {
+      assert.ok([worldX, worldZ, feetY].every(Number.isFinite));
+      ceilingSamples += 1;
+      return ceilingUnderside;
+    },
+  });
+  controller._onKeyDown({
+    code: "Space",
+    repeat: false,
+    preventDefault() {},
+  });
+
+  let contactedCeiling = false;
+  for (let frame = 0; frame < 120; frame += 1) {
+    controller.update(1 / 60);
+    assert.ok(
+      controller.position.y + controller.bodyHeight <= ceilingUnderside + POSITION_EPSILON,
+      "jumping body must remain below the sampled ceiling",
+    );
+    assert.ok(
+      controller.camera.position.y <= ceilingUnderside + POSITION_EPSILON,
+      "jumping camera must remain below the sampled ceiling",
+    );
+    if (Math.abs(controller.position.y + controller.bodyHeight - ceilingUnderside) <= POSITION_EPSILON) {
+      contactedCeiling = true;
+      assert.equal(controller.verticalVelocity, 0, "ceiling contact must cancel upward velocity");
+      break;
+    }
+  }
+
+  assert.equal(contactedCeiling, true, "jump must reach the low sampled ceiling");
+  assert.ok(ceilingSamples > 0, "jump must query the ceiling sampler");
 }
 
 // Direct movement into a wall stops at capsule contact without tunneling.
@@ -148,4 +197,4 @@ function createController({ collisionWorld, spawn, yaw = 0, onStuckRecovered = n
   assert.equal(world.isOverlapping(controller.position, controller.radius), false);
 }
 
-console.log("Player smoke valid: wall stop/slide, stable input, jump, and manual recovery.");
+console.log("Player smoke valid: wall stop/slide, stable input, jump headroom, and manual recovery.");

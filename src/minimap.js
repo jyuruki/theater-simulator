@@ -1,6 +1,7 @@
 import {
   AUDITORIUMS,
   COURTYARD_PLAN,
+  FOUNTAIN_PLAN,
   HALL_END_EXITS,
   MAP_BOUNDS,
   PUBLIC_SPACES,
@@ -143,13 +144,68 @@ function fillZone(context, zone, view, options = {}) {
   );
   context.fillStyle = fill;
   context.fill();
-  context.setLineDash(dashed ? [3, 2.5] : []);
-  context.lineWidth = zone.kind === "corridor" ? 1.2 : 0.8;
+  if (options.stroke !== false) {
+    context.setLineDash(dashed ? [3, 2.5] : []);
+    context.lineWidth = zone.kind === "corridor" ? 1.2 : 0.8;
+    context.strokeStyle = COLORS.outline;
+    context.stroke();
+  }
+  context.restore();
+
+  return rectangle;
+}
+
+function fillFootprint(context, room, view) {
+  const rectangles = room.footprintRects || [room.bounds];
+  const fill = ZONE_COLORS[room.kind] || "rgba(65,65,76,0.82)";
+
+  context.save();
+  context.fillStyle = fill;
+  for (const bounds of rectangles) {
+    const rectangle = projectBounds(bounds, view);
+    context.fillRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height);
+  }
+
+  // Trace only exposed rectangle-union edges. Drawing every source rectangle
+  // would invent walls through the connected BB/GB floor plans.
+  const xs = [...new Set(rectangles.flatMap(({ xMin, xMax }) => [xMin, xMax]))].sort((a, b) => a - b);
+  const zs = [...new Set(rectangles.flatMap(({ zMin, zMax }) => [zMin, zMax]))].sort((a, b) => a - b);
+  const occupied = (x, z) => rectangles.some((bounds) => (
+    x > bounds.xMin && x < bounds.xMax && z > bounds.zMin && z < bounds.zMax
+  ));
+
+  context.beginPath();
+  for (let xIndex = 0; xIndex < xs.length - 1; xIndex += 1) {
+    for (let zIndex = 0; zIndex < zs.length - 1; zIndex += 1) {
+      const xMin = xs[xIndex];
+      const xMax = xs[xIndex + 1];
+      const zMin = zs[zIndex];
+      const zMax = zs[zIndex + 1];
+      const centerX = (xMin + xMax) / 2;
+      const centerZ = (zMin + zMax) / 2;
+      if (!occupied(centerX, centerZ)) continue;
+
+      const addEdge = (firstX, firstZ, secondX, secondZ) => {
+        const first = project(firstX, firstZ, view);
+        const second = project(secondX, secondZ, view);
+        context.moveTo(first.x, first.y);
+        context.lineTo(second.x, second.y);
+      };
+      const xProbe = Math.max(0.0001, (xMax - xMin) * 0.01);
+      const zProbe = Math.max(0.0001, (zMax - zMin) * 0.01);
+      if (!occupied(xMin - xProbe, centerZ)) addEdge(xMin, zMin, xMin, zMax);
+      if (!occupied(xMax + xProbe, centerZ)) addEdge(xMax, zMin, xMax, zMax);
+      if (!occupied(centerX, zMin - zProbe)) addEdge(xMin, zMin, xMax, zMin);
+      if (!occupied(centerX, zMax + zProbe)) addEdge(xMin, zMax, xMax, zMax);
+    }
+  }
+  context.setLineDash([]);
+  context.lineWidth = 0.8;
   context.strokeStyle = COLORS.outline;
   context.stroke();
   context.restore();
 
-  return rectangle;
+  return projectBounds(room.bounds, view);
 }
 
 function fitFontSize(label, rectangle, preferred, minimum = 5.5) {
@@ -184,14 +240,18 @@ function drawPublicSpaces(context, view) {
       lobby: "LOBBY",
       "lobby-approach": "LOBBY HALL",
       "ticket-check": "TICKETS",
+      "ticket-poster-alcove": "POSTER",
+      "ticket-empty-alcove": "ALCOVE",
       "main-corridor": "THEATER HALL",
     }[space.id];
 
     if (label) {
       drawCenteredLabel(context, label, rectangle, {
         color: "rgba(250,246,238,0.35)",
-        preferredSize: space.id === "main-corridor" ? 6.5 : 7.5,
-        minimumSize: 4.5,
+        preferredSize: space.id === "main-corridor" ? 6.5
+          : space.id.includes("alcove") ? 4.6
+            : 7.5,
+        minimumSize: space.id.includes("alcove") ? 3.4 : 4.5,
         weight: 700,
       });
     }
@@ -208,6 +268,23 @@ function drawPublicSpaces(context, view) {
     minimumSize: 4.5,
     weight: 700,
   });
+
+  for (const [id, bounds] of Object.entries(FOUNTAIN_PLAN)) {
+    const rectangle = fillZone(context, {
+      id: `minimap-${id}`,
+      bounds,
+      kind: "storage",
+    }, view, {
+      fill: id === "island" ? "rgba(120,92,65,0.95)" : "rgba(99,80,63,0.95)",
+    });
+    if (rectangle.width > 24 && rectangle.height > 4) {
+      drawCenteredLabel(context, id === "island" ? "DRINKS" : "REAR COUNTER", rectangle, {
+        preferredSize: 4.8,
+        minimumSize: 3.8,
+        color: "rgba(250,246,238,0.62)",
+      });
+    }
+  }
 }
 
 function drawRouteRectangle(context, bounds, view, options = {}) {
@@ -236,19 +313,33 @@ function routeSegmentsFor(auditorium) {
   const { bounds, entry } = auditorium;
 
   if (entry.type === "trash-cubby") {
+    const halfWidth = entry.cubbyHalfWidth ?? 1.6;
+    const depth = entry.cubbyDepth ?? 2.2;
     return [{
       kind: "cubby",
-      bounds: {
-        xMin: entry.center - 1.6,
-        xMax: entry.center + 1.6,
-        zMin: bounds.zMax - 2.2,
+      bounds: entry.cubbyBounds || {
+        xMin: entry.center - halfWidth,
+        xMax: entry.center + halfWidth,
+        zMin: bounds.zMax - depth,
         zMax: bounds.zMax,
       },
     }];
   }
 
-  if (entry.routeBounds) {
-    return [{ kind: "route", bounds: entry.routeBounds }];
+  if (entry.type === "storage-left-then-left") {
+    return [
+      ...(entry.usherNookBounds ? [{ kind: "usher-nook", bounds: entry.usherNookBounds }] : []),
+      ...(entry.routeBounds ? [{ kind: "route", bounds: entry.routeBounds }] : []),
+      ...(entry.ramp?.bounds ? [{ kind: "ramp", bounds: entry.ramp.bounds }] : []),
+    ];
+  }
+
+  if (entry.type === "dogleg") {
+    return [
+      ...(entry.stemBounds ? [{ kind: "stem", bounds: entry.stemBounds }] : []),
+      ...(entry.lateralBounds ? [{ kind: "lateral", bounds: entry.lateralBounds }] : []),
+      ...(entry.longRouteBounds ? [{ kind: "route", bounds: entry.longRouteBounds }] : []),
+    ];
   }
 
   if (entry.transverseBounds || entry.longRouteBounds) {
@@ -257,6 +348,17 @@ function routeSegmentsFor(auditorium) {
       ...(entry.transverseBounds ? [{ kind: "transverse", bounds: entry.transverseBounds }] : []),
       ...(entry.longRouteBounds ? [{ kind: "route", bounds: entry.longRouteBounds }] : []),
     ];
+  }
+
+  if (entry.type === "straight-side") {
+    return [
+      ...(entry.usherNookBounds ? [{ kind: "usher-nook", bounds: entry.usherNookBounds }] : []),
+      ...(entry.ramp?.bounds ? [{ kind: "ramp", bounds: entry.ramp.bounds }] : []),
+    ];
+  }
+
+  if (entry.routeBounds) {
+    return [{ kind: "route", bounds: entry.routeBounds }];
   }
 
   if (entry.vestibuleBounds) {
@@ -298,7 +400,7 @@ function drawEntryRoutes(context, view) {
     for (const segment of routeSegmentsFor(auditorium)) {
       drawRouteRectangle(context, segment.bounds, view, {
         dashed: segment.kind === "ramp",
-        emphasis: segment.kind === "vestibule" || segment.kind === "transverse",
+        emphasis: ["vestibule", "transverse", "stem", "lateral", "usher-nook"].includes(segment.kind),
       });
     }
   }
@@ -364,16 +466,24 @@ function drawServiceRooms(context, view) {
   const lowerStorage = SERVICE_ROOMS.filter((room) => room.kind === "storage-lower");
 
   for (const room of [...normalRooms, ...lowerStorage]) {
-    if (room.cubby?.bounds) {
-      fillZone(context, { bounds: room.cubby.bounds, kind: "corridor" }, view, {
-        fill: "rgba(51,75,91,0.68)",
-      });
-    }
     if (room.accessHall) {
-      drawRouteRectangle(context, room.accessHall, view, { dashed: true, lower: true });
+      const anteroom = drawRouteRectangle(context, room.accessHall, view, {
+        dashed: true,
+        lower: true,
+        emphasis: room.id === "under-storage-3",
+      });
+      if (room.id === "under-storage-3" && anteroom) {
+        drawCenteredLabel(context, "ANTEROOM", anteroom, {
+          preferredSize: 4.4,
+          minimumSize: 3.5,
+          color: "rgba(250,246,238,0.5)",
+        });
+      }
     }
 
-    const rectangle = fillZone(context, room, view);
+    const rectangle = room.footprintRects?.length
+      ? fillFootprint(context, room, view)
+      : fillZone(context, room, view);
     const label = SERVICE_LABELS[room.id] || room.short || room.name;
     if (room.kind === "storage-lower" && (rectangle.width < 22 || rectangle.height < 10)) continue;
     drawCenteredLabel(context, label, rectangle, {
@@ -417,11 +527,13 @@ function drawAuditoriumDoors(context, view) {
       drawDoorMarker(context, "north", cubby.zMax, entry.center, view);
       const innerSide = entry.turnSide;
       const innerX = innerSide === "west" ? cubby.xMin : cubby.xMax;
-      drawDoorMarker(context, innerSide, innerX, cubby.zMin + 1.05, view);
+      drawDoorMarker(context, innerSide, innerX, entry.innerDoorCenter ?? cubby.zMin + 1.05, view);
       continue;
     }
 
-    const outerZ = entry.routeBounds?.zMin
+    const outerZ = entry.outerPlaneZ
+      ?? entry.stemBounds?.zMin
+      ?? entry.routeBounds?.zMin
       ?? entry.vestibuleBounds?.zMin
       ?? entry.transverseBounds?.zMin
       ?? bounds.zMin;
@@ -431,13 +543,11 @@ function drawAuditoriumDoors(context, view) {
 
 function drawServiceDoors(context, view) {
   for (const room of SERVICE_ROOMS) {
-    if (room.cubby?.bounds) {
-      const cubby = room.cubby.bounds;
-      const outerCenter = room.cubby.outerDoorCenter ?? (cubby.xMin + cubby.xMax) / 2;
-      drawDoorMarker(context, "south", cubby.zMin, outerCenter, view);
-      const innerSide = room.cubby.innerSide;
-      const innerX = innerSide === "west" ? cubby.xMin : cubby.xMax;
-      drawDoorMarker(context, innerSide, innerX, room.cubby.innerDoorCenter ?? (cubby.zMin + cubby.zMax) / 2, view);
+    if (room.entry && Number.isFinite(room.entry.coordinate) && Number.isFinite(room.entry.center)) {
+      drawDoorMarker(context, room.entry.side, room.entry.coordinate, room.entry.center, view, {
+        width: room.entry.width,
+        closed: room.closed,
+      });
     } else if (room.entrySide && Number.isFinite(room.doorCenter)) {
       const coordinate = room.entrySide === "south" ? room.bounds.zMin
         : room.entrySide === "north" ? room.bounds.zMax
@@ -455,6 +565,15 @@ function drawServiceDoors(context, view) {
         width: extraDoor.width,
         closed: room.closed,
       });
+    }
+
+    if (room.outerDoorSide && Number.isFinite(room.outerDoorCenter)) {
+      const outerBounds = room.accessHall || room.bounds;
+      const coordinate = room.outerDoorSide === "south" ? outerBounds.zMin
+        : room.outerDoorSide === "north" ? outerBounds.zMax
+          : room.outerDoorSide === "west" ? outerBounds.xMin
+            : outerBounds.xMax;
+      drawDoorMarker(context, room.outerDoorSide, coordinate, room.outerDoorCenter, view);
     }
 
     if (room.doorSide && Array.isArray(room.doorCenters)) {
