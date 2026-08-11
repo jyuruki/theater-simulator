@@ -170,6 +170,46 @@ function createTileCanvas() {
   return canvas;
 }
 
+function createCourtyardTileCanvas() {
+  const size = 512;
+  const tileSize = 128;
+  const canvas = createCanvas(size, size);
+  const context = context2d(canvas);
+  const random = seededRandom("fountain-courtyard-charcoal-tile-v4");
+
+  // A restrained charcoal tile: dark enough to distinguish the recessed
+  // fountain court from the maroon hall carpet, without becoming a black
+  // void under the theater lighting.
+  context.fillStyle = "#17191b";
+  context.fillRect(0, 0, size, size);
+  for (let row = 0; row < size / tileSize; row += 1) {
+    for (let column = 0; column < size / tileSize; column += 1) {
+      const x = column * tileSize + 3;
+      const y = row * tileSize + 3;
+      const shade = 48 + Math.floor(random() * 12);
+      const gradient = context.createLinearGradient(x, y, x + tileSize, y + tileSize);
+      gradient.addColorStop(0, `rgb(${shade + 3}, ${shade + 4}, ${shade + 5})`);
+      gradient.addColorStop(1, `rgb(${shade - 3}, ${shade - 2}, ${shade})`);
+      context.fillStyle = gradient;
+      context.fillRect(x, y, tileSize - 6, tileSize - 6);
+
+      for (let fleck = 0; fleck < 260; fleck += 1) {
+        const light = random() > 0.58;
+        context.fillStyle = light ? "#777a7c" : "#202326";
+        context.globalAlpha = 0.025 + random() * 0.07;
+        context.fillRect(
+          x + random() * (tileSize - 6),
+          y + random() * (tileSize - 6),
+          0.35 + random() * 0.9,
+          0.35 + random() * 0.9,
+        );
+      }
+    }
+  }
+  context.globalAlpha = 1;
+  return canvas;
+}
+
 function createLobbyStoneCanvas() {
   const size = 512;
   const slabSize = size / 2;
@@ -587,6 +627,7 @@ function createMaterialLibrary(renderer) {
   });
   const carpetMap = textureFrom(createCarpetCanvas(), { name: "cinema-carpet", repeat: [4, 4] });
   const tileMap = textureFrom(createTileCanvas(), { name: "lobby-tile", repeat: [4, 4] });
+  const courtyardTileMap = textureFrom(createCourtyardTileCanvas(), { name: "fountain-courtyard-charcoal-tile", repeat: [4, 4] });
   const lobbyStoneMap = textureFrom(createLobbyStoneCanvas(), { name: "warm-honed-lobby-stone", repeat: [3, 3] });
   const corridorCarpetMap = textureFrom(createCorridorCarpetCanvas(), { name: "maroon-corridor-carpet", repeat: [4, 4] });
   const counterStoneMap = textureFrom(createCounterStoneCanvas(), { name: "charcoal-quartz-counter", repeat: [2, 2] });
@@ -633,6 +674,17 @@ function createMaterialLibrary(renderer) {
       metalness: 0,
       clearcoat: 0.18,
       clearcoatRoughness: 0.35,
+    })),
+    courtyardTile: track(new THREE.MeshPhysicalMaterial({
+      name: "Tile / fountain courtyard charcoal",
+      color: 0xffffff,
+      map: courtyardTileMap,
+      bumpMap: microBump,
+      bumpScale: 0.015,
+      roughness: 0.69,
+      metalness: 0.015,
+      clearcoat: 0.035,
+      clearcoatRoughness: 0.78,
     })),
     lobbyStone: track(new THREE.MeshPhysicalMaterial({
       name: "Stone / warm gray honed lobby slabs",
