@@ -44,16 +44,17 @@ Every auditorium has a procedural screen, brown leather seating with tray tables
 ## Sketch interpretations
 
 - The entrance leads into a large gray-stone lobby/service block, then a long maroon-carpeted ticket approach, then the narrow east–west theater hall.
-- A self-serve court sits straight ahead beyond ticket check. Its first island carries `ICEE | soda | cups/lids/straws | soda | ICEE`; the equal-length counter behind it is intentionally empty for later gameplay. The future-task room is directly behind both counters.
+- A recessed dark-gray-tile court sits straight ahead beyond ticket check. Its first island carries `ICEE | soda | cups/lids/straws | soda | ICEE`; the equal-length counter behind it is intentionally empty for later gameplay. Theater 3, the future-task room, Theater 4, and Theater 5 share one back-wall plane in that order.
 - The upper-right handwritten room is interpreted as **Candy Storage**.
 - `KS`, `K`, `B`, `C`, and `OFF` are Kitchen Storage, Kitchen, Bar, Concession, and Office. The lobby counter retains all five traced vertices: its top horizontal segment is the guest bar, its diagonal run carries six POS systems, and its lower kink is intentional. The hot line includes two poppers and two fryer placeholders. The first office door enters an interim candy-overflow room; a second door reaches the manager office.
-- `BB` and `GB` are represented as men's and women's restrooms. The supplied green/blue/yellow fixture key is translated to stalls/sinks/urinals.
-- The dotted `STOCK` area behind Theaters 4/5 is treated as lower-level usher/soda stock, not as a main-floor room.
+- `BB` and `GB` are represented as men's and women's restrooms. The BB room comes before the trash room in plan order, uses the clarified privacy approach, and has two drinking fountains outside. The supplied green/blue/yellow fixture key is translated to stalls/sinks/urinals.
+- The previously inferred `STOCK` area behind Theaters 4/5 has been removed; the clarified drawing does not place a lower stock room there.
 - Other dotted storage is represented as below-tier storage associated with the stadium rake. Theaters 3 and 6 each have two doors into one lower room, an explicit roof, and an elevation-aware floor sampler so the player stays on the correct stacked level.
-- Theater 3 has a long side passage, an initial left storage-hall door, two lower-room doors, a very gentle incline, and an open turn into the front seating apron. Theater 6 has a flat transverse hall, two doors along it into one lower room, then a long side passage to the front apron.
+- Theater 3 begins on the shared courtyard wall, has a horizontal two-door under-tier room extending left from its access hall, a delayed gentle incline, and an open turn into the front seating apron. Theater 6 begins with a short straight vestibule, then turns right into a flat transverse hall with two doors into one lower room before its long side passage to the front apron.
 - Theaters 4 and 5 are recessed in the court beyond and beside the fountain room. Their first lateral legs are approximately twice the previous length; their final corridors open directly into the bowl without an invented doorway. Theaters 7 and 8 use gently inclined straight side routes, with their seating banks on the right.
 - Theaters 1, 2, and 9–14 use recessed entry cubbies with side doors and trash cans rather than centered straight openings.
-- The main restrooms have privacy-entry cubbies: the boys' inner door is on the physical right and the girls' is on the physical left. The unlabeled approach door is now a closed electrical-room door. The explicit trash room remains modeled.
+- The main restrooms have privacy-entry cubbies. The boys' route uses the clarified left-side inner opening and two-turn privacy path; the girls' cubby retains its left-side opening. The unlabeled approach door is a closed electrical-room door. The trash room's door is at its right end and the room opens left.
+- Kitchen storage connects directly to the hot-line area through a doorway cut into the intentional diagonal partition. The original red service doorway farther along the partition remains separate.
 - Red sketch marks are interpreted as doors. Closed exterior doors are present at both ends of the main theater hall; the outdoor continuation remains a future phase. Door swing animation is still provisional.
 - The lobby mural is an original procedural island-botanical composition inspired by local design character; it is not a copy of an existing artwork.
 
