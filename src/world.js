@@ -10,6 +10,7 @@ import {
   POS_STATIONS,
   PUBLIC_SPACES,
   SERVICE_ROOMS,
+  T3_MEN_PLAN,
   TICKET_APPROACH_PLAN,
 } from "./layout-data.js";
 import {
@@ -48,7 +49,7 @@ const publicById = (id) => PUBLIC_SPACES.find((space) => space.id === id);
 
 export function createTheaterWorld({ scene, materials }) {
   const root = new THREE.Group();
-  root.name = "Mililani 14 layout prototype v7";
+  root.name = "Mililani 14 layout prototype v8";
   scene.add(root);
 
   const colliders = [];
@@ -144,7 +145,7 @@ export function createTheaterWorld({ scene, materials }) {
     }
     const batches = new Map();
     for (const child of parent.children) {
-      if (!child.isMesh || child.isInstancedMesh || child.geometry !== unitBoxGeometry) continue;
+      if (!child.isMesh || child.isInstancedMesh || child.geometry !== unitBoxGeometry || Array.isArray(child.material)) continue;
       const key = child.material.uuid;
       if (!batches.has(key)) batches.set(key, []);
       batches.get(key).push(child);
@@ -690,11 +691,15 @@ export function createTheaterWorld({ scene, materials }) {
     addWallX(`${auditorium.id}-cubby-back`, westX, eastX, southZ, { material: materials.darkWall });
     if (entry.turnSide === "west") {
       addWallZWithOpenings(`${auditorium.id}-cubby-west`, westX, southZ, bounds.zMax, [{ center: doorZ, baseY: layout.backElevation }], { material: materials.darkWall });
-      if (entry.sharedBoundarySide !== "east") addWallZ(`${auditorium.id}-cubby-east`, eastX, southZ, bounds.zMax, { material: materials.darkWall });
+      if (entry.sharedBoundarySide !== "east" && Math.abs(eastX - bounds.xMax) > EPSILON) {
+        addWallZ(`${auditorium.id}-cubby-east`, eastX, southZ, bounds.zMax, { material: materials.darkWall });
+      }
       addDoorTrim(`${auditorium.id}-inner`, "west", westX, doorZ, { baseY: layout.backElevation });
       addTrashCan(`${auditorium.id}-trash`, eastX - 0.52, southZ + 0.55);
     } else {
-      if (entry.sharedBoundarySide !== "west") addWallZ(`${auditorium.id}-cubby-west`, westX, southZ, bounds.zMax, { material: materials.darkWall });
+      if (entry.sharedBoundarySide !== "west" && Math.abs(westX - bounds.xMin) > EPSILON) {
+        addWallZ(`${auditorium.id}-cubby-west`, westX, southZ, bounds.zMax, { material: materials.darkWall });
+      }
       addWallZWithOpenings(`${auditorium.id}-cubby-east`, eastX, southZ, bounds.zMax, [{ center: doorZ, baseY: layout.backElevation }], { material: materials.darkWall });
       addDoorTrim(`${auditorium.id}-inner`, "east", eastX, doorZ, { baseY: layout.backElevation });
       addTrashCan(`${auditorium.id}-trash`, westX + 0.52, southZ + 0.55);
@@ -759,9 +764,8 @@ export function createTheaterWorld({ scene, materials }) {
     addStorageRoom(storage, { labelPosition: [(storage.bounds.xMin + storage.bounds.xMax) / 2, 2.0, storage.bounds.zMin + 0.12], labelRotation: Math.PI });
     addFloor(`${storage.id}-anteroom`, anteroom, materials.floorDark);
     addCeiling(`${storage.id}-anteroom`, anteroom, storage.ceilingHeight - 0.05);
-    if (anteroom.xMin < COURTYARD_PLAN.bounds.xMin) {
-      addWallX(`${storage.id}-anteroom-south`, anteroom.xMin, COURTYARD_PLAN.bounds.xMin, anteroom.zMin, { material: materials.darkWall, height: storage.ceilingHeight });
-    }
+    // The MEN/T3 shared back wall owns the full south edge of this anteroom.
+    // Authoring another low wall here would overlap it and flash while moving.
     addWallZ(`${storage.id}-anteroom-west`, anteroom.xMin, anteroom.zMin, anteroom.zMax, { material: materials.darkWall, height: storage.ceilingHeight });
     // Storage's south wall owns the shared two-door boundary at z=72.
   };
@@ -1019,29 +1023,46 @@ export function createTheaterWorld({ scene, materials }) {
 
     if (room.id === "boys-restroom") {
       const lobe = lobes[0];
-      const fountainWall = publicById("boys-fountain-alcove");
+      const fountainNook = publicById("boys-fountain-alcove");
       const entryCubby = publicById("boys-men-entry-cubby");
+      addFloor(fountainNook.id, fountainNook.bounds, materials.corridorCarpet, 0, root, 2.4);
+      addCeiling(fountainNook.id, fountainNook.bounds);
       addFloor(entryCubby.id, entryCubby.bounds, materials.corridorCarpet, 0, root, 2.4);
       addCeiling(entryCubby.id, entryCubby.bounds);
-      addWallX(`${room.id}-north`, main.xMin, main.xMax, main.zMax);
+
+      // One wall, two finishes: warm restroom surface to the south and dark
+      // under-storage/usher surface to the north. Keeping this as one collider
+      // prevents the overlapping-wall flicker that motivated V8.
+      addWallX("boys-t3-shared-back-wall", T3_MEN_PLAN.sharedBackWall.xMin, T3_MEN_PLAN.sharedBackWall.xMax, T3_MEN_PLAN.sharedBackWall.z, {
+        material: [
+          materials.wall,
+          materials.wall,
+          materials.wall,
+          materials.wall,
+          materials.darkWall,
+          materials.wall,
+        ],
+      });
       addWallZ(`${room.id}-west`, main.xMin, main.zMin, main.zMax);
-      const storage = roomById("under-storage-3");
-      addWallZ(`${room.id}-east`, main.xMax, main.zMin, storage.accessHall.zMin);
+      // This vertical wall is the one called out in the V8 sketch: it runs
+      // continuously from the hall-side lobe to Theater 3's left door jamb.
+      addWallZ(`${room.id}-east`, main.xMax, lobe.zMin, main.zMax);
       addWallX(`${room.id}-south`, main.xMin, lobe.xMin, main.zMin);
       addWallX(`${room.id}-entry-south`, lobe.xMin, lobe.xMax, lobe.zMin);
-      addWallZ(`${room.id}-entry-east`, lobe.xMax, lobe.zMin, lobe.zMax);
       addWallZWithOpenings(`${room.id}-entry-west`, lobe.xMin, lobe.zMin, lobe.zMax, [{ center: room.entry.center, width: room.entry.width }]);
       addDoorTrim(`${room.id}-entry`, "west", lobe.xMin, room.entry.center, { width: room.entry.width });
       const cubbyWidth = entryCubby.bounds.xMax - entryCubby.bounds.xMin;
+      // The fountain nook is open to the hall. Its west/mounting wall is the
+      // trash room's east wall, while this return separates H2O from MEN.
+      addWallZ("boys-entry-cubby-west", entryCubby.bounds.xMin, entryCubby.bounds.zMin, entryCubby.bounds.zMax, { material: materials.darkWall });
       addWallXWithOpenings(
-        "boys-exterior-fountain-wall",
-        fountainWall.bounds.xMin,
+        "boys-men-cubby-mouth",
+        entryCubby.bounds.xMin,
         entryCubby.bounds.xMax,
         entryCubby.bounds.zMin,
         [{ center: (entryCubby.bounds.xMin + entryCubby.bounds.xMax) / 2, width: cubbyWidth }],
         { material: materials.darkWall },
       );
-      addWallZ("boys-entry-cubby-west", entryCubby.bounds.xMin, entryCubby.bounds.zMin, entryCubby.bounds.zMax, { material: materials.darkWall });
       addLabel({ id: "boys-men-sign", text: "MEN", position: [(entryCubby.bounds.xMin + entryCubby.bounds.xMax) / 2, 2.95, entryCubby.bounds.zMin - 0.13], rotationY: Math.PI, width: 1.2, height: 0.42, small: true, accent: "#68a3d8" });
     } else {
       const [southwestLobe, connector, entryLobe] = lobes;
@@ -1123,7 +1144,8 @@ export function createTheaterWorld({ scene, materials }) {
     const rearCenter = centerOf(rear);
     addFloor(court.id, court.bounds, materials.courtyardTile, 0, root, 2.15);
     addCeiling(court.id, court.bounds);
-    addWallZ("fountain-courtyard-west", court.bounds.xMin, court.bounds.zMin, court.bounds.zMax, { material: materials.darkWall });
+    // The MEN east wall owns the court's west boundary and terminates exactly
+    // at the left jamb of Theater 3. A second wall here would be coplanar.
     addWallZ("fountain-courtyard-east", court.bounds.xMax, court.bounds.zMin, court.bounds.zMax, { material: materials.darkWall });
     addWallXWithOpenings(
       "fountain-courtyard-shared-back-wall",
@@ -1525,7 +1547,7 @@ export function createTheaterWorld({ scene, materials }) {
       sourceMeshCount,
       colliderCount: colliders.length,
       lightCount: hallLights.length + 3,
-      layoutVersion: "mililani-sketch-v7",
+      layoutVersion: "mililani-sketch-v8",
     }),
   };
 }

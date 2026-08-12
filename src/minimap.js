@@ -54,6 +54,19 @@ const ROUTE_STYLE = Object.freeze({
   lowerFill: "rgba(198,160,102,0.09)",
 });
 
+const BOYS_ENTRY_FEATURES = Object.freeze({
+  "boys-fountain-alcove": {
+    label: "H₂O",
+    fill: "rgba(43,93,113,0.96)",
+  },
+  "boys-men-entry-cubby": {
+    label: "MEN",
+    fill: "rgba(48,76,101,0.98)",
+  },
+});
+
+const boysEntryFeatureIds = new Set(Object.keys(BOYS_ENTRY_FEATURES));
+
 function clamp(value, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, value));
 }
@@ -134,14 +147,19 @@ function fillZone(context, zone, view, options = {}) {
   const dashed = options.dashed || zone.kind === "exterior" || zone.kind === "storage-lower";
 
   context.save();
-  roundedRectPath(
-    context,
-    rectangle.x,
-    rectangle.y,
-    rectangle.width,
-    rectangle.height,
-    Math.min(2.5, rectangle.width * 0.08, rectangle.height * 0.08),
-  );
+  if (options.square) {
+    context.beginPath();
+    context.rect(rectangle.x, rectangle.y, rectangle.width, rectangle.height);
+  } else {
+    roundedRectPath(
+      context,
+      rectangle.x,
+      rectangle.y,
+      rectangle.width,
+      rectangle.height,
+      Math.min(2.5, rectangle.width * 0.08, rectangle.height * 0.08),
+    );
+  }
   context.fillStyle = fill;
   context.fill();
   if (options.stroke !== false) {
@@ -234,7 +252,7 @@ function drawCenteredLabel(context, label, rectangle, options = {}) {
 
 function drawPublicSpaces(context, view) {
   for (const space of PUBLIC_SPACES) {
-    if (COURTYARD_PLAN.publicSpaceIds.includes(space.id)) continue;
+    if (COURTYARD_PLAN.publicSpaceIds.includes(space.id) || boysEntryFeatureIds.has(space.id)) continue;
     const rectangle = fillZone(context, space, view);
     const label = {
       lobby: "LOBBY",
@@ -242,8 +260,6 @@ function drawPublicSpaces(context, view) {
       "ticket-check": "TICKETS",
       "ticket-poster-alcove": "POSTER",
       "ticket-empty-alcove": "ALCOVE",
-      "boys-fountain-alcove": "H₂O",
-      "boys-men-entry-cubby": "MEN",
       "main-corridor": "THEATER HALL",
     }[space.id];
 
@@ -301,6 +317,96 @@ function drawPublicSpaces(context, view) {
   }, view, { fill: "rgba(43,205,210,0.98)" });
 }
 
+function drawBoysEntryFeatures(context, view) {
+  for (const space of PUBLIC_SPACES) {
+    const feature = BOYS_ENTRY_FEATURES[space.id];
+    if (!feature) continue;
+    const rectangle = fillZone(context, space, view, {
+      fill: feature.fill,
+      square: true,
+    });
+    drawCenteredLabel(context, feature.label, rectangle, {
+      color: "rgba(250,246,238,0.82)",
+      preferredSize: 5.2,
+      minimumSize: 3.2,
+      weight: 800,
+    });
+  }
+}
+
+function strokePlanSegment(context, first, second, view, options = {}) {
+  const start = project(first.x, first.z, view);
+  const end = project(second.x, second.z, view);
+  context.save();
+  context.beginPath();
+  context.moveTo(start.x, start.y);
+  context.lineTo(end.x, end.y);
+  context.setLineDash(options.dashed ? [2.4, 2] : []);
+  context.lineWidth = options.width ?? 1.5;
+  context.strokeStyle = options.color ?? "rgba(246,239,226,0.74)";
+  context.stroke();
+  context.restore();
+}
+
+function sharedBoundarySegments(first, second, epsilon = 0.001) {
+  const segments = [];
+  const zMin = Math.max(first.zMin, second.zMin);
+  const zMax = Math.min(first.zMax, second.zMax);
+  if (zMax > zMin) {
+    if (Math.abs(first.xMax - second.xMin) <= epsilon) {
+      segments.push([{ x: first.xMax, z: zMin }, { x: first.xMax, z: zMax }]);
+    }
+    if (Math.abs(first.xMin - second.xMax) <= epsilon) {
+      segments.push([{ x: first.xMin, z: zMin }, { x: first.xMin, z: zMax }]);
+    }
+  }
+
+  const xMin = Math.max(first.xMin, second.xMin);
+  const xMax = Math.min(first.xMax, second.xMax);
+  if (xMax > xMin) {
+    if (Math.abs(first.zMax - second.zMin) <= epsilon) {
+      segments.push([{ x: xMin, z: first.zMax }, { x: xMax, z: first.zMax }]);
+    }
+    if (Math.abs(first.zMin - second.zMax) <= epsilon) {
+      segments.push([{ x: xMin, z: first.zMin }, { x: xMax, z: first.zMin }]);
+    }
+  }
+  return segments;
+}
+
+function drawV8SpatialRelationships(context, view) {
+  const boys = SERVICE_ROOMS.find((room) => room.id === "boys-restroom");
+  const lowerStorage = SERVICE_ROOMS.find((room) => room.id === "under-storage-3");
+
+  // Emphasize only boundaries that the source rectangles actually share. The
+  // minimap therefore follows future BB/T3 scaling without maintaining a
+  // second set of coordinates.
+  if (boys && lowerStorage) {
+    const footprints = boys.footprintRects?.length ? boys.footprintRects : [boys.bounds];
+    const lowerFootprints = [lowerStorage.accessHall, lowerStorage.bounds].filter(Boolean);
+    for (const footprint of footprints) {
+      for (const lowerFootprint of lowerFootprints) {
+        for (const [first, second] of sharedBoundarySegments(footprint, lowerFootprint)) {
+          strokePlanSegment(context, first, second, view, {
+            color: "rgba(131,202,222,0.95)",
+            width: 2.1,
+          });
+        }
+      }
+    }
+  }
+
+  // The court boundary is read directly from COURTYARD_PLAN. This makes a
+  // shifted west edge visible without assuming an earlier-version position.
+  strokePlanSegment(
+    context,
+    { x: COURTYARD_PLAN.bounds.xMin, z: COURTYARD_PLAN.bounds.zMin },
+    { x: COURTYARD_PLAN.bounds.xMin, z: COURTYARD_PLAN.bounds.zMax },
+    view,
+    { color: "rgba(146,191,211,0.9)", width: 1.8 },
+  );
+}
+
 function drawRouteRectangle(context, bounds, view, options = {}) {
   if (!bounds) return null;
   const rectangle = projectBounds(bounds, view);
@@ -331,6 +437,8 @@ function routeSegmentsFor(auditorium) {
     const depth = entry.cubbyDepth ?? 2.2;
     return [{
       kind: "cubby",
+      // Cubby bounds and handedness remain in source plan space. In
+      // particular, Theater 9 must not receive an extra display-time mirror.
       bounds: entry.cubbyBounds || {
         xMin: entry.center - halfWidth,
         xMax: entry.center + halfWidth,
@@ -735,7 +843,9 @@ export function createMinimap(options = {}) {
     drawPublicSpaces(context, view);
     drawAuditoriums(context, view);
     drawServiceRooms(context, view);
+    drawBoysEntryFeatures(context, view);
     drawEntryRoutes(context, view);
+    drawV8SpatialRelationships(context, view);
     drawAuditoriumDoors(context, view);
     drawServiceDoors(context, view);
     drawHallExits(context, view);
