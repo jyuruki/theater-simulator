@@ -285,6 +285,18 @@ function drawPublicSpaces(context, view) {
       });
     }
   }
+
+  const partition = COURTYARD_PLAN.waistPartition;
+  fillZone(context, {
+    id: "theater-3-task-waist-partition",
+    bounds: {
+      xMin: partition.x - partition.thickness / 2,
+      xMax: partition.x + partition.thickness / 2,
+      zMin: partition.zMin,
+      zMax: partition.zMax,
+    },
+    kind: "storage",
+  }, view, { fill: "rgba(43,205,210,0.98)" });
 }
 
 function drawRouteRectangle(context, bounds, view, options = {}) {
@@ -328,6 +340,8 @@ function routeSegmentsFor(auditorium) {
 
   if (entry.type === "storage-left-then-left") {
     return [
+      ...(entry.entranceStemBounds ? [{ kind: "entrance-stem", bounds: entry.entranceStemBounds }] : []),
+      ...(entry.entranceLateralBounds ? [{ kind: "entrance-lateral", bounds: entry.entranceLateralBounds }] : []),
       ...(entry.usherNookBounds ? [{ kind: "usher-nook", bounds: entry.usherNookBounds }] : []),
       ...(entry.routeBounds ? [{ kind: "route", bounds: entry.routeBounds }] : []),
       ...(entry.ramp?.bounds ? [{ kind: "ramp", bounds: entry.ramp.bounds }] : []),
@@ -400,7 +414,7 @@ function drawEntryRoutes(context, view) {
     for (const segment of routeSegmentsFor(auditorium)) {
       drawRouteRectangle(context, segment.bounds, view, {
         dashed: segment.kind === "ramp",
-        emphasis: ["vestibule", "transverse", "stem", "lateral", "usher-nook"].includes(segment.kind),
+        emphasis: ["vestibule", "transverse", "stem", "lateral", "entrance-lateral", "usher-nook"].includes(segment.kind),
       });
     }
   }

@@ -418,6 +418,16 @@ for (const auditorium of AUDITORIUMS) {
     x: bowlX,
     z: bowlZ,
   });
+  if (auditorium.stadium.access === "top") {
+    const rearZ = (layout.rearCross.bounds.zMin + layout.rearCross.bounds.zMax) / 2;
+    for (const side of ["west", "east"]) {
+      navigationTargets.push({
+        id: `${auditorium.id}-${side}-rear-aisle`,
+        x: layout.sideAisles[side].centerX,
+        z: rearZ,
+      });
+    }
+  }
 }
 
 const serviceById = new Map(SERVICE_ROOMS.map((room) => [room.id, room]));
@@ -439,6 +449,8 @@ for (const door of COURTYARD_PLAN.doors) {
 
 const theater3 = auditoriumByNumber.get(3);
 const storage3 = serviceById.get("under-storage-3");
+addBoundsTarget("theater-3-entrance-stem", theater3.entry.entranceStemBounds);
+addBoundsTarget("theater-3-entrance-lateral", theater3.entry.entranceLateralBounds);
 addBoundsTarget("theater-3-usher-nook", theater3.entry.usherNookBounds);
 addBoundsTarget("theater-3-storage-anteroom", storage3.accessHall);
 for (const side of [-1, 1]) {
@@ -482,12 +494,17 @@ addBoundsTarget("boys-restroom-entry-lobe", boys.footprintRects[1]);
 navigationTargets.push({ id: "boys-restroom-main", x: -29.75, z: 66.9 });
 addBoundsTarget("boys-water-fountain-alcove", publicById.get("boys-fountain-alcove").bounds);
 const girls = serviceById.get("girls-restroom");
-addBoundsTarget("girls-restroom-entry-lobe", girls.footprintRects[2]);
+addBoundsTarget("girls-restroom-connector", girls.footprintRects[2]);
+addBoundsTarget("girls-restroom-entry-lobe", girls.footprintRects[3]);
 navigationTargets.push({ id: "girls-restroom-main", x: 66.5, z: 69.5 });
 const candy = serviceById.get("candy-storage");
 navigationTargets.push({ id: "candy-storage", x: candy.doorCenter, z: candy.bounds.zMin + 1.2 });
 
 navigationTargets.push({ id: "fountain-working-aisle", x: 5.8, z: 65.7 });
+navigationTargets.push(
+  { id: "t3-task-partition-west", x: COURTYARD_PLAN.waistPartition.x - 0.7, z: 65.5 },
+  { id: "t3-task-partition-east", x: COURTYARD_PLAN.waistPartition.x + 0.7, z: 65.5 },
+);
 addBoundsTarget("ticket-poster-alcove", TICKET_APPROACH_PLAN.posterAlcove);
 addBoundsTarget("ticket-empty-alcove", TICKET_APPROACH_PLAN.emptyAlcove);
 
@@ -529,7 +546,7 @@ const farVoidProbes = [
   { id: "rear-between-5-and-6", x: 40, z: 95 },
   { id: "rear-east", x: 100, z: 95 },
   { id: "rear-of-theater-8", x: 132, z: 94 },
-  { id: "behind-court-west-bay", x: -10, z: 70.5 },
+  { id: "behind-court-west-bay", x: -10, z: 69 },
   { id: "behind-court-east-seam", x: 7.4, z: 72 },
   { id: "far-east", x: 140, z: 90 },
   { id: "far-west", x: -40, z: 90 },
@@ -545,5 +562,5 @@ world.dispose();
 materials.dispose();
 
 console.log(
-  `Navigation smoke valid: 14 bowls + ${navigationTargets.length - 14} V5 route targets reachable on rendered floors · rear void contained · geometry overlap-free.`,
+  `Navigation smoke valid: 14 bowls + ${navigationTargets.length - 14} V6 route targets reachable on rendered floors · rear void contained · geometry overlap-free.`,
 );

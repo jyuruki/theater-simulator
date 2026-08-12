@@ -6,7 +6,7 @@ A first-person, browser-based layout prototype for a multiplayer movie-theater s
 
 This is a spatial prototype—not an official measured architectural plan. It is unaffiliated with Consolidated Theatres.
 
-## What is in v0.5
+## What is in v0.6
 
 - A physically corrected left/right plan: concessions are on the guest's left when entering, with the map and first-person heading using the same orientation
 - A much larger gray-stone lobby rebuilt from the detailed lobby sketch: three double-door banks, two ticket kiosks, the corrected L-shaped box office, a reserved future stair footprint, and an overflow-room-to-office sequence
@@ -16,15 +16,15 @@ This is a spatial prototype—not an official measured architectural plan. It is
 - Matching footprint families for Theaters 1/2, 4/5, 3/6/7/8, and 9–14
 - Two explicit stadium models: Theaters 3–8 enter at the bottom and climb dual side stairs, while Theaters 1/2 and 9–14 enter level with the top row and descend—without an artificial entry ramp
 - One compact dark-gray-tile fountain courtyard: two equal-length counters, then Theater 4 immediately past the rear counter, Theater 5 beside it near the end wall, with Theater 3 and the future-task room on the same recessed plane
-- Sketch-specific circulation: Theater 3's open usher nook, one-door horizontal anteroom, two-door lower room, and gentle-incline side hall; Theater 6's short vestibule, right-turn transverse passage, shared two-door lower room, and continuously roofed under-tier hall; the exact 4/5 doglegs; and usher/trash nooks at 7/8
+- Sketch-specific circulation: Theater 3's near-adjacent courtyard door, open usher nook, one-door horizontal anteroom, two-door lower room, and gentle-incline side hall; Theater 6's earlier entrance beside a closed future stair door, short vestibule, right-turn transverse passage, shared two-door lower room, and continuously roofed under-tier hall; the exact 4/5 doglegs; and usher/trash nooks at 7/8
 - An extended concession counter with six POS stations, plus the self-serve island with two soda fountains, two ICEE bookends, cup/lid/straw caddies, and a matching rear counter
 - Concession backline, bar, hot line, kitchen storage, office overflow, manager office, box office, candy storage, trash room, the room behind the fountain counters, both main restrooms, and a closed electrical room
-- The corrected BB-then-trash ordering, two vertically stacked drinking fountains, and drawing-specific restroom footprints: nine boys' stalls, six urinals and one long sink, plus fourteen girls' stalls and three sinks
+- The compact Trash–water-fountain–BB nook, expanded boys' fixture aisle, and drawing-specific restroom privacy routes: nine boys' stalls, six urinals and one long sink, plus fourteen girls' stalls and three sinks
 - Detail-ready placeholders and stable IDs for both poppers, soda fountains, drinking fountains, grill, fryers, turbo oven, and bar well
 - Dashed lower-storage volumes on the map only where the sketch calls for them: the Theater 3 and Theater 6 under-tier rooms
-- Deeper, joined turn pockets for paired Theaters 1/2 and 13/14, plus the drawing-specific handedness for every small-theater cubby
-- A fountain-width ticket approach with open 90-degree poster/empty alcoves, and a shallow rectangular candy room with one hall door and no invented exterior exit
-- Desktop and touch first-person controls, grounded jump with low-ceiling headroom protection, wall sliding without teleport recovery, stadium aisle elevations, and a live floor-plan minimap
+- Deeper, joined turn pockets for paired Theaters 1/2 and 13/14, the corrected Theater 9 turn, and clear rear landings that reach both side stairs without seat/wall clipping
+- A fountain-width ticket approach with true two-wall 90-degree poster/empty alcoves, a waist-high divider between Theater 3 and the task room, and a shallow rectangular candy room with one hall door and no invented exterior exit
+- Desktop and touch first-person controls, 30%-faster walking/running, grounded jump with low-ceiling headroom protection, wall sliding without teleport recovery, stadium aisle elevations, and a live floor-plan minimap
 - Always-resident auditorium interiors, extended fog distance, and single-owner floors/walls to eliminate proximity pop-in and the most common flashing surfaces
 - Procedural materials, original island-botanical lobby art, room signs, screens, acoustic panels, leather, trays, and instanced seating
 

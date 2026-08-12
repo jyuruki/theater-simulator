@@ -56,6 +56,16 @@ function createController({
   return controller;
 }
 
+// V6 movement tuning raises both default speeds by exactly 30 percent.
+{
+  const controller = createController({
+    collisionWorld: new AABBCollisionWorld(),
+    spawn: [0, 0, 0],
+  });
+  assertNear(controller.walkSpeed, 4.2 * 1.3, "default walk speed");
+  assertNear(controller.runSpeed, 7.1 * 1.3, "default run speed");
+}
+
 // A sampled ceiling limits jump headroom, cancels the upward velocity at
 // contact, and therefore keeps both the body and the lower camera below it.
 {
@@ -160,6 +170,19 @@ function createController({
   assertNear(controller.position.x, 0, "held input must not shift the player sideways");
   assertNear(controller.position.z, 0.34, "held input must remain at wall contact");
   assert.equal(recoveryCount, 0, "wall contact must not invoke recovery");
+}
+
+// V6's faster run speed still cannot tunnel through a wall during ordinary
+// controller updates, even after acceleration reaches its new maximum.
+{
+  const world = new AABBCollisionWorld();
+  world.addBox({ minX: -10, maxX: 10, minZ: -1, maxZ: 0 });
+  const controller = createController({ collisionWorld: world, spawn: [0, 0, 3] });
+  controller._onKeyDown({ code: "KeyW" });
+  controller._onKeyDown({ code: "ShiftLeft" });
+  for (let frame = 0; frame < 180; frame += 1) controller.update(1 / 60);
+  assertNear(controller.position.z, controller.radius, "high-speed run must stop at capsule contact");
+  assert.equal(world.isOverlapping(controller.position, controller.radius), false);
 }
 
 // Jump input remains functional after collision resolution.
