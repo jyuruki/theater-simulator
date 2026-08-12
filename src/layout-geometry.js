@@ -421,6 +421,8 @@ export function buildRouteSurfaceDescriptors(auditorium, layout) {
   }
 
   for (const [field, label] of [
+    ["entranceStemBounds", "entrance-stem"],
+    ["entranceLateralBounds", "entrance-lateral"],
     ["stemBounds", "stem"],
     ["lateralBounds", "lateral"],
     ["transverseBounds", "transverse-route"],
