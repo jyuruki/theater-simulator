@@ -96,8 +96,8 @@ for (const auditorium of AUDITORIUMS) {
   assert.equal(auditorium.rows.reduce((sum, count) => sum + count, 0), auditorium.seats, `Theater ${auditorium.number} row total is wrong.`);
   const preset = AUDITORIUM_PRESETS[auditorium.preset];
   assert.ok(preset, `Theater ${auditorium.number} has an unknown preset.`);
-  assert.equal(auditorium.bounds.xMax - auditorium.bounds.xMin, preset.width, `Theater ${auditorium.number} width differs from ${auditorium.preset}.`);
-  assert.equal(auditorium.bounds.zMax - auditorium.bounds.zMin, preset.depth, `Theater ${auditorium.number} depth differs from ${auditorium.preset}.`);
+  assertNear(auditorium.bounds.xMax - auditorium.bounds.xMin, preset.width, `Theater ${auditorium.number} width differs from ${auditorium.preset}.`);
+  assertNear(auditorium.bounds.zMax - auditorium.bounds.zMin, preset.depth, `Theater ${auditorium.number} depth differs from ${auditorium.preset}.`);
   assert.equal(auditorium.stadium.aisles, "dual-side", `Theater ${auditorium.number} must use dual side aisles.`);
 }
 
@@ -171,7 +171,7 @@ for (const auditorium of AUDITORIUMS.filter(({ entry }) => entry.type === "trash
   const cubbyDepth = auditorium.entry.cubbyBounds
     ? boundsDepth(auditorium.entry.cubbyBounds)
     : auditorium.entry.cubbyDepth;
-  assert.ok(cubbyDepth >= 3.4 - 1e-6, `Theater ${auditorium.number} needs the deeper V6 trash cubby.`);
+    assert.ok(cubbyDepth >= 3.4 - 1e-6, `Theater ${auditorium.number} needs the deeper trash cubby.`);
   const halfWidth = auditorium.entry.cubbyHalfWidth ?? 1.6;
   const cubby = auditorium.entry.cubbyBounds ?? {
     xMin: auditorium.entry.center - halfWidth,
@@ -241,6 +241,37 @@ assert.equal(boundsOverlap(roomById("under-storage-3").bounds, roomById("trash-r
 assert.equal(boundsOverlap(roomById("under-storage-3").bounds, roomById("boys-restroom").bounds), false);
 
 const t3Storage = roomById("under-storage-3");
+const t3ModuleTranslationX = 11.5;
+assert.deepEqual(t3.bounds, {
+  xMin: -36 + t3ModuleTranslationX,
+  xMax: -18.5 + t3ModuleTranslationX,
+  zMin: 72,
+  zMax: 99,
+}, "T3 auditorium must retain its V5 dimensions under one +11.5m translation.");
+assert.deepEqual(t3.entry.routeBounds, {
+  xMin: -18.5 + t3ModuleTranslationX,
+  xMax: -15.5 + t3ModuleTranslationX,
+  zMin: COURTYARD_PLAN.backWallZ,
+  zMax: 95.3,
+}, "T3 route must translate with the auditorium and begin directly at the courtyard door.");
+assert.deepEqual(t3.entry.usherNookBounds, {
+  xMin: -9.9,
+  xMax: -7,
+  zMin: COURTYARD_PLAN.backWallZ,
+  zMax: 72,
+});
+assert.deepEqual(t3Storage.bounds, {
+  xMin: -22,
+  xMax: -9.9,
+  zMin: 72,
+  zMax: 82.5,
+});
+assert.deepEqual(t3Storage.accessHall, {
+  xMin: -22,
+  xMax: -9.9,
+  zMin: COURTYARD_PLAN.backWallZ,
+  zMax: 72,
+});
 assert.equal(t3.entry.usherNookBounds.zMin, t3Storage.accessHall.zMin, "T3 usher nook must begin beside the horizontal storage anteroom.");
 assert.equal(t3.entry.usherNookBounds.xMax, t3.entry.routeBounds.xMin, "T3 usher nook must open directly to the public route.");
 assert.equal(t3.entry.usherNookBounds.xMin, t3Storage.accessHall.xMax, "T3 nook must meet the anteroom's single east door.");
@@ -255,14 +286,26 @@ assert.ok(
 );
 assert.equal(t3Storage.orientation, "horizontal");
 assert.equal(t3Storage.doorSide, "south", "T3 under-tier room must have its two doors on the south wall.");
-assert.deepEqual(t3Storage.doorCenters, [-30.6, -24.3], "T3 under-tier room must retain the two drawn south doors.");
+assert.deepEqual(
+  t3Storage.doorCenters,
+  [-19.1, -12.8],
+  "T3 under-tier doors must translate rigidly with their room.",
+);
 assert.equal(t3Storage.accessHall.zMax, t3Storage.bounds.zMin, "T3 anteroom must terminate at the under-tier room.");
 assert.ok(t3Storage.doorCenters.every((center) => center > t3Storage.bounds.xMin && center < t3Storage.bounds.xMax));
-assert.ok(t3.entry.center > t3.entry.entranceStemBounds.xMin && t3.entry.center < t3.entry.entranceStemBounds.xMax);
-assert.equal(t3.entry.entranceStemBounds.zMin, COURTYARD_PLAN.backWallZ);
-assert.equal(t3.entry.entranceStemBounds.zMax, t3.entry.entranceLateralBounds.zMin);
-assert.equal(t3.entry.entranceLateralBounds.xMin, t3.entry.routeBounds.xMin, "T3's courtyard dogleg must overlap the existing straight route without a floor seam.");
-assert.equal(t3.entry.entranceLateralBounds.zMax, t3.entry.routeBounds.zMin);
+assert.equal("entranceStemBounds" in t3.entry, false, "T3 must not retain a connector stem to its old position.");
+assert.equal("entranceLateralBounds" in t3.entry, false, "T3 must not retain a lateral connector to its old position.");
+assert.equal(t3.entry.routeBounds.xMin, t3.bounds.xMax, "T3 route must be flush with the translated auditorium edge.");
+assert.equal(t3.entry.routeBounds.zMin, COURTYARD_PLAN.backWallZ, "T3 route must start on the V7 courtyard door plane.");
+const t3CourtDoor = COURTYARD_PLAN.doors.find(({ targetId }) => targetId === "theater-3");
+assert.ok(t3CourtDoor.center - t3CourtDoor.width / 2 >= t3.entry.routeBounds.xMin);
+assert.ok(t3CourtDoor.center + t3CourtDoor.width / 2 <= t3.entry.routeBounds.xMax);
+assert.deepEqual(t3.entry.ramp.bounds, {
+  xMin: -7,
+  xMax: -4,
+  zMin: 82.5,
+  zMax: 94.5,
+});
 
 const theater4 = AUDITORIUMS.find(({ number }) => number === 4);
 const theater5 = AUDITORIUMS.find(({ number }) => number === 5);
@@ -280,7 +323,7 @@ assert.equal(SERVICE_ROOMS.some(({ id }) => id === "usher-stock"), false, "T4/T5
 assert.ok(theater4.bounds.zMin >= 75 && theater5.bounds.zMin >= 75, "T4/T5 must be recessed behind the fountain court.");
 
 const courtyardDoors = new Map(COURTYARD_PLAN.doors.map((door) => [door.targetId, door]));
-const t3CourtDoor = courtyardDoors.get("theater-3");
+const courtyardT3Door = courtyardDoors.get("theater-3");
 const taskCourtDoor = courtyardDoors.get("future-task-room");
 const t4CourtDoor = courtyardDoors.get("theater-4");
 const t5CourtDoor = courtyardDoors.get("theater-5");
@@ -294,12 +337,12 @@ assertNear(courtGaps[1], 0.7, "Compact court T4-to-T5 gap");
 assertNear(courtGaps[2], 0.3, "Compact court T5-to-east-wall gap");
 assert.ok(courtGaps.every((gap) => gap >= 0 && gap <= 0.75), "The compact court cannot regain an empty east bay.");
 assertNear(
-  taskCourtDoor.center - taskCourtDoor.width / 2 - (t3CourtDoor.center + t3CourtDoor.width / 2),
+  taskCourtDoor.center - taskCourtDoor.width / 2 - (courtyardT3Door.center + courtyardT3Door.width / 2),
   1.5,
   "T3-to-task clear wall gap",
 );
 assertNear(FOUNTAIN_PLAN.rearCounter.xMin - (taskCourtDoor.center + taskCourtDoor.width / 2), 0.1, "Task door-to-rear-counter gap");
-assert.ok(COURTYARD_PLAN.waistPartition.x > t3CourtDoor.center + t3CourtDoor.width / 2);
+assert.ok(COURTYARD_PLAN.waistPartition.x > courtyardT3Door.center + courtyardT3Door.width / 2);
 assert.ok(COURTYARD_PLAN.waistPartition.x < taskCourtDoor.center - taskCourtDoor.width / 2);
 assertNear(COURTYARD_PLAN.waistPartition.x, -3.55, "T3/task waist-partition center");
 assert.equal(COURTYARD_PLAN.waistPartition.zMin, FOUNTAIN_PLAN.island.zMin);
@@ -313,7 +356,7 @@ assertNear(
 
 assert.equal(theater4.bounds.xMax, theater5.bounds.xMin, "T4 and T5 must remain directly paired.");
 assert.equal(theater4.entry.firstTurn, "west");
-assert.equal(theater5.entry.firstTurn, "east", "T5 must take the east turn retained in V6.");
+assert.equal(theater5.entry.firstTurn, "east", "T5 must retain its east turn.");
 assert.equal(theater5.entry.routeSide, "east", "T5 must arrive on the east side of its screen.");
 assert.equal(theater5.entry.stemBounds.zMin, COURTYARD_PLAN.backWallZ);
 assert.equal(theater5.entry.stemBounds.zMax, theater5.entry.lateralBounds.zMin);
@@ -362,15 +405,31 @@ assert.ok(pointInRect(21.4, 3.3, LOBBY_PLAN.envelope));
 
 const boys = roomById("boys-restroom");
 const girls = roomById("girls-restroom");
+const boysClusterTranslationX = -0.6;
+assert.deepEqual(boys.bounds, {
+  xMin: -36.6,
+  xMax: -22,
+  zMin: 62.2,
+  zMax: 70.2,
+}, "The complete boys restroom must translate 0.6m plan-left without changing its interior dimensions.");
+assert.deepEqual(boys.footprintRects, [
+  { xMin: -36.6, xMax: -22, zMin: 64.7, zMax: 70.2 },
+  { xMin: -24.65, xMax: -22, zMin: 62.2, zMax: 64.7 },
+]);
 assert.deepEqual(boys.pathTurns, ["left", "left"], "Boys restroom must retain the two-turn privacy route.");
 assert.equal(boys.footprintRects.length, 2, "Boys restroom must retain its entrance lobe.");
 assert.equal(boys.entry.side, "west");
 assert.equal(boys.entry.coordinate, boys.footprintRects[1].xMin);
-assert.deepEqual(boys.entry, { side: "west", coordinate: -24.05, center: 63.45, width: 1.9 });
+assert.deepEqual(boys.entry, { side: "west", coordinate: -24.65, center: 63.45, width: 1.9 });
 assert.equal(boys.privacyTurn, "west");
 assert.deepEqual(boys.fixtures.stalls.map(({ count }) => count), [9], "Boys restroom requires one bank of nine stalls.");
 assert.deepEqual(boys.fixtures.urinals.map(({ count }) => count), [6], "Boys restroom requires six urinals.");
 assert.deepEqual(boys.fixtures.sinks.map(({ count, trough }) => [count, trough]), [[1, true]], "Boys restroom requires one long sink.");
+assert.deepEqual(boys.fixtures, {
+  stalls: [{ side: "south", count: 9, start: -36.15, end: -26.85, depth: 1.7 }],
+  urinals: [{ side: "north", count: 6, start: -35.85, end: -30.95 }],
+  sinks: [{ side: "north", count: 1, start: -29.8, end: -22.95, trough: true }],
+}, "Every boys fixture bank must translate with the unchanged interior.");
 assert.equal(fixtureCount(boys.fixtures.stalls), 9);
 assert.equal(fixtureCount(boys.fixtures.urinals), 6);
 assert.equal(fixtureCount(boys.fixtures.sinks), 1);
@@ -378,10 +437,32 @@ const boysMain = boys.footprintRects[0];
 const boysStallDoorZ = boysMain.zMin + boys.fixtures.stalls[0].depth - 0.025;
 const boysUrinalFrontZ = boysMain.zMax - 0.32 - 0.42 / 2;
 assert.ok(boysUrinalFrontZ - boysStallDoorZ >= 1.55, "Boys restroom needs visibly more space between stalls and urinals.");
-const boysFountainNook = publicById("boys-fountain-alcove");
-assert.ok(boundsWidth(boysFountainNook.bounds) <= 3.2, "The water-fountain/restroom nook must stay compact.");
-assert.equal(boysFountainNook.bounds.xMax, boys.entry.coordinate, "The compact nook must terminate at the restroom cubby door.");
-assert.equal(roomById("trash-room").bounds.xMax, boysFountainNook.bounds.xMin, "The fountain nook must sit directly beside Trash.");
+const boysFountainWall = publicById("boys-fountain-alcove");
+const boysMenCubby = publicById("boys-men-entry-cubby");
+assert.deepEqual(boysFountainWall.bounds, { xMin: -27.8, xMax: -26.15, zMin: 61.7, zMax: 62.2 });
+assert.deepEqual(boysMenCubby.bounds, { xMin: -26.15, xMax: -24.65, zMin: 62.2, zMax: 64.7 });
+assert.equal(boysFountainWall.bounds.xMax, boysMenCubby.bounds.xMin, "The flat fountain wall must terminate at the recessed MEN cubby.");
+assert.equal(boysMenCubby.bounds.xMax, boys.entry.coordinate, "The MEN cubby must terminate at the restroom privacy door.");
+assert.deepEqual(roomById("trash-room"), {
+  id: "trash-room",
+  name: "Trash Room",
+  short: "TRASH",
+  detail: "Waste and cleaning support; the door is at the right end and the room opens left",
+  bounds: { xMin: -35.8, xMax: -27.8, zMin: 62.2, zMax: 64.7 },
+  kind: "trash",
+  entrySide: "south",
+  doorCenter: -28.95,
+  doorPlacement: "right",
+  opensToward: "west",
+}, "Trash and the boys cluster must retain their common 0.6m translation.");
+assert.deepEqual(
+  EQUIPMENT_ANCHORS.filter(({ type }) => type === "drinking-fountain").map(({ position, rotation }) => ({ position, rotation })),
+  [
+    { position: [-27.38, 0, 61.94], rotation: 0 },
+    { position: [-26.6, 0, 61.94], rotation: 0 },
+  ],
+  "Both drinking fountains must remain mounted on the distinct exterior wall.",
+);
 
 assert.equal(girls.footprintRects.length, 4, "Girls restroom must retain its concave entrance, connector, and southwest lobe.");
 assert.equal(girls.entry.side, "west");
@@ -390,6 +471,19 @@ assert.deepEqual(girls.entry, { side: "west", coordinate: 68.3, center: 63.85, w
 assert.deepEqual(girls.fixtures.stalls.map(({ side, count }) => [side, count]), [
   ["north", 6], ["south", 6], ["south-lobe", 2],
 ]);
+const [girlsNorthStalls, girlsSouthStalls] = girls.fixtures.stalls;
+assert.deepEqual(
+  [girlsNorthStalls.start, girlsNorthStalls.end, girlsSouthStalls.start, girlsSouthStalls.end],
+  [68, 77, 68, 77],
+  "The two six-stall banks must share the same V7 span.",
+);
+for (let edge = 0; edge <= 6; edge += 1) {
+  const northPartitionX = girlsNorthStalls.start
+    + ((girlsNorthStalls.end - girlsNorthStalls.start) * edge) / girlsNorthStalls.count;
+  const southPartitionX = girlsSouthStalls.start
+    + ((girlsSouthStalls.end - girlsSouthStalls.start) * edge) / girlsSouthStalls.count;
+  assertNear(northPartitionX, southPartitionX, `Girls stall partition ${edge} alignment`);
+}
 assert.deepEqual(girls.fixtures.sinks.map(({ side, count }) => [side, count]), [["north", 3]]);
 assert.equal(fixtureCount(girls.fixtures.stalls), 14, "Girls restroom requires exactly fourteen stalls.");
 assert.equal(fixtureCount(girls.fixtures.sinks), 3, "Girls restroom requires exactly three sinks.");
@@ -414,7 +508,7 @@ assert.ok(hall.bounds.zMax - hall.bounds.zMin <= 4.3, "The theater hall must rem
 assert.ok(approach.bounds.zMax - approach.bounds.zMin >= 30, "The lobby-to-ticket approach must remain long.");
 assert.deepEqual(approach.bounds, TICKET_APPROACH_PLAN.bounds);
 assertNear(boundsWidth(approach.bounds), boundsWidth(FOUNTAIN_PLAN.island), "Approach must be the fountain-counter width");
-assertNear(boundsWidth(approach.bounds), 12.6, "V6 narrow approach width");
+assertNear(boundsWidth(approach.bounds), 12.6, "Narrow approach width");
 const posterAlcove = publicById("ticket-poster-alcove");
 const emptyAlcove = publicById("ticket-empty-alcove");
 assert.deepEqual(posterAlcove.bounds, TICKET_APPROACH_PLAN.posterAlcove);
@@ -450,27 +544,38 @@ assert.ok(EQUIPMENT_ANCHORS.filter(({ roomId }) => roomId === "soda-service").ev
 
 const theater6 = AUDITORIUMS.find(({ number }) => number === 6);
 const futureUpstairs = roomById("future-upstairs-stair");
+const t6ModuleTranslationX = -13.3;
 assert.equal(futureUpstairs.closed, true);
 assert.deepEqual(
   {
     stairBounds: futureUpstairs.bounds,
     stairDoor: futureUpstairs.doorCenter,
+    auditorium: theater6.bounds,
     theater6Door: theater6.entry.center,
     vestibule: theater6.entry.vestibuleBounds,
     transverse: theater6.entry.transverseBounds,
+    longRoute: theater6.entry.longRouteBounds,
+    storage: t6Storage.bounds,
+    storageDoors: t6Storage.doorCenters,
   },
   {
-    stairBounds: { xMin: 25, xMax: 29.8, zMin: 62.2, zMax: 68.5 },
+    stairBounds: { xMin: 25, xMax: 29.7, zMin: 62.2, zMax: 68.5 },
     stairDoor: 27.5,
+    auditorium: { xMin: 29.7, xMax: 47.2, zMin: 62.2, zMax: 89.2 },
     theater6Door: 31.2,
-    vestibule: { xMin: 29.8, xMax: 32.6, zMin: 62.2, zMax: 65.5 },
-    transverse: { xMin: 29.8, xMax: 60.5, zMin: 65.5, zMax: 68.5 },
+    vestibule: { xMin: 29.7, xMax: 32.55, zMin: 62.2, zMax: 65.5 },
+    transverse: { xMin: 29.7, xMax: 47.2, zMin: 65.5, zMax: 68.5 },
+    longRoute: { xMin: 44.7, xMax: 47.2, zMin: 68.5, zMax: 85.5 },
+    storage: { xMin: 31.7, xMax: 44.7, zMin: 68.5, zMax: 71.8 },
+    storageDoors: [35.2, 41.7],
   },
-  "The future stair and earlier Theater 6 entrance must stay locked to the V6 drawing.",
+  "The whole T6 module must share one -13.3m translation to its V7 door.",
 );
 assert.ok(theater6.entry.vestibuleBounds.zMax - theater6.entry.vestibuleBounds.zMin >= 3, "T6 needs a few feet of straight vestibule before its right turn.");
 assert.equal(theater6.entry.vestibuleBounds.zMax, theater6.entry.transverseBounds.zMin);
 assert.equal(theater6.entry.transverseBounds.zMax, theater6.entry.longRouteBounds.zMin);
+assert.equal(theater6.entry.transverseBounds.xMin, theater6.bounds.xMin);
+assert.equal(theater6.entry.transverseBounds.xMax, theater6.bounds.xMax, "T6 must not retain a transverse connector to its old position.");
 assert.equal(boundsWidth(theater6.entry.longRouteBounds), theater6.entry.routeWidth);
 assert.equal(theater6.entry.longRouteBounds.xMax, theater6.bounds.xMax, "T6 long route must remain on its east side.");
 assert.equal(t6Storage.ceilingHeight, 2.32, "T6 under-tier route needs the authoritative low roof height.");
@@ -487,7 +592,7 @@ assert.ok(worldBounds.xMin < worldBounds.xMax);
 assert.equal(worldBounds.xMax - worldBounds.xMin, MAP_BOUNDS.xMax - MAP_BOUNDS.xMin);
 
 console.log(
-  `Layout valid: v6 · 14 theaters · 1,093 brown-leather tray seats · ${EQUIPMENT_ANCHORS.length} equipment anchors · ${POS_STATIONS.length} diagonal POS stations.`,
+  `Layout valid: v7 · 14 theaters · 1,093 brown-leather tray seats · ${EQUIPMENT_ANCHORS.length} equipment anchors · ${POS_STATIONS.length} diagonal POS stations.`,
 );
 
 function publicById(id) {

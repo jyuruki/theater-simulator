@@ -92,17 +92,15 @@ export const AUDITORIUMS = Object.freeze([
     },
   },
   {
-    number: 3, id: "theater-3", preset: "large150", bounds: rect(-36, -18.5, 72, 99),
+    number: 3, id: "theater-3", preset: "large150", bounds: rect(-24.5, -7, 72, 99),
     screenSide: "north", seats: 148, rows: [14, 16, 18, 20, 20, 20, 20, 20],
     underStorage: true, stadium: { ...bottomEntryStadium(0.24), outerMargin: 0 },
     entry: {
       type: "storage-left-then-left", center: -5.5, routeSide: "east", storageId: "under-storage-3",
       courtyardId: COURTYARD_PLAN.id, outerPlaneZ: COURTYARD_BACK_WALL_Z,
-      entranceStemBounds: rect(-6.7, -4.3, COURTYARD_BACK_WALL_Z, 70.2),
-      entranceLateralBounds: rect(-18.5, -4.3, 70.2, 72),
-      usherNookBounds: rect(-21.4, -18.5, 70.2, 74),
-      routeBounds: rect(-18.5, -15.5, 72, 95.3), arrivalZ: 94.5,
-      ramp: { bounds: rect(-18.5, -15.5, 84.5, 94.5), startHeight: 0, endHeight: 0.24 },
+      usherNookBounds: rect(-9.9, -7, COURTYARD_BACK_WALL_Z, 72),
+      routeBounds: rect(-7, -4, COURTYARD_BACK_WALL_Z, 95.3), arrivalZ: 94.5,
+      ramp: { bounds: rect(-7, -4, 82.5, 94.5), startHeight: 0, endHeight: 0.24 },
     },
   },
   {
@@ -130,14 +128,14 @@ export const AUDITORIUMS = Object.freeze([
     },
   },
   {
-    number: 6, id: "theater-6", preset: "large150", bounds: rect(43, 60.5, 62.2, 89.2),
+    number: 6, id: "theater-6", preset: "large150", bounds: rect(29.7, 47.2, 62.2, 89.2),
     screenSide: "north", seats: 148, rows: [14, 16, 18, 20, 20, 20, 20, 20],
     underStorage: true, stadium: bottomEntryStadium(0),
     entry: {
       type: "right-then-left", center: 31.2, routeSide: "east", routeWidth: 2.5, storageId: "under-storage-6",
-      vestibuleBounds: rect(29.8, 32.6, 62.2, 65.5),
-      transverseBounds: rect(29.8, 60.5, 65.5, 68.5),
-      longRouteBounds: rect(58, 60.5, 68.5, 85.5), arrivalZ: 84.7,
+      vestibuleBounds: rect(29.7, 32.55, 62.2, 65.5),
+      transverseBounds: rect(29.7, 47.2, 65.5, 68.5),
+      longRouteBounds: rect(44.7, 47.2, 68.5, 85.5), arrivalZ: 84.7,
     },
   },
   {
@@ -208,7 +206,8 @@ export const PUBLIC_SPACES = Object.freeze([
   { id: "ticket-poster-alcove", name: "Poster Alcove", detail: "Open 90-degree pocket at ticket check", bounds: TICKET_APPROACH_PLAN.posterAlcove, kind: "corridor" },
   { id: "ticket-empty-alcove", name: "Ticket Alcove", detail: "Open 90-degree pocket at ticket check", bounds: TICKET_APPROACH_PLAN.emptyAlcove, kind: "corridor" },
   { id: "main-corridor", name: "Main Theater Hall", detail: "Long, narrow auditorium corridor", bounds: rect(-40, 140, 58, 62.2), kind: "corridor" },
-  { id: "boys-fountain-alcove", name: "Water Fountain / Restroom Nook", detail: "Compact 90-degree nook containing both drinking fountains and the men's restroom privacy entrance", bounds: rect(-27.2, -24.05, 62.2, 64.7), kind: "corridor" },
+  { id: "boys-fountain-alcove", name: "Water Fountains", detail: "Two wall-mounted drinking fountains on the flat hall wall beside MEN", bounds: rect(-27.8, -26.15, 61.7, 62.2), kind: "corridor" },
+  { id: "boys-men-entry-cubby", name: "MEN Entry Cubby", detail: "Distinct recessed MEN entrance immediately beside the drinking fountains", bounds: rect(-26.15, -24.65, 62.2, 64.7), kind: "corridor" },
   { id: "soda-service", name: "Self-Serve Fountain Court", detail: "Dark-gray-tile courtyard with soda, ICEE, lids, straws, and cup service", bounds: rect(-18.5, 12.1, 62.2, COURTYARD_BACK_WALL_Z), kind: "soda-service", courtyardId: COURTYARD_PLAN.id, floorFinish: COURTYARD_PLAN.floorFinish },
   { id: "recessed-theater-court", name: "Theaters 3–5 Court", detail: "Compact dark-gray-tile court: counter, T4, T5, wall", bounds: rect(12.1, 18.3, 62.2, COURTYARD_BACK_WALL_Z), kind: "corridor", courtyardId: COURTYARD_PLAN.id, floorFinish: COURTYARD_PLAN.floorFinish },
 ]);
@@ -222,22 +221,22 @@ export const SERVICE_ROOMS = Object.freeze([
   { id: "bar", name: "Lobby Bar", short: "B", detail: "Horizontal guest bar and back-bar worktop", bounds: rect(-16.1, -8.6, 20.4, 24), kind: "bar" },
   { id: "box-office", name: "Box Office", short: "BOX", detail: "Freestanding L-shaped ticket counter", bounds: rect(9.2, 15.5, 6.9, 14.4), kind: "office" },
   { id: "electrical-room", name: "Electrical Room", short: "ELEC", detail: "Closed service room behind the former provisional restroom door", bounds: rect(12.1, 17.7, 34, 43), kind: "electrical", entrySide: "west", doorCenter: 39, closed: true },
-  { id: "future-upstairs-stair", name: "Future Upstairs Stair", short: "STAIR", detail: "Closed future staircase immediately before Theater 6", bounds: rect(25, 29.8, 62.2, 68.5), kind: "electrical", entrySide: "south", doorCenter: 27.5, closed: true },
-  { id: "trash-room", name: "Trash Room", short: "TRASH", detail: "Waste and cleaning support; the door is at the right end and the room opens left", bounds: rect(-35.2, -27.2, 62.2, 64.7), kind: "trash", entrySide: "south", doorCenter: -28.35, doorPlacement: "right", opensToward: "west" },
+  { id: "future-upstairs-stair", name: "Future Upstairs Stair", short: "STAIR", detail: "Closed future staircase immediately before Theater 6", bounds: rect(25, 29.7, 62.2, 68.5), kind: "electrical", entrySide: "south", doorCenter: 27.5, closed: true },
+  { id: "trash-room", name: "Trash Room", short: "TRASH", detail: "Waste and cleaning support; the door is at the right end and the room opens left", bounds: rect(-35.8, -27.8, 62.2, 64.7), kind: "trash", entrySide: "south", doorCenter: -28.95, doorPlacement: "right", opensToward: "west" },
   {
     id: "boys-restroom", name: "Men's Restroom", short: "BB",
     detail: "Southeast privacy lobe, left-left path, nine stalls, six urinals, and one long sink",
-    bounds: rect(-36, -21.4, 62.2, 70.2), kind: "restroom",
+    bounds: rect(-36.6, -22, 62.2, 70.2), kind: "restroom",
     footprintRects: Object.freeze([
-      rect(-36, -21.4, 64.7, 70.2),
-      rect(-24.05, -21.4, 62.2, 64.7),
+      rect(-36.6, -22, 64.7, 70.2),
+      rect(-24.65, -22, 62.2, 64.7),
     ]),
-    entry: { side: "west", coordinate: -24.05, center: 63.45, width: 1.9 },
+    entry: { side: "west", coordinate: -24.65, center: 63.45, width: 1.9 },
     privacyTurn: "west", pathTurns: Object.freeze(["left", "left"]),
     fixtures: Object.freeze({
-      stalls: Object.freeze([{ side: "south", count: 9, start: -35.55, end: -26.25, depth: 1.7 }]),
-      urinals: Object.freeze([{ side: "north", count: 6, start: -35.25, end: -30.35 }]),
-      sinks: Object.freeze([{ side: "north", count: 1, start: -29.2, end: -22.35, trough: true }]),
+      stalls: Object.freeze([{ side: "south", count: 9, start: -36.15, end: -26.85, depth: 1.7 }]),
+      urinals: Object.freeze([{ side: "north", count: 6, start: -35.85, end: -30.95 }]),
+      sinks: Object.freeze([{ side: "north", count: 1, start: -29.8, end: -22.95, trough: true }]),
     }),
   },
   {
@@ -253,8 +252,8 @@ export const SERVICE_ROOMS = Object.freeze([
     entry: { side: "west", coordinate: 68.3, center: 63.85, width: 2.05 },
     fixtures: Object.freeze({
       stalls: Object.freeze([
-        { side: "north", count: 6, start: 67.1, end: 76.85, depth: 2.0 },
-        { side: "south", count: 6, start: 70.95, end: 76.85, depth: 2.0 },
+        { side: "north", count: 6, start: 68.0, end: 77.0, depth: 2.0 },
+        { side: "south", count: 6, start: 68.0, end: 77.0, depth: 2.0 },
         { side: "south-lobe", count: 2, start: 61.65, end: 65.65, depth: 2.0 },
       ]),
       sinks: Object.freeze([{ side: "north", count: 3, start: 62.0, end: 66.3 }]),
@@ -262,8 +261,8 @@ export const SERVICE_ROOMS = Object.freeze([
   },
   { id: "future-task-room", name: "Future Task Room", short: "TASK", detail: "Empty gameplay room directly behind the fountain counters on the shared courtyard door plane", bounds: rect(-3.2, 7.3, COURTYARD_BACK_WALL_Z, 74.8), kind: "storage", entrySide: "south", doorCenter: -1.7, courtyardId: COURTYARD_PLAN.id },
   { id: "candy-storage", name: "Candy Storage", short: "CANDY", detail: "Wide, shallow bulk-candy room with one left-side hall door", bounds: rect(128.5, 138.5, 62.2, 67.2), kind: "storage", entrySide: "south", doorCenter: 130.2 },
-  { id: "under-storage-3", name: "Under-Seat Storage 3", short: "U/S 3", detail: "One-door horizontal anteroom leading to a two-door under-tier room", bounds: rect(-33.5, -21.4, 74, 84.5), kind: "storage-lower", orientation: "horizontal", ceilingHeight: 2.32, doorSide: "south", doorCenters: [-30.6, -24.3], accessHall: rect(-33.5, -21.4, 70.2, 74), outerDoorSide: "east", outerDoorCenter: 72.1 },
-  { id: "under-storage-6", name: "Under-Seat Storage 6", short: "U/S 6", detail: "Shared two-door room below Theater 6's upper tiers", bounds: rect(45, 58, 68.5, 71.8), kind: "storage-lower", ceilingHeight: 2.32, doorSide: "south", doorCenters: [48.5, 55] },
+  { id: "under-storage-3", name: "Under-Seat Storage 3", short: "U/S 3", detail: "One-door horizontal anteroom leading to a two-door under-tier room", bounds: rect(-22, -9.9, 72, 82.5), kind: "storage-lower", orientation: "horizontal", ceilingHeight: 2.32, doorSide: "south", doorCenters: [-19.1, -12.8], accessHall: rect(-22, -9.9, 68.2, 72), outerDoorSide: "east", outerDoorCenter: 70.1 },
+  { id: "under-storage-6", name: "Under-Seat Storage 6", short: "U/S 6", detail: "Shared two-door room below Theater 6's upper tiers", bounds: rect(31.7, 44.7, 68.5, 71.8), kind: "storage-lower", ceilingHeight: 2.32, doorSide: "south", doorCenters: [35.2, 41.7] },
 ]);
 
 export const LOBBY_PLAN = Object.freeze({
@@ -311,8 +310,8 @@ export const EQUIPMENT_ANCHORS = Object.freeze([
   { id: "soda-fountain-1", type: "soda-fountain", roomId: "soda-service", position: [3.3, 0, 63.6], rotation: 0, footprint: [1.8, 0.95] },
   { id: "soda-fountain-2", type: "soda-fountain", roomId: "soda-service", position: [7.8, 0, 63.6], rotation: 0, footprint: [1.8, 0.95] },
   { id: "soda-icee-right", type: "icee-fountain", roomId: "soda-service", position: [10.5, 0, 63.6], rotation: 0, footprint: [1.5, 0.95] },
-  { id: "boys-water-fountain-1", type: "drinking-fountain", roomId: "boys-fountain-alcove", position: [-26.92, 0, 63.0], rotation: -Math.PI / 2, footprint: [0.65, 0.42] },
-  { id: "boys-water-fountain-2", type: "drinking-fountain", roomId: "boys-fountain-alcove", position: [-26.92, 0, 64.0], rotation: -Math.PI / 2, footprint: [0.65, 0.42] },
+  { id: "boys-water-fountain-1", type: "drinking-fountain", roomId: "boys-fountain-alcove", position: [-27.38, 0, 61.94], rotation: 0, footprint: [0.65, 0.42] },
+  { id: "boys-water-fountain-2", type: "drinking-fountain", roomId: "boys-fountain-alcove", position: [-26.6, 0, 61.94], rotation: 0, footprint: [0.65, 0.42] },
 ]);
 
 export const POS_STATIONS = Object.freeze([
@@ -346,7 +345,7 @@ export const MAP_BOUNDS = Object.freeze(rect(-41, 141, -10, 99));
 export const PLAYER_SPAWN_PLAN = Object.freeze({ x: 1.5, y: 0, z: -6.8 });
 
 export const AUDITORIUM_ENTRY_ZONES = Object.freeze([
-  { id: "theater-3-entry", name: "Theater 3 Entrance", detail: "Shared courtyard door · horizontal under-tier storage left · gentle incline · front seating apron", bounds: rect(-21.4, -4.3, COURTYARD_BACK_WALL_Z, 95.3) },
+  { id: "theater-3-entry", name: "Theater 3 Entrance", detail: "Shared courtyard door · horizontal under-tier storage left · gentle incline · front seating apron", bounds: rect(-22, -4, COURTYARD_BACK_WALL_Z, 95.3) },
   { id: "theater-4-entry", name: "Theater 4 Vestibule", detail: "Compact court door · left dogleg · east-side aisle", bounds: rect(7.5, 15.05, 68.2, 75) },
   { id: "theater-5-entry", name: "Theater 5 Vestibule", detail: "Wall-side court door · right dogleg · east-side aisle", bounds: rect(15.45, 21.5, 68.2, 75) },
 ]);

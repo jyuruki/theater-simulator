@@ -242,6 +242,8 @@ function drawPublicSpaces(context, view) {
       "ticket-check": "TICKETS",
       "ticket-poster-alcove": "POSTER",
       "ticket-empty-alcove": "ALCOVE",
+      "boys-fountain-alcove": "H₂O",
+      "boys-men-entry-cubby": "MEN",
       "main-corridor": "THEATER HALL",
     }[space.id];
 

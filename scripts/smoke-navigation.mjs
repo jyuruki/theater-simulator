@@ -449,10 +449,32 @@ for (const door of COURTYARD_PLAN.doors) {
 
 const theater3 = auditoriumByNumber.get(3);
 const storage3 = serviceById.get("under-storage-3");
-addBoundsTarget("theater-3-entrance-stem", theater3.entry.entranceStemBounds);
-addBoundsTarget("theater-3-entrance-lateral", theater3.entry.entranceLateralBounds);
+const theater3Route = theater3.entry.routeBounds;
+const theater3RouteCenterX = (theater3Route.xMin + theater3Route.xMax) / 2;
+navigationTargets.push(
+  {
+    id: "theater-3-direct-route-entry",
+    x: theater3RouteCenterX,
+    z: theater3Route.zMin + 0.7,
+  },
+  {
+    id: "theater-3-route-ramp",
+    ...boundsCenter(theater3.entry.ramp.bounds),
+  },
+  {
+    id: "theater-3-bowl-seam-route-side",
+    x: theater3Route.xMin + 0.7,
+    z: theater3.entry.arrivalZ,
+  },
+  {
+    id: "theater-3-bowl-seam-bowl-side",
+    x: theater3Route.xMin - 0.7,
+    z: theater3.entry.arrivalZ,
+  },
+);
 addBoundsTarget("theater-3-usher-nook", theater3.entry.usherNookBounds);
 addBoundsTarget("theater-3-storage-anteroom", storage3.accessHall);
+addBoundsTarget("theater-3-storage-room", storage3.bounds);
 for (const side of [-1, 1]) {
   navigationTargets.push({
     id: `theater-3-anteroom-outer-door-side-${side}`,
@@ -478,9 +500,34 @@ const theater6 = auditoriumByNumber.get(6);
 addBoundsTarget("theater-6-vestibule", theater6.entry.vestibuleBounds);
 addBoundsTarget("theater-6-transverse", theater6.entry.transverseBounds);
 addBoundsTarget("theater-6-long-route", theater6.entry.longRouteBounds);
+navigationTargets.push(
+  {
+    id: "theater-6-vestibule-transverse-seam",
+    x: (theater6.entry.vestibuleBounds.xMin + theater6.entry.vestibuleBounds.xMax) / 2,
+    z: theater6.entry.vestibuleBounds.zMax,
+  },
+  {
+    id: "theater-6-transverse-long-turn",
+    x: (theater6.entry.longRouteBounds.xMin + theater6.entry.longRouteBounds.xMax) / 2,
+    z: theater6.entry.longRouteBounds.zMin + 0.7,
+  },
+  {
+    id: "theater-6-bowl-seam-route-side",
+    x: theater6.entry.longRouteBounds.xMin + 0.7,
+    z: theater6.entry.arrivalZ,
+  },
+  {
+    id: "theater-6-bowl-seam-bowl-side",
+    x: theater6.entry.longRouteBounds.xMin - 0.7,
+    z: theater6.entry.arrivalZ,
+  },
+);
 const storage6 = serviceById.get("under-storage-6");
 for (const center of storage6.doorCenters) {
-  navigationTargets.push({ id: `theater-6-storage-south-${center}`, x: center, z: storage6.bounds.zMin + 0.7 });
+  navigationTargets.push(
+    { id: `theater-6-storage-south-${center}-passage`, x: center, z: storage6.bounds.zMin - 0.7 },
+    { id: `theater-6-storage-south-${center}-room`, x: center, z: storage6.bounds.zMin + 0.7 },
+  );
 }
 
 for (const number of [7, 8]) {
@@ -490,13 +537,59 @@ for (const number of [7, 8]) {
 const trash = serviceById.get("trash-room");
 navigationTargets.push({ id: "trash-room", x: trash.doorCenter - 1.7, z: trash.bounds.zMin + 1.25 });
 const boys = serviceById.get("boys-restroom");
-addBoundsTarget("boys-restroom-entry-lobe", boys.footprintRects[1]);
-navigationTargets.push({ id: "boys-restroom-main", x: -29.75, z: 66.9 });
-addBoundsTarget("boys-water-fountain-alcove", publicById.get("boys-fountain-alcove").bounds);
+const boysMain = boys.footprintRects[0];
+const boysFountainWall = publicById.get("boys-fountain-alcove");
+const boysEntryCubby = publicById.get("boys-men-entry-cubby");
+navigationTargets.push(
+  {
+    id: "boys-water-fountain-wall",
+    x: (boysFountainWall.bounds.xMin + boysFountainWall.bounds.xMax) / 2,
+    z: boysFountainWall.bounds.zMin - 0.4,
+  },
+  { id: "boys-men-entry-cubby", ...boundsCenter(boysEntryCubby.bounds) },
+  {
+    id: "boys-men-entry-cubby-door-side",
+    x: boys.entry.coordinate - 0.7,
+    z: boys.entry.center,
+  },
+  {
+    id: "boys-men-entry-restroom-side",
+    x: boys.entry.coordinate + 0.7,
+    z: boys.entry.center,
+  },
+  { id: "boys-restroom-main", ...boundsCenter(boysMain) },
+);
 const girls = serviceById.get("girls-restroom");
 addBoundsTarget("girls-restroom-connector", girls.footprintRects[2]);
 addBoundsTarget("girls-restroom-entry-lobe", girls.footprintRects[3]);
 navigationTargets.push({ id: "girls-restroom-main", x: 66.5, z: 69.5 });
+const girlsMain = girls.footprintRects[0];
+const girlsNorthStalls = girls.fixtures.stalls.find(({ side }) => side === "north");
+const girlsSouthStalls = girls.fixtures.stalls.find(({ side }) => side === "south");
+assert.deepEqual(
+  {
+    start: girlsNorthStalls.start,
+    end: girlsNorthStalls.end,
+    count: girlsNorthStalls.count,
+  },
+  {
+    start: girlsSouthStalls.start,
+    end: girlsSouthStalls.end,
+    count: girlsSouthStalls.count,
+  },
+  "Girls north/south stall banks must remain aligned.",
+);
+const girlsBayWidth = (girlsNorthStalls.end - girlsNorthStalls.start) / girlsNorthStalls.count;
+const girlsNorthDoorZ = girlsMain.zMax - (girlsNorthStalls.depth - 0.025);
+const girlsSouthDoorZ = girlsMain.zMin + (girlsSouthStalls.depth - 0.025);
+const girlsAisleZ = (girlsNorthDoorZ + girlsSouthDoorZ) / 2;
+for (let index = 0; index < girlsNorthStalls.count; index += 1) {
+  navigationTargets.push({
+    id: `girls-restroom-aligned-aisle-${index + 1}`,
+    x: girlsNorthStalls.start + girlsBayWidth * (index + 0.5),
+    z: girlsAisleZ,
+  });
+}
 const candy = serviceById.get("candy-storage");
 navigationTargets.push({ id: "candy-storage", x: candy.doorCenter, z: candy.bounds.zMin + 1.2 });
 
@@ -541,13 +634,25 @@ assert.deepEqual(
 
 const farVoidProbes = [
   { id: "rear-center", x: 0, z: 95 },
-  { id: "rear-of-theater-3-route", x: -17, z: 97 },
+  { id: "rear-of-theater-3-route", x: theater3RouteCenterX, z: 97 },
   { id: "rear-of-theaters-4-5", x: 15, z: 94 },
-  { id: "rear-between-5-and-6", x: 40, z: 95 },
+  {
+    id: "rear-between-5-and-6",
+    x: (auditoriumByNumber.get(5).bounds.xMax + theater6.bounds.xMin) / 2,
+    z: 95,
+  },
+  { id: "rear-of-theater-6", x: (theater6.bounds.xMin + theater6.bounds.xMax) / 2, z: 95 },
   { id: "rear-east", x: 100, z: 95 },
   { id: "rear-of-theater-8", x: 132, z: 94 },
-  { id: "behind-court-west-bay", x: -10, z: 69 },
+  {
+    id: "behind-t3-task-seam",
+    x: (theater3Route.xMax + serviceById.get("future-task-room").bounds.xMin) / 2,
+    z: 70.5,
+  },
   { id: "behind-court-east-seam", x: 7.4, z: 72 },
+  { id: "old-theater-6-transverse-ghost", x: 54, z: 67 },
+  { id: "old-theater-6-storage-ghost", x: 52, z: 70 },
+  { id: "old-theater-6-long-route-ghost", x: 59, z: 78 },
   { id: "far-east", x: 140, z: 90 },
   { id: "far-west", x: -40, z: 90 },
 ];
@@ -562,5 +667,5 @@ world.dispose();
 materials.dispose();
 
 console.log(
-  `Navigation smoke valid: 14 bowls + ${navigationTargets.length - 14} V6 route targets reachable on rendered floors · rear void contained · geometry overlap-free.`,
+  `Navigation smoke valid: 14 bowls + ${navigationTargets.length - 14} V7 route targets reachable on rendered floors · moved-module ghosts and rear void contained · geometry overlap-free.`,
 );
