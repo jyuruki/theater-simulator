@@ -37,6 +37,11 @@ const {
   COURTYARD_PLAN,
   EQUIPMENT_ANCHORS,
   FOUNTAIN_PLAN,
+  FRONT_SHIFT_Z,
+  HALL_END_EXITS,
+  HALL_PLAN,
+  LOBBY_PLAN,
+  POS_STATIONS,
   PUBLIC_SPACES,
   SERVICE_ROOMS,
   TICKET_APPROACH_PLAN,
@@ -97,14 +102,66 @@ try {
   THREE.Object3D.prototype.add = originalAdd;
 }
 
+const serviceById = new Map(SERVICE_ROOMS.map((room) => [room.id, room]));
+const publicById = new Map(PUBLIC_SPACES.map((room) => [room.id, room]));
+const auditoriumByNumber = new Map(AUDITORIUMS.map((auditorium) => [auditorium.number, auditorium]));
+
 assert.equal(world.stats.auditoriumCount, 14);
 assert.equal(world.stats.seatCount, 1093);
 assert.equal(world.stats.equipmentAnchors, 13);
-assert.equal(world.stats.layoutVersion, "mililani-sketch-v8");
+assert.equal(world.stats.layoutVersion, "mililani-sketch-v9");
 assert.ok(world.stats.meshCount > 0);
 assert.ok(world.stats.colliderCount > 0);
 assert.equal(world.auditoriumGroups.size, 14);
 assert.equal(world.auditoriumLayouts.size, 14);
+
+assertBoxMatchesBounds("main-corridor-narrow-floor", HALL_PLAN.narrow, "narrow hall floor");
+assertBoxMatchesBounds("main-corridor-wide-floor", HALL_PLAN.wide, "wide hall floor");
+assertBoxMatchesBounds("main-corridor-narrow-ceiling", HALL_PLAN.narrow, "narrow hall ceiling");
+assertBoxMatchesBounds("main-corridor-wide-ceiling", HALL_PLAN.wide, "wide hall ceiling");
+assert.deepEqual(
+  authoredBoxes.filter(({ id }) => id === "main-corridor-floor" || id === "main-corridor-ceiling").map(({ id }) => id),
+  [],
+  "V9 must not retain the old single-rectangle hall surfaces.",
+);
+const hallExitById = new Map(HALL_END_EXITS.map((exit) => [exit.id, exit]));
+for (const [id, footprint] of [["hall-west-exit", HALL_PLAN.narrow], ["hall-east-exit", HALL_PLAN.wide]]) {
+  const exit = hallExitById.get(id);
+  const wallSegments = authoredBoxes.filter(({ id: boxId }) => boxId.startsWith(`${id}-wall-segment-`));
+  assert.ok(wallSegments.length >= 2, `${id} requires a player-width door in its own hall leg.`);
+  assertNear(exit.z, (footprint.zMin + footprint.zMax) / 2, `${id} center in its hall leg`);
+  assertNear(exit.x, id === "hall-west-exit" ? footprint.xMin : footprint.xMax, `${id} end plane`);
+  for (const segment of wallSegments) {
+    assertNear(segment.x, planToWorldX(exit.x), `${segment.id} exit plane X`);
+  }
+}
+
+const shiftedRuntimeBoxes = [
+  ["lobby-floor", { ...publicById.get("lobby").bounds, zMax: LOBBY_PLAN.envelope.zMax }],
+  ["lobby-approach-floor", TICKET_APPROACH_PLAN.bounds],
+  ["ticket-poster-alcove-floor", TICKET_APPROACH_PLAN.posterAlcove],
+  ["ticket-empty-alcove-floor", TICKET_APPROACH_PLAN.emptyAlcove],
+];
+for (const [id, bounds] of shiftedRuntimeBoxes) assertBoxMatchesBounds(id, bounds, `${id} rigid shift`);
+for (const [id, baselineZ] of [["ticket-kiosk-1", 3.3], ["ticket-kiosk-2", 5.3]]) {
+  const body = boxById(`${id}-body`);
+  assertNear(body.z, baselineZ + FRONT_SHIFT_Z, `${id} runtime Z shift`);
+}
+for (const station of LOBBY_PLAN.customerCounter) {
+  assert.ok(station.z <= LOBBY_PLAN.envelope.zMax, "Translated counter must remain inside the shifted lobby.");
+}
+for (const station of POS_STATIONS) {
+  const group = scene.getObjectByName(station.id);
+  assert.ok(group, `${station.id} group must remain authored.`);
+  assertNear(group.position.x, planToWorldX(station.position[0]), `${station.id} translated X`);
+  assertNear(group.position.z, station.position[2], `${station.id} translated Z`);
+}
+for (const anchor of EQUIPMENT_ANCHORS.filter(({ roomId }) => ["concession-boh", "kitchen", "bar"].includes(roomId))) {
+  const equipment = world.equipment.get(anchor.id);
+  assert.ok(equipment, `${anchor.id} must remain authored after the rigid shift.`);
+  assertNear(equipment.worldPosition.x, planToWorldX(anchor.position[0]), `${anchor.id} translated X`);
+  assertNear(equipment.worldPosition.z, anchor.position[2], `${anchor.id} translated Z`);
+}
 
 const t1 = world.auditoriumLayouts.get("theater-1");
 const t1FrontHeight = world.groundHeight(planToWorldX(t1.sideAisles.west.centerX), t1.frontRowZ, 0);
@@ -121,14 +178,10 @@ const t3RampHeight = world.groundHeight(
 );
 assert.ok(Math.abs(t3RampHeight - 0.12) < 0.001);
 
-const serviceById = new Map(SERVICE_ROOMS.map((room) => [room.id, room]));
-const publicById = new Map(PUBLIC_SPACES.map((room) => [room.id, room]));
-const auditoriumByNumber = new Map(AUDITORIUMS.map((auditorium) => [auditorium.number, auditorium]));
-
 const t3Storage = serviceById.get("under-storage-3");
 const theater3 = auditoriumByNumber.get(3);
-assert.deepEqual(theater3.bounds, { xMin: -24.2, xMax: -6.7, zMin: 72, zMax: 99 });
-assert.deepEqual(theater3.entry.routeBounds, { xMin: -6.7, xMax: -4.3, zMin: 68.2, zMax: 95.3 });
+assert.deepEqual(theater3.bounds, { xMin: -21.8, xMax: -4.3, zMin: 72, zMax: 99 });
+assert.deepEqual(theater3.entry.routeBounds, { xMin: -6.7, xMax: -4.3, zMin: 68.2, zMax: 99 });
 assert.deepEqual(theater3.entry.ramp.bounds, { xMin: -6.7, xMax: -4.3, zMin: 82.5, zMax: 94.5 });
 assert.deepEqual(theater3.entry.usherNookBounds, { xMin: -9.9, xMax: -6.7, zMin: 68.2, zMax: 72 });
 assert.deepEqual(t3Storage.bounds, { xMin: -21.5, xMax: -9.9, zMin: 72, zMax: 82.5 });
@@ -136,6 +189,7 @@ assert.deepEqual(t3Storage.accessHall, { xMin: -21.5, xMax: -9.9, zMin: 68.2, zM
 assert.deepEqual(t3Storage.doorCenters, [-18.6, -12.3]);
 assert.equal("entranceStemBounds" in theater3.entry, false);
 assert.equal("entranceLateralBounds" in theater3.entry, false);
+assert.equal(theater3.entry.directAuditoriumEntry, true);
 assert.deepEqual(
   authoredBoxes.filter(({ id }) => /^theater-3-entrance-(?:stem|lateral)/.test(id)).map(({ id }) => id),
   [],
@@ -164,7 +218,16 @@ assertBoxMatchesBounds("under-storage-3-floor", t3Storage.bounds, "translated T3
 assertBoxMatchesBounds("under-storage-3-roof-ceiling", t3Storage.bounds, "translated T3 storage roof");
 assertBoxMatchesBounds("under-storage-3-anteroom-floor", t3Storage.accessHall, "translated T3 anteroom floor");
 assertBoxMatchesBounds("under-storage-3-anteroom-ceiling", t3Storage.accessHall, "translated T3 anteroom ceiling");
-assertNear(boxById("theater-3-east-wall-north-cap").x, planToWorldX(theater3.bounds.xMax), "translated T3 east wall X");
+assert.deepEqual(
+  authoredBoxes.filter(({ id }) => /^theater-3-(?:east-wall-north-cap|turn-arrow)$/.test(id)).map(({ id }) => id),
+  [],
+  "Direct T3 must not retain the V8 north cap or left-turn arrow.",
+);
+assert.deepEqual(
+  colliderIdsMatching(world, /^theater-3-east-wall-north-cap$/),
+  [],
+  "Direct T3 must not retain a blocking north-cap collider.",
+);
 assert.equal(colliderIdsMatching(world, /^under-storage-3-anteroom-east-header-\d+$/).length, 1, "T3 anteroom needs one nook-side door.");
 assert.equal(colliderIdsMatching(world, /^under-storage-3-south-header-\d+$/).length, 2, "T3 under-tier room needs two south doors.");
 assertNear(
@@ -198,25 +261,38 @@ assert.deepEqual(boys.footprintRects, [
   { xMin: -9.35, xMax: -6.7, zMin: 62.2, zMax: 64.7 },
 ]);
 assert.deepEqual(boys.entry, { side: "west", coordinate: -9.35, center: 63.45, width: 1.9 });
-assert.deepEqual(boysFountainNook.bounds, { xMin: -13.5, xMax: -10.85, zMin: 62.2, zMax: 64.7 });
+assert.deepEqual(boysFountainNook.bounds, { xMin: -13.5, xMax: -10.85, zMin: 59.7, zMax: 62.2 });
 assert.deepEqual(boysMenCubby.bounds, { xMin: -10.85, xMax: -9.35, zMin: 62.2, zMax: 64.7 });
 assertBoxMatchesBounds("boys-restroom-section-0-floor", boys.footprintRects[0], "boys main-room floor");
 assertBoxMatchesBounds("boys-restroom-section-0-ceiling", boys.footprintRects[0], "boys main-room ceiling");
 assertBoxMatchesBounds("boys-restroom-section-1-floor", boys.footprintRects[1], "boys entry-lobe floor");
 assertBoxMatchesBounds("boys-restroom-section-1-ceiling", boys.footprintRects[1], "boys entry-lobe ceiling");
-assertBoxMatchesBounds("boys-fountain-alcove-floor", boysFountainNook.bounds, "H2O nook floor");
-assertBoxMatchesBounds("boys-fountain-alcove-ceiling", boysFountainNook.bounds, "H2O nook ceiling");
+assert.deepEqual(
+  authoredBoxes.filter(({ id }) => /^boys-fountain-alcove-(?:floor|ceiling)$/.test(id)).map(({ id }) => id),
+  [],
+  "The H2O apron is part of the wide hall and must not regain overlapping white-room geometry.",
+);
 assertBoxMatchesBounds("boys-men-entry-cubby-floor", boysMenCubby.bounds, "recessed MEN cubby floor");
 assertBoxMatchesBounds("boys-men-entry-cubby-ceiling", boysMenCubby.bounds, "recessed MEN cubby ceiling");
 const sharedWall = boxById("boys-t3-shared-back-wall");
-assertNear(sharedWall.x, planToWorldX((-21.5 + -6.7) / 2), "boys/T3 shared wall center X");
+assertNear(sharedWall.x, planToWorldX((-21.5 + -6.82) / 2), "boys/T3 shared wall center X");
 assertNear(sharedWall.z, 68.2, "boys/T3 shared wall Z");
-assertNear(sharedWall.width, 14.8, "boys/T3 shared wall width");
+assertNear(sharedWall.width, 14.68, "boys/T3 shared wall width");
 assertNear(sharedWall.depth, 0.18, "boys/T3 shared wall thickness");
 assert.equal(colliderIdsMatching(world, /^boys-t3-shared-back-wall$/).length, 1, "The boys/T3 boundary must have exactly one collider.");
 assert.equal(sharedWall.materialNames.length, 6, "The shared wall needs per-face finishes.");
 assert.equal(sharedWall.materialNames[4], materials.darkWall.name, "The shared wall's +Z storage face must use the dark finish.");
 assert.equal(sharedWall.materialNames[5], materials.wall.name, "The shared wall's -Z bathroom face must use the warm finish.");
+for (const [id, publicFaceIndex, interiorFaceIndex] of [
+  ["boys-restroom-south", 5, 4],
+  ["boys-restroom-entry-south", 5, 4],
+  ["boys-restroom-east", 1, 0],
+]) {
+  const wall = boxById(id);
+  assert.equal(wall.materialNames.length, 6, `${id} requires per-face finishes.`);
+  assert.equal(wall.materialNames[publicFaceIndex], materials.darkWall.name, `${id} public face must match the hall.`);
+  assert.equal(wall.materialNames[interiorFaceIndex], materials.wall.name, `${id} restroom face must remain warm.`);
+}
 const menCubbyHeader = boxById("boys-men-cubby-mouth-header-0");
 assertNear(menCubbyHeader.x, planToWorldX((boysMenCubby.bounds.xMin + boysMenCubby.bounds.xMax) / 2), "MEN cubby header center X");
 assertNear(menCubbyHeader.width, boysMenCubby.bounds.xMax - boysMenCubby.bounds.xMin, "MEN cubby opening width");
@@ -233,8 +309,8 @@ assert.equal(scene.getObjectByName("boys-restroom-sign"), undefined, "The old ge
 assert.deepEqual(
   EQUIPMENT_ANCHORS.filter(({ type }) => type === "drinking-fountain").map(({ id, position, rotation }) => ({ id, position, rotation })),
   [
-    { id: "boys-water-fountain-1", position: [-13.24, 0, 63.03], rotation: -Math.PI / 2 },
-    { id: "boys-water-fountain-2", position: [-13.24, 0, 63.83], rotation: -Math.PI / 2 },
+    { id: "boys-water-fountain-1", position: [-13.24, 0, 60.53], rotation: -Math.PI / 2 },
+    { id: "boys-water-fountain-2", position: [-13.24, 0, 61.33], rotation: -Math.PI / 2 },
   ],
   "Runtime fountain anchors must remain in the H2O nook and face its mounting wall.",
 );
@@ -269,10 +345,10 @@ const theater9Cubby = {
   zMin: theater9.bounds.zMax - theater9.entry.cubbyDepth,
   zMax: theater9.bounds.zMax,
 };
-assert.deepEqual(theater9.bounds, { xMin: 125, xMax: 135.5, zMin: 44.5, zMax: 58 });
+assert.deepEqual(theater9.bounds, { xMin: 125, xMax: 135.5, zMin: 42, zMax: 55.5 });
 assert.deepEqual(
   { center: theater9.entry.center, turnSide: theater9.entry.turnSide, cubby: theater9Cubby },
-  { center: 128.1, turnSide: "east", cubby: { xMin: 126.5, xMax: 129.7, zMin: 54.6, zMax: 58 } },
+  { center: 128.1, turnSide: "east", cubby: { xMin: 126.5, xMax: 129.7, zMin: 52.1, zMax: 55.5 } },
 );
 const t9InnerHeader = boxById("theater-9-cubby-east-header-0");
 assertNear(t9InnerHeader.x, planToWorldX(theater9Cubby.xMax), "T9 inner door physical-left X");
@@ -421,15 +497,15 @@ const t6StorageCenterX = (t6Storage.bounds.xMin + t6Storage.bounds.xMax) / 2;
 assert.equal(world.groundHeight(planToWorldX(t6StorageCenterX), 69.2, 0), 0);
 assert.ok(world.groundHeight(planToWorldX(t6StorageCenterX), 69.2, 3.1) > 2);
 
-world.updateVisibility(planToWorldX(1.5), -6.8);
+world.updateVisibility(planToWorldX(1.5), -6.8 + FRONT_SHIFT_Z);
 for (const { group } of world.auditoriumGroups.values()) assert.equal(group.visible, true, "Auditorium interiors must remain resident and visible.");
 const removedHallPosters = [];
 scene.traverse(({ name }) => {
   if (/^poster-\d+$/.test(name)) removedHallPosters.push(name);
 });
-assert.deepEqual(removedHallPosters, [], "V8 must not restore the removed random NOW SHOWING posters.");
+assert.deepEqual(removedHallPosters, [], "V9 must not restore the removed random NOW SHOWING posters.");
 const minimap = createMinimap({ canvas: new FakeCanvas(700, 360) });
-minimap.updatePlayer({ x: -2, z: 64, directionX: 1, directionZ: 0 });
+minimap.updatePlayer({ x: -2, z: HALL_PLAN.wide.zMin + 1, directionX: 1, directionZ: 0 });
 minimap.draw();
 minimap.destroy();
 world.dispose();

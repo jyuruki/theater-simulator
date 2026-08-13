@@ -6,7 +6,12 @@ A first-person, browser-based layout prototype for a multiplayer movie-theater s
 
 This is a spatial prototype—not an official measured architectural plan. It is unaffiliated with Consolidated Theatres.
 
-## What is in v0.8
+## What is in v0.9
+
+- A stepped main theater hall: the run from Theater 9 to the drinking-water-fountain wall is now 6.7 meters wide, then it narrows at that exact wall to the prior 4.2-meter width through the Theater 2 exit
+- A rigid 2.5-meter translation of the complete front block—including the small south auditoriums, ticket approach, lobby, service rooms, fixtures, and entrance—so the wider hall adds space without stretching or rearranging those layouts
+- A direct Theater 3 approach: the courtyard door, gentle ramp, and auditorium now share one straight sightline with no invented last-second left turn
+- Hallway-dark public finishes around the drinking fountains and MEN entry, while the restroom-facing surfaces retain their lighter interior finish
 
 - A physically corrected left/right plan: concessions are on the guest's left when entering, with the map and first-person heading using the same orientation
 - A much larger gray-stone lobby rebuilt from the detailed lobby sketch: three double-door banks, two ticket kiosks, the corrected L-shaped box office, a reserved future stair footprint, and an overflow-room-to-office sequence
@@ -26,7 +31,7 @@ This is a spatial prototype—not an official measured architectural plan. It is
 - Deeper, joined turn pockets for paired Theaters 1/2 and 13/14, Theater 9's entrance on the first-person left of its cubby with the auditorium extending left from it, and clear rear landings that reach both side stairs without seat/wall clipping
 - A fountain-width ticket approach with true two-wall 90-degree poster/empty alcoves, a waist-high divider between Theater 3 and the task room, and a shallow rectangular candy room with one hall door and no invented exterior exit
 - Desktop and touch first-person controls, 30%-faster walking/running, grounded jump with low-ceiling headroom protection, wall sliding without teleport recovery, stadium aisle elevations, and a live floor-plan minimap
-- A source-driven V8 minimap that preserves plan orientation while scaling the revised BB/H₂O/MEN cluster, Theater 3 route and lower storage, courtyard west edge, and Theater 9 cubby directly from the same layout records used by the world
+- A source-driven V9 minimap that preserves plan orientation and draws the stepped hall, revised BB/H₂O/MEN frontage, Theater 3 route and lower storage, courtyard west edge, and Theater 9 cubby directly from the same layout records used by the world
 - Always-resident auditorium interiors, extended fog distance, and single-owner floors/walls to eliminate proximity pop-in and the most common flashing surfaces
 - Procedural materials, original island-botanical lobby art, room signs, screens, acoustic panels, leather, trays, and instanced seating
 

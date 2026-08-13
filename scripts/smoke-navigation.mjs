@@ -35,6 +35,10 @@ const PLAYER_HEIGHT = 1.78;
 const GRID_STEP = 0.2;
 const GEOMETRY_EPSILON = 1e-4;
 
+function assertNear(actual, expected, message, epsilon = 1e-6) {
+  assert.ok(Math.abs(actual - expected) <= epsilon, `${message}: expected ${expected}, received ${actual}`);
+}
+
 const THREE = await import("three");
 const structuralFloors = [];
 const structuralCeilings = [];
@@ -101,6 +105,9 @@ const {
   AUDITORIUMS,
   COURTYARD_PLAN,
   EQUIPMENT_ANCHORS,
+  FRONT_SHIFT_Z,
+  HALL_END_EXITS,
+  HALL_PLAN,
   LOBBY_PLAN,
   MAP_BOUNDS,
   PLAYER_SPAWN_PLAN,
@@ -491,15 +498,16 @@ const storage3 = serviceById.get("under-storage-3");
 const theater3Route = theater3.entry.routeBounds;
 const theater3RouteCenterX = (theater3Route.xMin + theater3Route.xMax) / 2;
 const theater3Door = COURTYARD_PLAN.doors.find(({ targetId }) => targetId === "theater-3");
-assert.deepEqual(theater3.bounds, { xMin: -24.2, xMax: -6.7, zMin: 72, zMax: 99 });
-assert.deepEqual(theater3Route, { xMin: -6.7, xMax: -4.3, zMin: 68.2, zMax: 95.3 });
+assert.deepEqual(theater3.bounds, { xMin: -21.8, xMax: -4.3, zMin: 72, zMax: 99 });
+assert.deepEqual(theater3Route, { xMin: -6.7, xMax: -4.3, zMin: 68.2, zMax: 99 });
 assert.deepEqual(theater3.entry.usherNookBounds, { xMin: -9.9, xMax: -6.7, zMin: 68.2, zMax: 72 });
 assert.deepEqual(theater3.entry.ramp.bounds, { xMin: -6.7, xMax: -4.3, zMin: 82.5, zMax: 94.5 });
 assert.deepEqual(storage3.bounds, { xMin: -21.5, xMax: -9.9, zMin: 72, zMax: 82.5 });
 assert.deepEqual(storage3.accessHall, { xMin: -21.5, xMax: -9.9, zMin: 68.2, zMax: 72 });
 assert.deepEqual(storage3.doorCenters, [-18.6, -12.3]);
 assert.deepEqual(theater3Door, { targetId: "theater-3", center: -5.5, width: 2.4 });
-assert.equal(theater3.bounds.xMax, theater3Route.xMin, "T3 bowl must butt directly against its V8 route.");
+assert.equal(theater3.bounds.xMax, theater3Route.xMax, "T3 direct route must finish flush with the bowl east edge.");
+assert.equal(theater3.entry.directAuditoriumEntry, true, "T3 must use the direct auditorium route.");
 assert.equal(theater3.entry.usherNookBounds.xMax, theater3Route.xMin, "T3 nook must open directly to its route.");
 assert.equal(theater3.entry.usherNookBounds.xMin, storage3.accessHall.xMax, "T3 nook must meet the storage door wall.");
 assert.equal(storage3.accessHall.zMax, storage3.bounds.zMin, "T3 access hall must meet its two-door storage room.");
@@ -529,14 +537,14 @@ navigationTargets.push(
     ...boundsCenter(theater3.entry.ramp.bounds),
   },
   {
-    id: "theater-3-bowl-seam-route-side",
-    x: theater3Route.xMin + 0.7,
-    z: theater3.entry.arrivalZ,
+    id: "theater-3-straight-arrival",
+    x: theater3RouteCenterX,
+    z: theater3.entry.arrivalZ + 0.7,
   },
   {
-    id: "theater-3-bowl-seam-bowl-side",
-    x: theater3Route.xMin - 0.7,
-    z: theater3.entry.arrivalZ,
+    id: "theater-3-straight-rear-route",
+    x: theater3RouteCenterX,
+    z: theater3Route.zMax - 1,
   },
   {
     id: "theater-3-route-nook-seam-route-side",
@@ -618,11 +626,11 @@ const boysMain = boys.footprintRects[0];
 const boysLobe = boys.footprintRects[1];
 const boysFountainWall = publicById.get("boys-fountain-alcove");
 const boysEntryCubby = publicById.get("boys-men-entry-cubby");
-assert.deepEqual(trash.bounds, { xMin: -21.5, xMax: -13.5, zMin: 62.2, zMax: 64.7 });
+assert.deepEqual(trash.bounds, { xMin: -21.5, xMax: -13.5, zMin: 59.7, zMax: 62.2 });
 assert.deepEqual(boys.bounds, { xMin: -21.5, xMax: -6.7, zMin: 62.2, zMax: 68.2 });
 assert.deepEqual(boysMain, { xMin: -21.5, xMax: -6.7, zMin: 64.7, zMax: 68.2 });
 assert.deepEqual(boysLobe, { xMin: -9.35, xMax: -6.7, zMin: 62.2, zMax: 64.7 });
-assert.deepEqual(boysFountainWall.bounds, { xMin: -13.5, xMax: -10.85, zMin: 62.2, zMax: 64.7 });
+assert.deepEqual(boysFountainWall.bounds, { xMin: -13.5, xMax: -10.85, zMin: 59.7, zMax: 62.2 });
 assert.deepEqual(boysEntryCubby.bounds, { xMin: -10.85, xMax: -9.35, zMin: 62.2, zMax: 64.7 });
 assert.deepEqual(boys.entry, { side: "west", coordinate: -9.35, center: 63.45, width: 1.9 });
 assert.equal(trash.bounds.xMax, boysFountainWall.bounds.xMin, "Trash must share the solid fountain wall at x=-13.5.");
@@ -635,10 +643,10 @@ assert.equal(storage3.accessHall.xMax, -9.9, "The BB/storage shared wall must en
 assert.deepEqual(
   EQUIPMENT_ANCHORS.filter(({ type }) => type === "drinking-fountain").map(({ id, position, rotation }) => ({ id, position, rotation })),
   [
-    { id: "boys-water-fountain-1", position: [-13.24, 0, 63.03], rotation: -Math.PI / 2 },
-    { id: "boys-water-fountain-2", position: [-13.24, 0, 63.83], rotation: -Math.PI / 2 },
+    { id: "boys-water-fountain-1", position: [-13.24, 0, 60.53], rotation: -Math.PI / 2 },
+    { id: "boys-water-fountain-2", position: [-13.24, 0, 61.33], rotation: -Math.PI / 2 },
   ],
-  "V8 fountains must mount vertically on the x=-13.5 H2O wall.",
+  "V9 fountains must mount vertically on the x=-13.5 transition wall.",
 );
 assertOpenPlanPoint("H2O hall opening", (boysFountainWall.bounds.xMin + boysFountainWall.bounds.xMax) / 2, boysFountainWall.bounds.zMin);
 assertOpenPlanPoint("MEN hall opening", (boysEntryCubby.bounds.xMin + boysEntryCubby.bounds.xMax) / 2, boysEntryCubby.bounds.zMin);
@@ -650,12 +658,11 @@ assertBlockedPlanSegment("solid Trash/H2O fountain wall", {
   zMin: boysFountainWall.bounds.zMin,
   zMax: boysFountainWall.bounds.zMax,
 });
-assertBlockedPlanSegment("solid H2O/MEN return wall", {
-  xMin: boysFountainWall.bounds.xMax,
-  xMax: boysFountainWall.bounds.xMax,
-  zMin: boysFountainWall.bounds.zMin,
-  zMax: boysFountainWall.bounds.zMax,
-});
+assertOpenPlanPoint(
+  "open wide-hall apron between H2O and MEN",
+  boysFountainWall.bounds.xMax,
+  (boysFountainWall.bounds.zMin + boysFountainWall.bounds.zMax) / 2,
+);
 assertBlockedPlanSegment("solid BB/T3-storage shared wall", {
   xMin: storage3.accessHall.xMin,
   xMax: storage3.accessHall.xMax,
@@ -722,11 +729,11 @@ navigationTargets.push(
 
 const theater9 = auditoriumByNumber.get(9);
 const theater9Cubby = cubbyBoundsFor(theater9);
-assert.deepEqual(theater9.bounds, { xMin: 125, xMax: 135.5, zMin: 44.5, zMax: 58 });
+assert.deepEqual(theater9.bounds, { xMin: 125, xMax: 135.5, zMin: 42, zMax: 55.5 });
 assert.equal(theater9.entry.center, 128.1);
 assert.equal(theater9.entry.turnSide, "east");
-assert.equal(theater9.entry.innerDoorCenter, 55.75);
-assert.deepEqual(theater9Cubby, { xMin: 126.5, xMax: 129.7, zMin: 54.6, zMax: 58 });
+assert.equal(theater9.entry.innerDoorCenter, 53.25);
+assert.deepEqual(theater9Cubby, { xMin: 126.5, xMax: 129.7, zMin: 52.1, zMax: 55.5 });
 assertOpenPlanPoint("T9 hall door", theater9.entry.center, theater9.bounds.zMax);
 assertOpenPlanPoint("T9 inner door", theater9Cubby.xMax, theater9.entry.innerDoorCenter);
 assertBlockedPlanSegment("T9 solid cubby west wall", {
@@ -783,6 +790,43 @@ navigationTargets.push(
 addBoundsTarget("ticket-poster-alcove", TICKET_APPROACH_PLAN.posterAlcove);
 addBoundsTarget("ticket-empty-alcove", TICKET_APPROACH_PLAN.emptyAlcove);
 
+assert.equal(FRONT_SHIFT_Z, -2.5);
+assert.deepEqual(HALL_PLAN.narrow, { xMin: -40, xMax: -13.5, zMin: 55.5, zMax: 59.7 });
+assert.deepEqual(HALL_PLAN.wide, { xMin: -13.5, xMax: 140, zMin: 55.5, zMax: 62.2 });
+for (const [id, bounds] of [["hall-narrow", HALL_PLAN.narrow], ["hall-wide", HALL_PLAN.wide]]) {
+  const inset = 0.8;
+  navigationTargets.push(
+    { id: `${id}-southwest`, x: bounds.xMin + inset, z: bounds.zMin + inset },
+    { id: `${id}-northeast`, x: bounds.xMax - inset, z: bounds.zMax - inset },
+    { id: `${id}-center`, ...boundsCenter(bounds) },
+  );
+}
+navigationTargets.push({
+  id: "hall-step-wide-side",
+  x: HALL_PLAN.transitionX + 0.8,
+  z: (HALL_PLAN.narrowNorthZ + HALL_PLAN.wideNorthZ) / 2,
+});
+assert.equal(
+  isBlocked(HALL_PLAN.transitionX - 0.2, (HALL_PLAN.narrowNorthZ + HALL_PLAN.wideNorthZ) / 2),
+  true,
+  "The added wide-hall band must not leak west past the drinking-fountain wall.",
+);
+assert.equal(
+  isBlocked(HALL_PLAN.transitionX, (HALL_PLAN.narrowNorthZ + HALL_PLAN.wideNorthZ) / 2),
+  true,
+  "The drinking-fountain transition wall must be solid.",
+);
+const exitFootprintBySegment = { narrow: HALL_PLAN.narrow, wide: HALL_PLAN.wide };
+for (const exit of HALL_END_EXITS) {
+  const footprint = exitFootprintBySegment[exit.segment];
+  assert.ok(footprint, `${exit.id} must identify its hall leg.`);
+  assertNear(exit.z, (footprint.zMin + footprint.zMax) / 2, `${exit.id} leg center`);
+  const insideX = exit.x + (exit.side === "west" ? 0.8 : -0.8);
+  const outsideX = exit.x + (exit.side === "west" ? -0.8 : 0.8);
+  navigationTargets.push({ id: `${exit.id}-inside`, x: insideX, z: exit.z });
+  assert.equal(isReachable(outsideX, exit.z), false, `${exit.id} closed leaf must contain the exterior side.`);
+}
+
 const kitchenDoor = LOBBY_PLAN.kitchenStorageDoor;
 const kitchenSegmentStart = LOBBY_PLAN.kitchenPartition[kitchenDoor.partitionSegment];
 const kitchenSegmentEnd = LOBBY_PLAN.kitchenPartition[kitchenDoor.partitionSegment + 1];
@@ -816,7 +860,7 @@ assert.deepEqual(
 
 const farVoidProbes = [
   { id: "rear-center", x: 0, z: 95 },
-  { id: "rear-of-theater-3-route", x: theater3RouteCenterX, z: 97 },
+  { id: "rear-east-of-theater-3-route", x: theater3Route.xMax + 0.8, z: 97 },
   { id: "rear-of-theaters-4-5", x: 15, z: 94 },
   {
     id: "rear-between-5-and-6",
@@ -852,5 +896,5 @@ world.dispose();
 materials.dispose();
 
 console.log(
-  `Navigation smoke valid: 14 bowls + ${navigationTargets.length - 14} V8 route targets reachable on rendered floors · T3/BB/MEN/T9 seams contained · legacy ghosts and rear void contained · geometry overlap-free.`,
+  `Navigation smoke valid: 14 bowls + ${navigationTargets.length - 14} V9 route targets reachable on rendered floors · stepped hall/T3/BB/MEN/T9 contained · legacy ghosts and rear void contained · geometry overlap-free.`,
 );

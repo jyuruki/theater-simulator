@@ -112,9 +112,9 @@ export function polygonCentroid(polygon) {
 
 function inferRouteReserve(auditorium) {
   const { bounds, entry } = auditorium;
-  if (!entry?.routeSide || entry.type === "storage-left-then-left") return null;
+  if (!entry?.routeSide || (entry.type === "storage-left-then-left" && !entry.directAuditoriumEntry)) return null;
 
-  const candidates = [entry.longRouteBounds, entry.ramp?.bounds, entry.vestibuleBounds]
+  const candidates = [entry.routeBounds, entry.longRouteBounds, entry.ramp?.bounds, entry.vestibuleBounds]
     .filter(Boolean)
     .map((candidate) => normalizeBounds(candidate));
   let overlapWidth = 0;
@@ -359,6 +359,10 @@ function rampSurface(id, ramp, auditoriumId) {
 function addRouteReserveSurface(surfaces, auditorium, layout) {
   if (!layout.routeReserve || !Number.isFinite(auditorium.entry?.arrivalZ)) return;
   const entry = auditorium.entry;
+  // A direct route (Theater 3) already contributes its accurately segmented
+  // flat/ramp/flat descriptors above. Its reserve only removes that strip from
+  // the seating bowl; adding a second flat descriptor would mask the incline.
+  if (entry.directAuditoriumEntry && entry.routeBounds) return;
   const startZ = entry.vestibuleBounds?.zMax
     ?? entry.lateralBounds?.zMax
     ?? entry.stemBounds?.zMax
@@ -430,7 +434,12 @@ export function buildRouteSurfaceDescriptors(auditorium, layout) {
     ["vestibuleBounds", "vestibule"],
     ["usherNookBounds", "usher-nook"],
   ]) {
-    if (entry[field]) surfaces.push(flatSurface(`${auditorium.id}-${label}`, entry[field], layout.corridorRise, auditorium.id));
+    if (entry[field]) {
+      const height = field === "usherNookBounds" && entry.ramp
+        ? entry.ramp.startHeight
+        : layout.corridorRise;
+      surfaces.push(flatSurface(`${auditorium.id}-${label}`, entry[field], height, auditorium.id));
+    }
   }
 
   if (entry.type === "straight-side" && ramp) {
