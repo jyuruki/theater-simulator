@@ -6,7 +6,12 @@ A first-person, browser-based layout prototype for a multiplayer movie-theater s
 
 This is a spatial prototype—not an official measured architectural plan. It is unaffiliated with Consolidated Theatres.
 
-## What is in v0.9
+## What is in v0.10
+
+- A roughly 15%-shorter main theater hall, with complete auditorium and service-room modules shifted rigidly so none of their internal layouts, seating bowls, cubbies, or routes are stretched
+- Correct hall encounter order from ticket check toward the Theater 9 exit: Theaters 14/13/6 together, Women's Restroom, Theater 12, Theater 7, Theater 11, Theater 10, Theater 8, then Theater 9 with Candy Storage
+- A 50%-wider recessed `MEN` entrance cubby and a small whole-module correction that gives the Theater 3 jamb a deliberate reveal while preserving the BB, drinking-fountain nook, and trash-room relationships
+- The future-upstairs door relocated from the main hall into the left wall of Theater 6's short entrance vestibule, matching the clarified drawing
 
 - A stepped main theater hall: the run from Theater 9 to the drinking-water-fountain wall is now 6.7 meters wide, then it narrows at that exact wall to the prior 4.2-meter width through the Theater 2 exit
 - A rigid 2.5-meter translation of the complete front block—including the small south auditoriums, ticket approach, lobby, service rooms, fixtures, and entrance—so the wider hall adds space without stretching or rearranging those layouts
@@ -22,7 +27,7 @@ This is a spatial prototype—not an official measured architectural plan. It is
 - Two explicit stadium models: Theaters 3–8 enter at the bottom and climb dual side stairs, while Theaters 1/2 and 9–14 enter level with the top row and descend—without an artificial entry ramp
 - One compact dark-gray-tile fountain courtyard: two equal-length counters, then Theater 4 immediately past the rear counter, Theater 5 beside it near the end wall, with Theater 3 and the future-task room on the same recessed plane
 - Rigidly relocated Theater 3 and Theater 6 modules: each bowl, screen, seating deck, route, usher/storage space, and roof now sits at its corrected entrance instead of connecting back to its former position
-- Sketch-specific circulation: Theater 3's near-adjacent courtyard door, open usher nook, one-door horizontal anteroom, two-door lower room, and gentle-incline side hall; Theater 6's earlier entrance beside a closed future stair door, short vestibule, right-turn transverse passage, shared two-door lower room, and continuously roofed under-tier hall; the exact 4/5 doglegs; and usher/trash nooks at 7/8
+- Sketch-specific circulation: Theater 3's near-adjacent courtyard door, open usher nook, one-door horizontal anteroom, two-door lower room, and gentle-incline side hall; Theater 6's short vestibule with the closed future-stair door on its left wall, right-turn transverse passage, shared two-door lower room, and continuously roofed under-tier hall; the exact 4/5 doglegs; and usher/trash nooks at 7/8
 - An extended concession counter with six POS stations, plus the self-serve island with two soda fountains, two ICEE bookends, cup/lid/straw caddies, and a matching rear counter
 - Concession backline, bar, hot line, kitchen storage, office overflow, manager office, box office, candy storage, trash room, the room behind the fountain counters, both main restrooms, and a closed electrical room
 - The compact Trash–water-fountain–BB cluster, now with a distinct vertical drinking-fountain nook, a separate recessed `MEN` cubby, and a full-height finished BB back wall shared cleanly with Theater 3's lower-storage/service side without overlapping either room
@@ -31,7 +36,7 @@ This is a spatial prototype—not an official measured architectural plan. It is
 - Deeper, joined turn pockets for paired Theaters 1/2 and 13/14, Theater 9's entrance on the first-person left of its cubby with the auditorium extending left from it, and clear rear landings that reach both side stairs without seat/wall clipping
 - A fountain-width ticket approach with true two-wall 90-degree poster/empty alcoves, a waist-high divider between Theater 3 and the task room, and a shallow rectangular candy room with one hall door and no invented exterior exit
 - Desktop and touch first-person controls, 30%-faster walking/running, grounded jump with low-ceiling headroom protection, wall sliding without teleport recovery, stadium aisle elevations, and a live floor-plan minimap
-- A source-driven V9 minimap that preserves plan orientation and draws the stepped hall, revised BB/H₂O/MEN frontage, Theater 3 route and lower storage, courtyard west edge, and Theater 9 cubby directly from the same layout records used by the world
+- A source-driven V10 minimap that preserves plan orientation and draws the compressed stepped hall, reordered auditorium modules, revised BB/H₂O/MEN frontage, Theater 6 vestibule stair, Theater 3 route and lower storage, courtyard west edge, and Theater 9 cubby directly from the same layout records used by the world
 - Always-resident auditorium interiors, extended fog distance, and single-owner floors/walls to eliminate proximity pop-in and the most common flashing surfaces
 - Procedural materials, original island-botanical lobby art, room signs, screens, acoustic panels, leather, trays, and instanced seating
 

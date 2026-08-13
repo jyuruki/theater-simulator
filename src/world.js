@@ -52,7 +52,7 @@ const publicById = (id) => PUBLIC_SPACES.find((space) => space.id === id);
 
 export function createTheaterWorld({ scene, materials }) {
   const root = new THREE.Group();
-  root.name = "Mililani 14 layout prototype v9";
+  root.name = "Mililani 14 layout prototype v10";
   scene.add(root);
 
   const colliders = [];
@@ -946,6 +946,16 @@ export function createTheaterWorld({ scene, materials }) {
       }
       const westOpenings = [];
       const eastOpenings = [];
+      // The future upstairs door is inside the short Theater 6 vestibule. The
+      // auditorium perimeter owns this shared wall, so cut the opening here
+      // and let the stair-room shell omit its coplanar east side below.
+      if (auditorium.number === 6) {
+        const futureUpstairs = roomById("future-upstairs-stair");
+        westOpenings.push({
+          center: futureUpstairs.doorCenter,
+          width: futureUpstairs.doorWidth ?? DOOR_WIDTH,
+        });
+      }
       if (auditorium.entry.sharedBoundarySide !== "west" || auditorium.entry.sharedWallOwner) {
         addWallZWithOpenings(`${auditorium.id}-west-wall`, auditorium.bounds.xMin, auditorium.bounds.zMin, auditorium.bounds.zMax, westOpenings, { material: materials.darkWall, baseY: wallBase, height: wallHeight, parent: interior });
       }
@@ -1053,7 +1063,7 @@ export function createTheaterWorld({ scene, materials }) {
         && fountainNook.bounds.zMin >= footprint.zMin - EPSILON
         && fountainNook.bounds.zMax <= footprint.zMax + EPSILON
       ));
-      // V9 treats H2O as a carpeted hall apron, not a separate white room.
+      // H2O is a carpeted hall apron, not a separate white room.
       // Add its surface only when it extends beyond the stepped hall floor.
       if (!fountainIsPartOfHall) {
         addFloor(fountainNook.id, fountainNook.bounds, materials.corridorCarpet, 0, root, 2.4);
@@ -1419,17 +1429,27 @@ export function createTheaterWorld({ scene, materials }) {
   addLabel({ id: "electrical-sign", text: "ELECTRICAL", position: [electrical.bounds.xMin - 0.13, 2.8, electrical.doorCenter], rotationY: -Math.PI / 2, width: 1.8, height: 0.38, small: true, accent: "#f0c36f" });
 
   const futureUpstairs = roomById("future-upstairs-stair");
-  addSimpleRoomShell(futureUpstairs, { floorMaterial: materials.floorDark, material: materials.darkWall, skipSides: ["south", "east"] });
-  addWallXWithOpenings(
-    `${futureUpstairs.id}-south`,
-    futureUpstairs.bounds.xMin,
+  // T6's west perimeter is the only physical owner of the shared wall. The
+  // stair shell keeps its other three sides and its complete floor/ceiling,
+  // while the closed leaf occupies the opening cut by addAuditorium above.
+  addSimpleRoomShell(futureUpstairs, { floorMaterial: materials.floorDark, material: materials.darkWall, skipSides: ["east"] });
+  addClosedDoor(
+    `${futureUpstairs.id}-closed`,
+    "east",
     futureUpstairs.bounds.xMax,
-    futureUpstairs.bounds.zMin,
-    [{ center: futureUpstairs.doorCenter, width: 1.8 }],
-    { material: materials.darkWall },
+    futureUpstairs.doorCenter,
+    { width: futureUpstairs.doorWidth ?? 1.8 },
   );
-  addClosedDoor(`${futureUpstairs.id}-closed`, "south", futureUpstairs.bounds.zMin, futureUpstairs.doorCenter, { width: 1.8 });
-  addLabel({ id: `${futureUpstairs.id}-sign`, text: "UPSTAIRS · FUTURE", position: [futureUpstairs.doorCenter, 2.85, futureUpstairs.bounds.zMin - 0.13], rotationY: Math.PI, width: 2.4, height: 0.4, small: true, accent: "#8c6bd3" });
+  addLabel({
+    id: `${futureUpstairs.id}-sign`,
+    text: "UPSTAIRS · FUTURE",
+    position: [futureUpstairs.bounds.xMax + 0.13, 2.85, futureUpstairs.doorCenter],
+    rotationY: Math.PI / 2,
+    width: 2.4,
+    height: 0.4,
+    small: true,
+    accent: "#8c6bd3",
+  });
 
   addSodaService();
   const futureTask = roomById("future-task-room");
@@ -1491,6 +1511,7 @@ export function createTheaterWorld({ scene, materials }) {
     if (cursor < xMax - EPSILON) addWallX(`${id}-last`, cursor, xMax, z, { material: materials.darkWall });
   };
   const theater6 = AUDITORIUMS.find((auditorium) => auditorium.number === 6);
+  const straightNorthTheaters = AUDITORIUMS.filter(({ number }) => [7, 8].includes(number));
   const southOccupied = [
     ...AUDITORIUMS.filter((room) => room.screenSide === "south").map((room) => [room.bounds.xMin, room.bounds.xMax]),
     [posterAlcove.bounds.xMin, posterAlcove.bounds.xMax],
@@ -1505,8 +1526,7 @@ export function createTheaterWorld({ scene, materials }) {
     [futureUpstairs.bounds.xMin, futureUpstairs.bounds.xMax],
     [theater6.bounds.xMin, theater6.bounds.xMax],
     [roomById("girls-restroom").footprintRects[1].xMin, roomById("girls-restroom").footprintRects.at(-1).xMax],
-    [79.5, 97],
-    [110, 127.5],
+    ...straightNorthTheaters.map(({ bounds }) => [bounds.xMin, bounds.xMax]),
     [candy.bounds.xMin, candy.bounds.xMax],
   ];
   addFillSegments("hall-narrow-south-fill", hallNarrow.xMin, hallNarrow.xMax, hallNarrow.zMin, southOccupied);
@@ -1521,8 +1541,12 @@ export function createTheaterWorld({ scene, materials }) {
   }
   const narrowHallCenterZ = (hallNarrow.zMin + hallNarrow.zMax) / 2;
   const wideHallCenterZ = (hallWide.zMin + hallWide.zMax) / 2;
-  for (let x = -34; x < HALL_PLAN.transitionX; x += 12) addLightPanel(`hall-narrow-light-${x}`, x, narrowHallCenterZ, 2.65, 0.3);
-  for (let x = -10; x <= 138; x += 12) addLightPanel(`hall-wide-light-${x}`, x, wideHallCenterZ, 2.65, 0.3);
+  for (let x = hallNarrow.xMin + 6; x <= hallNarrow.xMax - 2; x += 12) {
+    addLightPanel(`hall-narrow-light-${x}`, x, narrowHallCenterZ, 2.65, 0.3);
+  }
+  for (let x = hallWide.xMin + 3.62; x <= hallWide.xMax - 2; x += 12) {
+    addLightPanel(`hall-wide-light-${x}`, x, wideHallCenterZ, 2.65, 0.3);
+  }
   for (const [x, z] of [[-18, 5], [-7, 5], [4, 5], [15, 5], [-15, 14], [-4, 14], [8, 14], [5.8, 29], [5.8, 39], [5.8, 49]]) addLightPanel(`lobby-light-${x}-${frontZ(z)}`, x, frontZ(z), 2.2, 0.44);
   for (const [x, z] of [[5.8, 65], [13.7, 70], [16.8, 70]]) addLightPanel(`north-light-${x}-${z}`, x, z, 2.2, 0.44);
 
@@ -1535,7 +1559,9 @@ export function createTheaterWorld({ scene, materials }) {
   const approachLight = new THREE.PointLight(0xffdfc7, 48, 34, 2);
   approachLight.position.set(planToWorldX(1.5), 3.7, frontZ(40));
   root.add(approachLight);
-  const hallLights = [-30, 0, 30, 60, 90, 120].map((planX) => {
+  const hallPointLightPlanXs = [];
+  for (let x = hallNarrow.xMin + 10; x <= hallWide.xMax - 8; x += 30) hallPointLightPlanXs.push(x);
+  const hallLights = hallPointLightPlanXs.map((planX) => {
     const light = new THREE.PointLight(0xffe7cf, 39, 28, 2);
     light.position.set(planToWorldX(planX), 3.7, planX < HALL_PLAN.transitionX ? narrowHallCenterZ : wideHallCenterZ);
     root.add(light);
@@ -1628,7 +1654,7 @@ export function createTheaterWorld({ scene, materials }) {
       sourceMeshCount,
       colliderCount: colliders.length,
       lightCount: hallLights.length + 3,
-      layoutVersion: "mililani-sketch-v9",
+      layoutVersion: "mililani-sketch-v10",
     }),
   };
 }

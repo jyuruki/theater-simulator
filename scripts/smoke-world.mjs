@@ -109,7 +109,7 @@ const auditoriumByNumber = new Map(AUDITORIUMS.map((auditorium) => [auditorium.n
 assert.equal(world.stats.auditoriumCount, 14);
 assert.equal(world.stats.seatCount, 1093);
 assert.equal(world.stats.equipmentAnchors, 13);
-assert.equal(world.stats.layoutVersion, "mililani-sketch-v9");
+assert.equal(world.stats.layoutVersion, "mililani-sketch-v10");
 assert.ok(world.stats.meshCount > 0);
 assert.ok(world.stats.colliderCount > 0);
 assert.equal(world.auditoriumGroups.size, 14);
@@ -122,7 +122,7 @@ assertBoxMatchesBounds("main-corridor-wide-ceiling", HALL_PLAN.wide, "wide hall 
 assert.deepEqual(
   authoredBoxes.filter(({ id }) => id === "main-corridor-floor" || id === "main-corridor-ceiling").map(({ id }) => id),
   [],
-  "V9 must not retain the old single-rectangle hall surfaces.",
+  "V10 must not retain the old single-rectangle hall surfaces.",
 );
 const hallExitById = new Map(HALL_END_EXITS.map((exit) => [exit.id, exit]));
 for (const [id, footprint] of [["hall-west-exit", HALL_PLAN.narrow], ["hall-east-exit", HALL_PLAN.wide]]) {
@@ -255,14 +255,15 @@ for (const [pattern, expected, label] of fixtureExpectations) {
 const boys = serviceById.get("boys-restroom");
 const boysFountainNook = publicById.get("boys-fountain-alcove");
 const boysMenCubby = publicById.get("boys-men-entry-cubby");
-assert.deepEqual(boys.bounds, { xMin: -21.5, xMax: -6.7, zMin: 62.2, zMax: 68.2 });
+assert.deepEqual(boys.bounds, { xMin: -21.62, xMax: -6.82, zMin: 62.2, zMax: 68.2 });
 assert.deepEqual(boys.footprintRects, [
-  { xMin: -21.5, xMax: -6.7, zMin: 64.7, zMax: 68.2 },
-  { xMin: -9.35, xMax: -6.7, zMin: 62.2, zMax: 64.7 },
+  { xMin: -21.62, xMax: -6.82, zMin: 64.7, zMax: 68.2 },
+  { xMin: -9.47, xMax: -6.82, zMin: 62.2, zMax: 64.7 },
 ]);
-assert.deepEqual(boys.entry, { side: "west", coordinate: -9.35, center: 63.45, width: 1.9 });
-assert.deepEqual(boysFountainNook.bounds, { xMin: -13.5, xMax: -10.85, zMin: 59.7, zMax: 62.2 });
-assert.deepEqual(boysMenCubby.bounds, { xMin: -10.85, xMax: -9.35, zMin: 62.2, zMax: 64.7 });
+assert.deepEqual(boys.entry, { side: "west", coordinate: -9.47, center: 63.45, width: 1.9 });
+assert.deepEqual(boysFountainNook.bounds, { xMin: -13.62, xMax: -11.72, zMin: 59.7, zMax: 62.2 });
+assert.deepEqual(boysMenCubby.bounds, { xMin: -11.72, xMax: -9.47, zMin: 62.2, zMax: 64.7 });
+assertNear(boysMenCubby.bounds.xMax - boysMenCubby.bounds.xMin, 2.25, "V10 MEN cubby width");
 assertBoxMatchesBounds("boys-restroom-section-0-floor", boys.footprintRects[0], "boys main-room floor");
 assertBoxMatchesBounds("boys-restroom-section-0-ceiling", boys.footprintRects[0], "boys main-room ceiling");
 assertBoxMatchesBounds("boys-restroom-section-1-floor", boys.footprintRects[1], "boys entry-lobe floor");
@@ -275,9 +276,9 @@ assert.deepEqual(
 assertBoxMatchesBounds("boys-men-entry-cubby-floor", boysMenCubby.bounds, "recessed MEN cubby floor");
 assertBoxMatchesBounds("boys-men-entry-cubby-ceiling", boysMenCubby.bounds, "recessed MEN cubby ceiling");
 const sharedWall = boxById("boys-t3-shared-back-wall");
-assertNear(sharedWall.x, planToWorldX((-21.5 + -6.82) / 2), "boys/T3 shared wall center X");
+assertNear(sharedWall.x, planToWorldX((-21.62 + -6.82) / 2), "boys/T3 shared wall center X");
 assertNear(sharedWall.z, 68.2, "boys/T3 shared wall Z");
-assertNear(sharedWall.width, 14.68, "boys/T3 shared wall width");
+assertNear(sharedWall.width, 14.8, "boys/T3 shared wall width");
 assertNear(sharedWall.depth, 0.18, "boys/T3 shared wall thickness");
 assert.equal(colliderIdsMatching(world, /^boys-t3-shared-back-wall$/).length, 1, "The boys/T3 boundary must have exactly one collider.");
 assert.equal(sharedWall.materialNames.length, 6, "The shared wall needs per-face finishes.");
@@ -309,8 +310,8 @@ assert.equal(scene.getObjectByName("boys-restroom-sign"), undefined, "The old ge
 assert.deepEqual(
   EQUIPMENT_ANCHORS.filter(({ type }) => type === "drinking-fountain").map(({ id, position, rotation }) => ({ id, position, rotation })),
   [
-    { id: "boys-water-fountain-1", position: [-13.24, 0, 60.53], rotation: -Math.PI / 2 },
-    { id: "boys-water-fountain-2", position: [-13.24, 0, 61.33], rotation: -Math.PI / 2 },
+    { id: "boys-water-fountain-1", position: [-13.36, 0, 60.53], rotation: -Math.PI / 2 },
+    { id: "boys-water-fountain-2", position: [-13.36, 0, 61.33], rotation: -Math.PI / 2 },
   ],
   "Runtime fountain anchors must remain in the H2O nook and face its mounting wall.",
 );
@@ -326,10 +327,10 @@ const girls = serviceById.get("girls-restroom");
 const [girlsNorthStalls, girlsSouthStalls] = girls.fixtures.stalls;
 assert.deepEqual(
   [girlsNorthStalls.start, girlsNorthStalls.end, girlsSouthStalls.start, girlsSouthStalls.end],
-  [68, 77, 68, 77],
+  [54.5, 63.5, 54.5, 63.5],
 );
 for (let edge = 0; edge <= 6; edge += 1) {
-  const expectedPlanX = 68 + edge * 1.5;
+  const expectedPlanX = 54.5 + edge * 1.5;
   const northPartition = boxById(`girls-restroom-stall-bank-0-partition-${edge}`);
   const southPartition = boxById(`girls-restroom-stall-bank-1-partition-${edge}`);
   assertNear(northPartition.x, planToWorldX(expectedPlanX), `girls north partition ${edge} X`);
@@ -345,11 +346,13 @@ const theater9Cubby = {
   zMin: theater9.bounds.zMax - theater9.entry.cubbyDepth,
   zMax: theater9.bounds.zMax,
 };
-assert.deepEqual(theater9.bounds, { xMin: 125, xMax: 135.5, zMin: 42, zMax: 55.5 });
-assert.deepEqual(
-  { center: theater9.entry.center, turnSide: theater9.entry.turnSide, cubby: theater9Cubby },
-  { center: 128.1, turnSide: "east", cubby: { xMin: 126.5, xMax: 129.7, zMin: 52.1, zMax: 55.5 } },
-);
+assert.deepEqual(theater9.bounds, { xMin: 99.6, xMax: 110.1, zMin: 42, zMax: 55.5 });
+assert.equal(theater9.entry.center, 102.7);
+assert.equal(theater9.entry.turnSide, "east");
+assertNear(theater9Cubby.xMin, 101.1, "T9 cubby xMin");
+assertNear(theater9Cubby.xMax, 104.3, "T9 cubby xMax");
+assertNear(theater9Cubby.zMin, 52.1, "T9 cubby zMin");
+assertNear(theater9Cubby.zMax, 55.5, "T9 cubby zMax");
 const t9InnerHeader = boxById("theater-9-cubby-east-header-0");
 assertNear(t9InnerHeader.x, planToWorldX(theater9Cubby.xMax), "T9 inner door physical-left X");
 assertNear(t9InnerHeader.z, theater9.entry.innerDoorCenter, "T9 inner door Z");
@@ -357,9 +360,9 @@ assert.equal(colliderIdsMatching(world, /^theater-9-cubby-east-header-0$/).lengt
 assert.deepEqual(colliderIdsMatching(world, /^theater-9-cubby-west-header-/), [], "T9 must not put its inner door on the physical-right side.");
 const t9OuterThreshold = boxById("theater-9-outer-threshold");
 const t9InnerThreshold = boxById("theater-9-inner-threshold");
-assertNear(t9OuterThreshold.x, planToWorldX(128.1), "T9 outer-door center X");
+assertNear(t9OuterThreshold.x, planToWorldX(102.7), "T9 outer-door center X");
 assertNear(t9OuterThreshold.z, theater9.bounds.zMax, "T9 outer-door plane");
-assertNear(t9InnerThreshold.x, planToWorldX(129.7), "T9 inner-door center X");
+assertNear(t9InnerThreshold.x, planToWorldX(104.3), "T9 inner-door center X");
 assertNear(t9InnerThreshold.z, theater9.entry.innerDoorCenter, "T9 inner-door center Z");
 assert.ok(t9InnerThreshold.x < t9OuterThreshold.x, "After plan reflection, T9's inner entrance must appear left of the cubby in first person.");
 assert.ok(planToWorldX(theater9.bounds.xMax) < t9InnerThreshold.x, "The T9 bowl must continue physically left beyond its inner entrance.");
@@ -431,12 +434,31 @@ for (const [id, bounds] of [
 }
 
 for (const number of [7, 8]) {
-  const nookBounds = auditoriumByNumber.get(number).entry.usherNookBounds;
+  const auditorium = auditoriumByNumber.get(number);
+  const nookBounds = auditorium.entry.usherNookBounds;
   const floor = boxById(`theater-${number}-usher-nook-floor`);
   assertNear(floor.width, nookBounds.xMax - nookBounds.xMin, `T${number} usher-nook width`);
   assertNear(floor.depth, nookBounds.zMax - nookBounds.zMin, `T${number} usher-nook depth`);
   boxById(`theater-${number}-usher-nook-ceiling`);
+  assertBoxMatchesBounds(`theater-${number}-ceiling`, auditorium.bounds, `T${number} rigidly moved auditorium ceiling`);
+  assertBoxMatchesBounds(
+    `theater-${number}-route-ceiling`,
+    { ...auditorium.entry.ramp.bounds, zMin: auditorium.bounds.zMin, zMax: auditorium.entry.arrivalZ + 0.55 },
+    `T${number} rigidly moved route ceiling`,
+  );
 }
+
+for (const number of [9, 10, 11, 12]) {
+  const auditorium = auditoriumByNumber.get(number);
+  assertBoxMatchesBounds(`theater-${number}-ceiling`, auditorium.bounds, `T${number} rigidly moved ceiling`);
+}
+for (let index = 0; index < girls.footprintRects.length; index += 1) {
+  assertBoxMatchesBounds(`girls-restroom-section-${index}-floor`, girls.footprintRects[index], `girls section ${index} floor`);
+  assertBoxMatchesBounds(`girls-restroom-section-${index}-ceiling`, girls.footprintRects[index], `girls section ${index} ceiling`);
+}
+const candy = serviceById.get("candy-storage");
+assertBoxMatchesBounds("candy-storage-floor", candy.bounds, "rigidly moved candy floor");
+assertBoxMatchesBounds("candy-storage-ceiling", candy.bounds, "rigidly moved candy ceiling");
 
 const theater6 = auditoriumByNumber.get(6);
 const theater6Layout = world.auditoriumLayouts.get("theater-6");
@@ -451,9 +473,23 @@ assertBoxMatchesBounds("theater-6-ceiling", theater6.bounds, "translated T6 audi
 assertBoxMatchesBounds("under-storage-6-floor", t6Storage.bounds, "translated T6 storage floor");
 assertBoxMatchesBounds("under-storage-6-roof-ceiling", t6Storage.bounds, "translated T6 storage roof");
 const expectedT6Underside = t6Storage.ceilingHeight - 0.1;
+const futureUpstairs = serviceById.get("future-upstairs-stair");
 const stairLeaf = boxById("future-upstairs-stair-closed-leaf");
-assertNear(stairLeaf.x, planToWorldX(27.5), "future stair door x");
-assertNear(stairLeaf.z, 62.2, "future stair door z");
+assert.equal(futureUpstairs.entrySide, "east");
+assertNear(stairLeaf.x, planToWorldX(theater6.bounds.xMin), "future stair door shared-wall x");
+assertNear(stairLeaf.z, futureUpstairs.doorCenter, "future stair door z in T6 vestibule");
+boxById("theater-6-west-wall-header-0");
+boxById("future-upstairs-stair-closed-bar");
+assert.deepEqual(
+  authoredBoxes.filter(({ id }) => /^future-upstairs-stair-east-/.test(id)).map(({ id }) => id),
+  [],
+  "The stair shell must not duplicate T6's shared west wall.",
+);
+assert.deepEqual(
+  colliderIdsMatching(world, /^future-upstairs-stair-east-/),
+  [],
+  "No duplicate stair-east collider may overlap the T6 west wall.",
+);
 const t6DoorSegments = world.colliders
   .filter(({ id }) => /^theater-6-south-wall-segment-(?:0|last)$/.test(id))
   .sort((first, second) => first.minX - second.minX);
@@ -503,7 +539,7 @@ const removedHallPosters = [];
 scene.traverse(({ name }) => {
   if (/^poster-\d+$/.test(name)) removedHallPosters.push(name);
 });
-assert.deepEqual(removedHallPosters, [], "V9 must not restore the removed random NOW SHOWING posters.");
+assert.deepEqual(removedHallPosters, [], "V10 must not restore the removed random NOW SHOWING posters.");
 const minimap = createMinimap({ canvas: new FakeCanvas(700, 360) });
 minimap.updatePlayer({ x: -2, z: HALL_PLAN.wide.zMin + 1, directionX: 1, directionZ: 0 });
 minimap.draw();
