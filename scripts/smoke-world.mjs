@@ -8,12 +8,29 @@ class FakeCanvas {
 
   getContext() {
     const gradient = { addColorStop() {} };
+    const finiteGeometryCall = (method) => (...values) => {
+      for (const value of values) {
+        assert.ok(Number.isFinite(value), `Canvas ${method} received a non-finite geometry argument: ${value}`);
+      }
+    };
     const context = {
       canvas: this,
+      arc: finiteGeometryCall("arc"),
+      bezierCurveTo: finiteGeometryCall("bezierCurveTo"),
+      clearRect: finiteGeometryCall("clearRect"),
       createLinearGradient: () => gradient,
       createRadialGradient: () => gradient,
+      ellipse: finiteGeometryCall("ellipse"),
+      fillRect: finiteGeometryCall("fillRect"),
       getImageData: (_x, _y, width, height) => ({ data: new Uint8ClampedArray(width * height * 4) }),
+      lineTo: finiteGeometryCall("lineTo"),
       measureText: (text) => ({ width: String(text).length * 12 }),
+      moveTo: finiteGeometryCall("moveTo"),
+      quadraticCurveTo: finiteGeometryCall("quadraticCurveTo"),
+      rect: finiteGeometryCall("rect"),
+      rotate: finiteGeometryCall("rotate"),
+      strokeRect: finiteGeometryCall("strokeRect"),
+      translate: finiteGeometryCall("translate"),
     };
     return new Proxy(context, {
       get(target, property) {
@@ -40,7 +57,9 @@ const {
   FRONT_SHIFT_Z,
   HALL_END_EXITS,
   HALL_PLAN,
+  LOBBY_CEILING_PLAN,
   LOBBY_PLAN,
+  LOBBY_SHIFT_X,
   POS_STATIONS,
   PUBLIC_SPACES,
   SERVICE_ROOMS,
@@ -79,6 +98,14 @@ function boxById(id) {
   return matches[0];
 }
 
+function objectsByName(id) {
+  const matches = [];
+  scene.traverse((object) => {
+    if (object.name === id) matches.push(object);
+  });
+  return matches;
+}
+
 function assertBoxMatchesBounds(id, bounds, message = id) {
   const box = boxById(id);
   assertNear(box.x, planToWorldX((bounds.xMin + bounds.xMax) / 2), `${message} center X`);
@@ -109,7 +136,7 @@ const auditoriumByNumber = new Map(AUDITORIUMS.map((auditorium) => [auditorium.n
 assert.equal(world.stats.auditoriumCount, 14);
 assert.equal(world.stats.seatCount, 1093);
 assert.equal(world.stats.equipmentAnchors, 13);
-assert.equal(world.stats.layoutVersion, "mililani-sketch-v10");
+assert.equal(world.stats.layoutVersion, "mililani-sketch-v11");
 assert.ok(world.stats.meshCount > 0);
 assert.ok(world.stats.colliderCount > 0);
 assert.equal(world.auditoriumGroups.size, 14);
@@ -143,9 +170,13 @@ const shiftedRuntimeBoxes = [
   ["ticket-empty-alcove-floor", TICKET_APPROACH_PLAN.emptyAlcove],
 ];
 for (const [id, bounds] of shiftedRuntimeBoxes) assertBoxMatchesBounds(id, bounds, `${id} rigid shift`);
-for (const [id, baselineZ] of [["ticket-kiosk-1", 3.3], ["ticket-kiosk-2", 5.3]]) {
-  const body = boxById(`${id}-body`);
-  assertNear(body.z, baselineZ + FRONT_SHIFT_Z, `${id} runtime Z shift`);
+assert.equal(LOBBY_SHIFT_X, 8.3, "V11 lobby X translation must remain authoritative.");
+assert.equal(LOBBY_PLAN.kiosks.length, 3, "V11 must author exactly three ticket kiosks.");
+for (const kiosk of LOBBY_PLAN.kiosks) {
+  const body = boxById(`${kiosk.id}-body`);
+  assertNear(body.x, planToWorldX(kiosk.position[0]), `${kiosk.id} runtime X`);
+  assertNear(body.z, kiosk.position[2], `${kiosk.id} runtime Z`);
+  assert.equal(colliderIdsMatching(world, new RegExp(`^${kiosk.id}-body$`)).length, 1, `${kiosk.id} needs one body collider.`);
 }
 for (const station of LOBBY_PLAN.customerCounter) {
   assert.ok(station.z <= LOBBY_PLAN.envelope.zMax, "Translated counter must remain inside the shifted lobby.");
@@ -156,12 +187,139 @@ for (const station of POS_STATIONS) {
   assertNear(group.position.x, planToWorldX(station.position[0]), `${station.id} translated X`);
   assertNear(group.position.z, station.position[2], `${station.id} translated Z`);
 }
+const boxOfficePos = scene.getObjectByName(LOBBY_PLAN.boxOfficePos.id);
+assert.ok(boxOfficePos, "The box-office long counter leg needs its dedicated POS.");
+assert.equal(objectsByName(LOBBY_PLAN.boxOfficePos.id).length, 1, "The box-office POS must be authored exactly once.");
+assertNear(boxOfficePos.position.x, planToWorldX(LOBBY_PLAN.boxOfficePos.position[0]), "box-office POS X");
+assertNear(boxOfficePos.position.z, LOBBY_PLAN.boxOfficePos.position[2], "box-office POS Z");
 for (const anchor of EQUIPMENT_ANCHORS.filter(({ roomId }) => ["concession-boh", "kitchen", "bar"].includes(roomId))) {
   const equipment = world.equipment.get(anchor.id);
   assert.ok(equipment, `${anchor.id} must remain authored after the rigid shift.`);
   assertNear(equipment.worldPosition.x, planToWorldX(anchor.position[0]), `${anchor.id} translated X`);
   assertNear(equipment.worldPosition.z, anchor.position[2], `${anchor.id} translated Z`);
 }
+
+const highLobbyCeiling = boxById("lobby-ceiling");
+assertBoxMatchesBounds("lobby-ceiling", LOBBY_PLAN.envelope, "triple-height lobby ceiling");
+assertNear(highLobbyCeiling.y, LOBBY_CEILING_PLAN.highHeight, "triple-height lobby ceiling elevation");
+assertNear(highLobbyCeiling.y - highLobbyCeiling.height / 2, 13.75, "triple-height lobby ceiling underside");
+assertNear(LOBBY_CEILING_PLAN.highHeight, LOBBY_CEILING_PLAN.baseHeight * 3, "public ceiling 3x multiplier");
+const highCourtCeiling = assertBoxMatchesBounds(
+  `${COURTYARD_PLAN.id}-ceiling`,
+  COURTYARD_PLAN.bounds,
+  "triple-height fountain / T3-5 courtyard ceiling",
+);
+assertNear(highCourtCeiling.y, LOBBY_CEILING_PLAN.highHeight, "courtyard ceiling elevation");
+const courtSouthUpper = boxById("fountain-courtyard-south-upper");
+assertNear(courtSouthUpper.x, planToWorldX((COURTYARD_PLAN.bounds.xMin + COURTYARD_PLAN.bounds.xMax) / 2), "court upper seam X");
+assertNear(courtSouthUpper.z, COURTYARD_PLAN.bounds.zMin, "court upper seam Z plane");
+assertNear(courtSouthUpper.width, COURTYARD_PLAN.bounds.xMax - COURTYARD_PLAN.bounds.xMin, "court upper seam full X span");
+assertNear(courtSouthUpper.y - courtSouthUpper.height / 2, LOBBY_CEILING_PLAN.baseHeight, "court upper seam base");
+assertNear(courtSouthUpper.y + courtSouthUpper.height / 2, LOBBY_CEILING_PLAN.highHeight, "court upper seam top");
+assert.equal(colliderIdsMatching(world, /^fountain-courtyard-south-upper$/).length, 0, "The overhead court seam must not block the hall route.");
+for (const roomId of LOBBY_CEILING_PLAN.lowServiceRoomIds) {
+  const room = serviceById.get(roomId);
+  const ceiling = assertBoxMatchesBounds(`${roomId}-ceiling`, room.bounds, `${roomId} retained service ceiling`);
+  assertNear(ceiling.y, LOBBY_CEILING_PLAN.baseHeight, `${roomId} service ceiling elevation`);
+  assertNear(ceiling.y - ceiling.height / 2, 4.55, `${roomId} service ceiling underside`);
+}
+assert.deepEqual(
+  authoredBoxes
+    .filter(({ id }) => ["concession-boh-ceiling", "bar-ceiling", "box-office-ceiling"].includes(id))
+    .map(({ id }) => id),
+  [],
+  "The open public lobby must not regain low concession, bar, or box-office roof slabs.",
+);
+
+const barCounter = boxById("customer-counter-0");
+assertNear(
+  barCounter.x - barCounter.width / 2,
+  planToWorldX(TICKET_APPROACH_PLAN.bounds.xMin),
+  "guest-bar physical-left end aligned to the ticket approach",
+);
+const backBar = assertBoxMatchesBounds("back-bar-cabinet", LOBBY_PLAN.backBar, "rigidly translated back bar");
+assertNear(backBar.depth, LOBBY_PLAN.backBar.zMax - LOBBY_PLAN.backBar.zMin, "back-bar depth preservation");
+const boxOfficeReturn = assertBoxMatchesBounds("box-office-return", LOBBY_PLAN.boxOfficeReturn, "rigidly translated box-office return");
+assertNear(
+  LOBBY_PLAN.envelope.xMax - LOBBY_PLAN.boxOfficeReturn.xMax,
+  7.5,
+  "box-office east-side spacing preservation",
+);
+assertNear(boxOfficeReturn.width, LOBBY_PLAN.boxOfficeReturn.xMax - LOBBY_PLAN.boxOfficeReturn.xMin, "box-office return width preservation");
+
+const podium = LOBBY_PLAN.ticketPodium;
+const podiumBoxes = authoredBoxes.filter(({ id }) => id.startsWith(`${podium.id}-`));
+assert.deepEqual(
+  podiumBoxes.map(({ id }) => id).sort(),
+  [`${podium.id}-base`, `${podium.id}-body`, `${podium.id}-top`].sort(),
+  "Ticket check must contain one three-piece central lectern.",
+);
+for (const piece of podiumBoxes) {
+  assertNear(piece.x, planToWorldX(podium.position[0]), `${piece.id} center X`);
+  assert.ok(piece.materialNames.every((name) => name === "Laminate / warm walnut"), `${piece.id} must use the wooden lectern finish.`);
+}
+assertNear(boxById(`${podium.id}-body`).z, podium.position[2] + podium.footprint[1] * 0.04, "lectern body Z");
+assertNear(boxById(`${podium.id}-top`).y, podium.height, "lectern above-stomach top height");
+assert.equal(colliderIdsMatching(world, new RegExp(`^${podium.id}-body$`)).length, 1, "The lectern needs exactly one body collider.");
+assert.deepEqual(
+  authoredBoxes.filter(({ id }) => /^ticket-(?:podium|scanner)-(?:2\.2|9\.4)$/.test(id)).map(({ id }) => id),
+  [],
+  "The two old black ticket podiums and scanners must be absent.",
+);
+
+assert.equal(FOUNTAIN_PLAN.pillars.length, 2, "Exactly two fountain-counter pillars are required.");
+for (const pillar of FOUNTAIN_PLAN.pillars) {
+  const box = boxById(pillar.id);
+  assertNear(box.x, planToWorldX(pillar.position[0]), `${pillar.id} X`);
+  assertNear(box.y, pillar.height / 2, `${pillar.id} vertical center`);
+  assertNear(box.z, pillar.position[2], `${pillar.id} Z`);
+  assertNear(box.width, pillar.footprint[0], `${pillar.id} width`);
+  assertNear(box.height, LOBBY_CEILING_PLAN.highHeight, `${pillar.id} full ceiling height`);
+  assertNear(box.depth, pillar.footprint[1], `${pillar.id} depth`);
+  assert.ok(box.materialNames.every((name) => name === "Wall / warm neutral"), `${pillar.id} must be white.`);
+  assert.equal(colliderIdsMatching(world, new RegExp(`^${pillar.id}$`)).length, 1, `${pillar.id} needs one collider.`);
+}
+const westPillar = FOUNTAIN_PLAN.pillars[0];
+const partitionEastFace = COURTYARD_PLAN.waistPartition.x + COURTYARD_PLAN.waistPartition.thickness / 2;
+const westPillarWestFace = westPillar.position[0] - westPillar.footprint[0] / 2;
+assertNear(westPillarWestFace - partitionEastFace, 1.11, "divider-to-west-pillar squeeze width");
+assert.ok(westPillarWestFace - partitionEastFace > 0.68, "The player capsule must fit through the divider/pillar squeeze.");
+
+const muralFacade = LOBBY_PLAN.muralFacade;
+const muralDx = muralFacade.end.x - muralFacade.start.x;
+const muralDz = muralFacade.end.z - muralFacade.start.z;
+const muralRun = Math.hypot(muralDx, muralDz);
+const muralGuestNormal = { x: -muralDz / muralRun, z: muralDx / muralRun };
+const projectedMuralStart = {
+  x: muralFacade.start.x + muralGuestNormal.x * muralFacade.projection,
+  z: muralFacade.start.z + muralGuestNormal.z * muralFacade.projection,
+};
+const projectedMuralEnd = {
+  x: muralFacade.end.x + muralGuestNormal.x * muralFacade.projection,
+  z: muralFacade.end.z + muralGuestNormal.z * muralFacade.projection,
+};
+const muralFascia = boxById("concession-mural-fascia");
+assertNear(muralFascia.x, planToWorldX((projectedMuralStart.x + projectedMuralEnd.x) / 2), "projecting mural fascia X");
+assertNear(muralFascia.z, (projectedMuralStart.z + projectedMuralEnd.z) / 2, "projecting mural fascia Z");
+assertNear(muralFascia.y, (muralFacade.bottomY + muralFacade.topY) / 2, "mural fascia center Y");
+assertNear(muralFascia.width, muralRun, "mural fascia run length");
+assertNear(muralFascia.height, muralFacade.topY - muralFacade.bottomY, "mural fascia height");
+assert.ok(muralFascia.depth >= muralFacade.projection, "Mural fascia must project materially toward guests.");
+const muralShadowLip = boxById("concession-mural-shadow-lip");
+assert.ok(
+  muralShadowLip.y + muralShadowLip.height / 2 <= muralFascia.y - muralFascia.height / 2 + 1e-6,
+  "The mural shadow lip must hang below the fascia instead of overlapping its lower face.",
+);
+for (const id of ["concession-mural-return-start", "concession-mural-return-end"]) {
+  const muralReturn = boxById(id);
+  assertNear(muralReturn.width, muralFacade.projection, `${id} projection return length`);
+  assertNear(muralReturn.height, muralFacade.topY - muralFacade.bottomY, `${id} height`);
+}
+const muralFace = scene.getObjectByName("concession-mural-face");
+assert.ok(muralFace?.isMesh, "The projecting concession fascia needs its botanical mural face.");
+assert.equal(objectsByName("concession-mural-face").length, 1, "The mural face must be authored exactly once.");
+assert.equal(muralFace.userData.facadeId, muralFacade.id, "Mural face must remain bound to the authoritative facade plan.");
+assert.equal(muralFace.material.name, "concession-botanical-mural-material");
 
 const t1 = world.auditoriumLayouts.get("theater-1");
 const t1FrontHeight = world.groundHeight(planToWorldX(t1.sideAisles.west.centerX), t1.frontRowZ, 0);
@@ -336,6 +494,32 @@ for (let edge = 0; edge <= 6; edge += 1) {
   assertNear(northPartition.x, planToWorldX(expectedPlanX), `girls north partition ${edge} X`);
   assertNear(southPartition.x, planToWorldX(expectedPlanX), `girls south partition ${edge} X`);
   assertNear(northPartition.x, southPartition.x, `girls partition pair ${edge} alignment`);
+}
+
+const WARM_WALL = "Wall / warm neutral";
+const DARK_WALL = "Wall / charcoal";
+const girlsExteriorFaceExpectations = [
+  ["girls-restroom-north", 4, DARK_WALL, 5, WARM_WALL],
+  ["girls-restroom-west", 0, DARK_WALL, 1, WARM_WALL],
+  ["girls-restroom-east", 1, DARK_WALL, 0, WARM_WALL],
+  ["girls-restroom-south-east", 5, DARK_WALL, 4, WARM_WALL],
+  ["girls-restroom-southwest-lobe-south", 5, DARK_WALL, 4, WARM_WALL],
+  ["girls-restroom-connector-south", 5, DARK_WALL, 4, WARM_WALL],
+  ["girls-restroom-entry-lobe-east", 1, DARK_WALL, 0, WARM_WALL],
+];
+for (const [id, exteriorIndex, exteriorMaterial, interiorIndex, interiorMaterial] of girlsExteriorFaceExpectations) {
+  const wall = boxById(id);
+  assert.equal(wall.materialNames[exteriorIndex], exteriorMaterial, `${id} public face must match the dark hallway.`);
+  assert.equal(wall.materialNames[interiorIndex], interiorMaterial, `${id} restroom face must remain light.`);
+}
+const girlsEntryWestPieces = authoredBoxes.filter(({ id }) => id.startsWith("girls-restroom-entry-lobe-west-"));
+assert.ok(girlsEntryWestPieces.length >= 3, "Girls entry west wall must retain jambs and a privacy-door header.");
+for (const wall of girlsEntryWestPieces) {
+  assert.equal(wall.materialNames[0], DARK_WALL, `${wall.id} public west face must match the hallway.`);
+  assert.equal(wall.materialNames[1], WARM_WALL, `${wall.id} interior east face must remain light.`);
+}
+for (const id of ["girls-restroom-southwest-lobe-east", "girls-restroom-entry-lobe-north"]) {
+  assert.ok(boxById(id).materialNames.every((name) => name === WARM_WALL), `${id} is an internal privacy wall and must remain light.`);
 }
 
 const theater9 = auditoriumByNumber.get(9);

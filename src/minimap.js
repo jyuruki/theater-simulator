@@ -253,7 +253,7 @@ function drawCenteredLabel(context, label, rectangle, options = {}) {
 function drawPublicSpaces(context, view) {
   for (const space of PUBLIC_SPACES) {
     if (COURTYARD_PLAN.publicSpaceIds.includes(space.id) || boysEntryFeatureIds.has(space.id)) continue;
-    // The V10 theater hall is a stepped union: its T9-side run is wider and
+    // The V11 theater hall is a stepped union: its T9-side run is wider and
     // narrows exactly at the drinking-fountain wall. Drawing its broad bounds
     // would invent floor in the notch, so all multi-rectangle public spaces
     // use the same footprint renderer as the concave restrooms.
@@ -293,7 +293,10 @@ function drawPublicSpaces(context, view) {
     weight: 700,
   });
 
-  for (const [id, bounds] of Object.entries(FOUNTAIN_PLAN)) {
+  for (const [id, bounds] of [
+    ["island", FOUNTAIN_PLAN.island],
+    ["rearCounter", FOUNTAIN_PLAN.rearCounter],
+  ]) {
     const rectangle = fillZone(context, {
       id: `minimap-${id}`,
       bounds,
@@ -308,6 +311,23 @@ function drawPublicSpaces(context, view) {
         color: "rgba(250,246,238,0.62)",
       });
     }
+  }
+
+  for (const pillar of FOUNTAIN_PLAN.pillars ?? []) {
+    const [x, , z] = pillar.position;
+    const [width, depth] = pillar.footprint;
+    fillZone(context, {
+      id: `minimap-${pillar.id}`,
+      bounds: {
+        xMin: x - width / 2,
+        xMax: x + width / 2,
+        zMin: z - depth / 2,
+        zMax: z + depth / 2,
+      },
+      kind: "service",
+    }, view, {
+      fill: "rgba(236,232,220,0.96)",
+    });
   }
 
   const partition = COURTYARD_PLAN.waistPartition;
@@ -380,7 +400,7 @@ function sharedBoundarySegments(first, second, epsilon = 0.001) {
   return segments;
 }
 
-function drawV10SpatialRelationships(context, view) {
+function drawV11SpatialRelationships(context, view) {
   const boys = SERVICE_ROOMS.find((room) => room.id === "boys-restroom");
   const lowerStorage = SERVICE_ROOMS.find((room) => room.id === "under-storage-3");
 
@@ -851,7 +871,7 @@ export function createMinimap(options = {}) {
     drawServiceRooms(context, view);
     drawBoysEntryFeatures(context, view);
     drawEntryRoutes(context, view);
-    drawV10SpatialRelationships(context, view);
+    drawV11SpatialRelationships(context, view);
     drawAuditoriumDoors(context, view);
     drawServiceDoors(context, view);
     drawHallExits(context, view);

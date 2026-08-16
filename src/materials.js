@@ -1064,66 +1064,155 @@ function drawHalfBlossom(context, x, y, radius, angle, color) {
 }
 
 function createBotanicalMuralTexture() {
-  const width = 512;
-  const height = 256;
+  // A wide, original lobby composition that echoes the venue photograph's
+  // face-and-foliage rhythm without reproducing the real artwork. The larger
+  // canvas remains crisp when stretched across the elevated concession
+  // fascia introduced for the V11 lobby.
+  const width = 1024;
+  const height = 384;
   const canvas = createCanvas(width, height);
   const context = context2d(canvas);
-  const random = seededRandom("original-island-botanical-mural-v1");
+  const random = seededRandom("original-island-botanical-mural-v2");
 
   const background = context.createLinearGradient(0, 0, width, height);
-  background.addColorStop(0, "#efe3cf");
-  background.addColorStop(0.52, "#d9d8c4");
-  background.addColorStop(1, "#c9d6cf");
+  background.addColorStop(0, "#899194");
+  background.addColorStop(0.2, "#56616a");
+  background.addColorStop(0.8, "#647079");
+  background.addColorStop(1, "#9da3a2");
   context.fillStyle = background;
   context.fillRect(0, 0, width, height);
 
-  context.strokeStyle = "#235461";
-  context.globalAlpha = 0.18;
-  context.lineWidth = 2;
-  for (let wave = 0; wave < 7; wave += 1) {
+  // Neutral end panels frame a deeper central field, matching the broad
+  // architectural cadence of the reference rather than leaving the artwork
+  // as an ungrounded rectangle.
+  const field = context.createLinearGradient(188, 0, 860, height);
+  field.addColorStop(0, "#315a72");
+  field.addColorStop(0.42, "#172936");
+  field.addColorStop(0.72, "#10231f");
+  field.addColorStop(1, "#26362f");
+  context.fillStyle = field;
+  context.fillRect(188, 0, 672, height);
+
+  context.strokeStyle = "#8dc3d0";
+  context.globalAlpha = 0.16;
+  context.lineWidth = 2.4;
+  for (let wave = 0; wave < 8; wave += 1) {
     context.beginPath();
-    context.moveTo(-20, 171 + wave * 11);
-    for (let x = -20; x <= width + 20; x += 32) {
-      context.quadraticCurveTo(x + 8, 163 + wave * 11, x + 16, 171 + wave * 11);
-      context.quadraticCurveTo(x + 24, 179 + wave * 11, x + 32, 171 + wave * 11);
+    context.moveTo(180, 270 + wave * 13);
+    for (let x = 180; x <= 650; x += 40) {
+      context.quadraticCurveTo(x + 10, 260 + wave * 13, x + 20, 270 + wave * 13);
+      context.quadraticCurveTo(x + 30, 280 + wave * 13, x + 40, 270 + wave * 13);
     }
     context.stroke();
   }
   context.globalAlpha = 1;
 
-  context.strokeStyle = "#254f48";
-  context.lineWidth = 4;
+  // An abstract cool-toned face anchors the composition. Deliberately loose
+  // painterly bands keep this a procedural original rather than a traced
+  // reproduction of the photograph.
+  const face = context.createLinearGradient(250, 40, 560, 360);
+  face.addColorStop(0, "#a8c1cb");
+  face.addColorStop(0.42, "#6f9ab1");
+  face.addColorStop(0.76, "#356e8e");
+  face.addColorStop(1, "#1d425d");
+  context.fillStyle = face;
   context.beginPath();
-  context.moveTo(-12, 229);
-  context.bezierCurveTo(97, 187, 113, 76, 235, 131);
-  context.bezierCurveTo(329, 174, 366, 54, 530, 22);
+  context.moveTo(274, 0);
+  context.bezierCurveTo(248, 86, 262, 183, 292, 274);
+  context.bezierCurveTo(315, 342, 374, 386, 470, 384);
+  context.bezierCurveTo(512, 313, 530, 242, 516, 174);
+  context.bezierCurveTo(500, 98, 456, 35, 408, 0);
+  context.closePath();
+  context.fill();
+
+  context.globalAlpha = 0.34;
+  for (let stroke = 0; stroke < 42; stroke += 1) {
+    const x = 270 + random() * 230;
+    context.strokeStyle = random() > 0.5 ? "#d9e3df" : "#235f82";
+    context.lineWidth = 2 + random() * 5;
+    context.beginPath();
+    context.moveTo(x, -10);
+    context.bezierCurveTo(x - 28 + random() * 56, 120, x - 22 + random() * 44, 280, x + (random() - 0.5) * 34, 398);
+    context.stroke();
+  }
+  context.globalAlpha = 1;
+
+  // Single expressive eye and brow.
+  context.fillStyle = "#e6e0d3";
+  context.beginPath();
+  context.moveTo(310, 126);
+  context.quadraticCurveTo(364, 86, 430, 126);
+  context.quadraticCurveTo(367, 166, 310, 126);
+  context.fill();
+  const iris = context.createRadialGradient(370, 126, 3, 370, 126, 28);
+  iris.addColorStop(0, "#111317");
+  iris.addColorStop(0.36, "#583d29");
+  iris.addColorStop(0.72, "#91a789");
+  iris.addColorStop(1, "#17211d");
+  context.fillStyle = iris;
+  context.beginPath();
+  context.arc(370, 126, 27, 0, TAU);
+  context.fill();
+  context.fillStyle = "#090b0d";
+  context.beginPath();
+  context.arc(370, 126, 10, 0, TAU);
+  context.fill();
+  context.fillStyle = "#ffffff";
+  context.beginPath();
+  context.arc(379, 116, 4, 0, TAU);
+  context.fill();
+  context.strokeStyle = "#10161b";
+  context.lineWidth = 9;
+  context.beginPath();
+  context.moveTo(300, 119);
+  context.quadraticCurveTo(367, 67, 442, 113);
   context.stroke();
 
-  const leafPalette = ["#2f6b59", "#4d8170", "#76947b", "#235e69", "#a34b3f"];
-  for (let index = 0; index < 39; index += 1) {
-    const progress = index / 38;
-    const x = -5 + progress * 530 + (random() - 0.5) * 22;
-    const centerWave = 142 - Math.sin(progress * Math.PI * 2.1) * 70;
-    const y = centerWave + (random() - 0.5) * 30;
+  // Nose and cheek accents terminate beneath the foliage rather than fully
+  // outlining a literal portrait.
+  context.strokeStyle = "#d4dedb";
+  context.globalAlpha = 0.55;
+  context.lineWidth = 5;
+  context.beginPath();
+  context.moveTo(432, 142);
+  context.bezierCurveTo(443, 198, 438, 232, 410, 264);
+  context.quadraticCurveTo(435, 278, 461, 262);
+  context.stroke();
+  context.globalAlpha = 1;
+
+  context.strokeStyle = "#254f48";
+  context.lineWidth = 7;
+  context.beginPath();
+  context.moveTo(442, 370);
+  context.bezierCurveTo(550, 300, 558, 172, 652, 196);
+  context.bezierCurveTo(742, 222, 768, 80, 884, 18);
+  context.stroke();
+
+  const leafPalette = ["#24543f", "#377654", "#5b9368", "#89af7b", "#163f42", "#b2564c"];
+  for (let index = 0; index < 64; index += 1) {
+    const progress = index / 63;
+    const x = 480 + progress * 430 + (random() - 0.5) * 38;
+    const centerWave = 205 - Math.sin(progress * Math.PI * 2.3) * 116;
+    const y = centerWave + (random() - 0.5) * 54;
     const upward = index % 2 ? -1 : 1;
     drawLeaf(
       context,
       x,
       y,
-      24 + random() * 21,
-      6 + random() * 7,
+      28 + random() * 34,
+      7 + random() * 10,
       upward * (0.46 + random() * 0.72),
       leafPalette[Math.floor(random() * leafPalette.length)],
-      "#244942",
+      "#163c32",
     );
   }
 
-  drawHalfBlossom(context, 92, 112, 27, -0.65, "#d3685e");
-  drawHalfBlossom(context, 258, 146, 31, 0.32, "#f2d9c5");
-  drawHalfBlossom(context, 414, 69, 26, 2.35, "#ca5960");
+  drawHalfBlossom(context, 584, 108, 28, -0.65, "#f2e5d7");
+  drawHalfBlossom(context, 710, 260, 34, 0.32, "#f0d9cc");
+  drawHalfBlossom(context, 824, 82, 29, 2.35, "#d06661");
 
-  context.globalAlpha = 0.33;
-  for (let dot = 0; dot < 115; dot += 1) {
+  context.globalAlpha = 0.28;
+  for (let dot = 0; dot < 220; dot += 1) {
     context.fillStyle = dot % 3 === 0 ? "#c8923e" : "#376b73";
     context.beginPath();
     context.arc(random() * width, random() * height, 0.5 + random() * 1.8, 0, TAU);
@@ -1131,8 +1220,8 @@ function createBotanicalMuralTexture() {
   }
   context.globalAlpha = 1;
 
-  const texture = canvasTexture(canvas, { name: "original-naupaka-inspired-botanical-mural", clamp: true, anisotropy: 4 });
-  texture.userData.credit = "Original procedural island-botanical composition";
+  const texture = canvasTexture(canvas, { name: "original-naupaka-inspired-botanical-mural-v2", clamp: true, anisotropy: 4 });
+  texture.userData.credit = "Original procedural face-and-island-botanical composition";
   return texture;
 }
 
