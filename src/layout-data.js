@@ -4,11 +4,32 @@ const rect = (xMin, xMax, zMin, zMax) => ({ xMin, xMax, zMin, zMax });
 
 // V10 preserves V9's stepped hall while shortening its full west-to-east run
 // by 15 percent and rigidly re-stationing complete auditorium/service modules.
-// toward the entrance as one rigid module. North-side auditorium and service
-// geometry remains in its established plan coordinates.
+// V11 retains that Z translation and moves only the complete front lobby module
+// to plan-right so the customer-bar end aligns with the ticket approach.
 export const FRONT_SHIFT_Z = -2.5;
+export const LOBBY_SHIFT_X = 8.3;
 const shiftedZ = (value) => value + FRONT_SHIFT_Z;
 const shiftedRect = (xMin, xMax, zMin, zMax) => rect(xMin, xMax, shiftedZ(zMin), shiftedZ(zMax));
+const shiftedLobbyX = (value) => value + LOBBY_SHIFT_X;
+const shiftedLobbyRect = (xMin, xMax, zMin, zMax) => rect(
+  shiftedLobbyX(xMin),
+  shiftedLobbyX(xMax),
+  shiftedZ(zMin),
+  shiftedZ(zMax),
+);
+
+export const LOBBY_CEILING_PLAN = Object.freeze({
+  baseHeight: 4.6,
+  multiplier: 3,
+  highHeight: 13.8,
+  highPublicSpaceIds: Object.freeze(["lobby", "soda-service", "recessed-theater-court"]),
+  lowServiceRoomIds: Object.freeze([
+    "office-overflow",
+    "office",
+    "kitchen-storage",
+    "kitchen",
+  ]),
+});
 
 // The wall carrying the two drinking fountains is the exact width transition:
 // west of it the hall keeps the former 4.2 m depth; east of it the south edge
@@ -81,6 +102,22 @@ export const COURTYARD_PLAN = Object.freeze({
 export const FOUNTAIN_PLAN = Object.freeze({
   island: rect(-0.5, 12.1, 62.89, 64.31),
   rearCounter: rect(-0.5, 12.1, 67.3, COURTYARD_BACK_WALL_Z),
+  pillars: Object.freeze([
+    Object.freeze({
+      id: "fountain-island-west-pillar",
+      position: Object.freeze([-2.03, 0, 63.6]),
+      footprint: Object.freeze([0.7, 0.7]),
+      height: LOBBY_CEILING_PLAN.highHeight,
+      finish: "white",
+    }),
+    Object.freeze({
+      id: "fountain-island-east-pillar",
+      position: Object.freeze([13.63, 0, 63.6]),
+      footprint: Object.freeze([0.7, 0.7]),
+      height: LOBBY_CEILING_PLAN.highHeight,
+      finish: "white",
+    }),
+  ]),
 });
 
 // V9 treats the Theater 3 frontage, MEN entrance sequence, drinking-fountain
@@ -238,8 +275,8 @@ export const AUDITORIUMS = Object.freeze([
 ]);
 
 export const PUBLIC_SPACES = Object.freeze([
-  { id: "front-walk", name: "Front Walk", detail: "Public entrance", bounds: shiftedRect(-27, 29, -10, 0), kind: "exterior" },
-  { id: "lobby", name: "Main Lobby", detail: "Concessions, bar, box office, kiosks, and guest gathering", bounds: shiftedRect(-24.5, 23, 0, 27), kind: "lobby" },
+  { id: "front-walk", name: "Front Walk", detail: "Public entrance", bounds: shiftedLobbyRect(-27, 29, -10, 0), kind: "exterior" },
+  { id: "lobby", name: "Main Lobby", detail: "Concessions, bar, box office, kiosks, and guest gathering", bounds: shiftedLobbyRect(-24.5, 23, 0, 27), kind: "lobby" },
   { id: "lobby-approach", name: "Carpeted Lobby Hall", detail: "Narrow guest route, approximately the fountain-counter width", bounds: TICKET_APPROACH_PLAN.bounds, kind: "corridor" },
   { id: "ticket-check", name: "Ticket Check", detail: "Guest entry checkpoint with two 90-degree side pockets", bounds: shiftedRect(0.5, 11.1, 52.2, 58), kind: "ticket" },
   { id: "ticket-poster-alcove", name: "Poster Alcove", detail: "Open 90-degree pocket at ticket check", bounds: TICKET_APPROACH_PLAN.posterAlcove, kind: "corridor" },
@@ -256,13 +293,13 @@ export const PUBLIC_SPACES = Object.freeze([
 ]);
 
 export const SERVICE_ROOMS = Object.freeze([
-  { id: "office-overflow", name: "Office Overflow / Candy", short: "STOCK", detail: "Interim excess-candy room before the manager office", bounds: shiftedRect(-36.5, -24.5, 0.4, 3.8), kind: "storage", entrySide: "east", doorCenter: shiftedZ(2.7), extraDoors: [{ side: "north", center: -34.7 }] },
-  { id: "office", name: "Manager Office", short: "OFF", detail: "Back-office operations behind the overflow room", bounds: shiftedRect(-36.5, -24.5, 3.8, 7), kind: "office", entrySide: "south", doorCenter: -34.7 },
-  { id: "kitchen-storage", name: "Kitchen Storage", short: "KS", detail: "Dry, refrigerated, and service stock connected directly to the hot line through the diagonal partition", bounds: shiftedRect(-37, -29, 7, 24), kind: "storage", entrySide: "east", doorCenter: shiftedZ(10.35), connections: Object.freeze(["kitchen"]) },
-  { id: "concession-boh", name: "Concession Backline", short: "C", detail: "Irregular preparation area behind the bent customer counter", bounds: shiftedRect(-29, -8.6, 4.9, 24), kind: "concession" },
-  { id: "kitchen", name: "Kitchen Hot Line", short: "K", detail: "Fryers, grill, and turbo-oven line", bounds: shiftedRect(-29, -17.8, 17, 24), kind: "kitchen" },
-  { id: "bar", name: "Lobby Bar", short: "B", detail: "Horizontal guest bar and back-bar worktop", bounds: shiftedRect(-16.1, -8.6, 20.4, 24), kind: "bar" },
-  { id: "box-office", name: "Box Office", short: "BOX", detail: "Freestanding L-shaped ticket counter", bounds: shiftedRect(9.2, 15.5, 6.9, 14.4), kind: "office" },
+  { id: "office-overflow", name: "Office Overflow / Candy", short: "STOCK", detail: "Interim excess-candy room before the manager office", bounds: shiftedLobbyRect(-36.5, -24.5, 0.4, 3.8), kind: "storage", entrySide: "east", doorCenter: shiftedZ(2.7), extraDoors: [{ side: "north", center: shiftedLobbyX(-34.7) }] },
+  { id: "office", name: "Manager Office", short: "OFF", detail: "Back-office operations behind the overflow room", bounds: shiftedLobbyRect(-36.5, -24.5, 3.8, 7), kind: "office", entrySide: "south", doorCenter: shiftedLobbyX(-34.7) },
+  { id: "kitchen-storage", name: "Kitchen Storage", short: "KS", detail: "Dry, refrigerated, and service stock connected directly to the hot line through the diagonal partition", bounds: shiftedLobbyRect(-37, -29, 7, 24), kind: "storage", entrySide: "east", doorCenter: shiftedZ(10.35), connections: Object.freeze(["kitchen"]) },
+  { id: "concession-boh", name: "Concession Backline", short: "C", detail: "Irregular preparation area behind the bent customer counter", bounds: shiftedLobbyRect(-29, -8.6, 4.9, 24), kind: "concession" },
+  { id: "kitchen", name: "Kitchen Hot Line", short: "K", detail: "Fryers, grill, and turbo-oven line", bounds: shiftedLobbyRect(-29, -17.8, 17, 24), kind: "kitchen" },
+  { id: "bar", name: "Lobby Bar", short: "B", detail: "Horizontal guest bar and back-bar worktop", bounds: shiftedLobbyRect(-16.1, -8.6, 20.4, 24), kind: "bar" },
+  { id: "box-office", name: "Box Office", short: "BOX", detail: "Freestanding L-shaped ticket counter", bounds: shiftedLobbyRect(9.2, 15.5, 6.9, 14.4), kind: "office" },
   { id: "electrical-room", name: "Electrical Room", short: "ELEC", detail: "Closed service room behind the former provisional restroom door", bounds: shiftedRect(12.1, 17.7, 34, 43), kind: "electrical", entrySide: "west", doorCenter: shiftedZ(39), closed: true },
   { id: "future-upstairs-stair", name: "Future Upstairs Stair", short: "STAIR", detail: "Closed future staircase entered from the left wall of Theater 6's short vestibule", bounds: rect(25, 29.7, 62.2, 68.5), kind: "electrical", entrySide: "east", doorCenter: 63.25, doorWidth: 1.8, closed: true },
   { id: "trash-room", name: "Trash Room", short: "TRASH", detail: "Waste and cleaning support; the door is at the right end and the room opens left", bounds: T3_MEN_PLAN.trash, kind: "trash", entrySide: "south", doorCenter: -14.77, doorPlacement: "right", opensToward: "west" },
@@ -309,46 +346,71 @@ export const SERVICE_ROOMS = Object.freeze([
 ]);
 
 export const LOBBY_PLAN = Object.freeze({
-  envelope: shiftedRect(-37, 23, 0, 24),
-  frontDoorCenters: [-10.8, -2.2, 8.7],
+  envelope: shiftedLobbyRect(-37, 23, 0, 24),
+  frontDoorCenters: [shiftedLobbyX(-10.8), shiftedLobbyX(-2.2), shiftedLobbyX(8.7)],
   customerCounter: [
-    { x: -8.8, z: shiftedZ(20.4) },
-    { x: -16.1, z: shiftedZ(20.4) },
-    { x: -16.8, z: shiftedZ(17.8) },
-    { x: -20.5, z: shiftedZ(8.2) },
-    { x: -20.1, z: shiftedZ(4.9) },
+    { x: shiftedLobbyX(-8.8), z: shiftedZ(20.4) },
+    { x: shiftedLobbyX(-16.1), z: shiftedZ(20.4) },
+    { x: shiftedLobbyX(-16.8), z: shiftedZ(17.8) },
+    { x: shiftedLobbyX(-20.5), z: shiftedZ(8.2) },
+    { x: shiftedLobbyX(-20.1), z: shiftedZ(4.9) },
   ],
-  backBar: shiftedRect(-16.1, -8.6, 23.05, 24),
-  hotLine: shiftedRect(-28.8, -17.8, 23.05, 24),
+  backBar: shiftedLobbyRect(-16.1, -8.6, 23.05, 24),
+  hotLine: shiftedLobbyRect(-28.8, -17.8, 23.05, 24),
   kitchenPartition: [
-    { x: -29, z: shiftedZ(23.5) }, { x: -29, z: shiftedZ(19.6) }, { x: -27.3, z: shiftedZ(17.3) },
-    { x: -24.4, z: shiftedZ(17.1) }, { x: -24.6, z: shiftedZ(15.5) }, { x: -24.5, z: shiftedZ(11.1) },
-    { x: -24.5, z: shiftedZ(9.6) }, { x: -24.5, z: shiftedZ(7) },
+    { x: shiftedLobbyX(-29), z: shiftedZ(23.5) }, { x: shiftedLobbyX(-29), z: shiftedZ(19.6) }, { x: shiftedLobbyX(-27.3), z: shiftedZ(17.3) },
+    { x: shiftedLobbyX(-24.4), z: shiftedZ(17.1) }, { x: shiftedLobbyX(-24.6), z: shiftedZ(15.5) }, { x: shiftedLobbyX(-24.5), z: shiftedZ(11.1) },
+    { x: shiftedLobbyX(-24.5), z: shiftedZ(9.6) }, { x: shiftedLobbyX(-24.5), z: shiftedZ(7) },
   ],
-  serviceDoor: { x: -24.5, z: shiftedZ(10.35) },
+  serviceDoor: { x: shiftedLobbyX(-24.5), z: shiftedZ(10.35) },
   kitchenStorageDoor: {
-    x: -28.15, z: shiftedZ(18.45), width: 1.5,
+    x: shiftedLobbyX(-28.15), z: shiftedZ(18.45), width: 1.5,
     wall: "diagonal", partitionSegment: 1, segmentT: 0.5,
     connects: Object.freeze(["kitchen-storage", "kitchen"]),
   },
-  futureStairs: shiftedRect(15.9, 22, 8.2, 24),
-  boxOfficeVertical: shiftedRect(9.2, 10.3, 6.9, 14.4),
-  boxOfficeReturn: shiftedRect(9.2, 15.5, 6.9, 8),
+  futureStairs: shiftedLobbyRect(15.9, 22, 8.2, 24),
+  boxOfficeVertical: shiftedLobbyRect(9.2, 10.3, 6.9, 14.4),
+  boxOfficeReturn: shiftedLobbyRect(9.2, 15.5, 6.9, 8),
+  boxOfficePos: Object.freeze({
+    id: "box-office-pos",
+    position: Object.freeze([shiftedLobbyX(9.75), 0, shiftedZ(11.2)]),
+    rotation: 0,
+    footprint: Object.freeze([0.72, 0.5]),
+    counterSegment: "box-office-vertical",
+  }),
   kiosks: [
-    { id: "ticket-kiosk-1", position: [21.4, 0, shiftedZ(3.3)], rotation: Math.PI / 2 },
-    { id: "ticket-kiosk-2", position: [21.4, 0, shiftedZ(5.3)], rotation: Math.PI / 2 },
+    { id: "ticket-kiosk-1", position: [shiftedLobbyX(21.4), 0, shiftedZ(3.3)], rotation: Math.PI / 2 },
+    { id: "ticket-kiosk-2", position: [shiftedLobbyX(21.4), 0, shiftedZ(5.3)], rotation: Math.PI / 2 },
+    { id: "ticket-kiosk-3", position: [shiftedLobbyX(21.4), 0, shiftedZ(7.3)], rotation: Math.PI / 2 },
   ],
+  ticketPodium: Object.freeze({
+    id: "ticket-podium-center",
+    position: Object.freeze([5.8, 0, shiftedZ(56.4)]),
+    footprint: Object.freeze([0.85, 0.65]),
+    height: 1.25,
+    material: "wood",
+    style: "lectern",
+  }),
+  muralFacade: Object.freeze({
+    id: "concession-mural-facade",
+    start: Object.freeze({ x: shiftedLobbyX(-16.8), z: shiftedZ(17.8) }),
+    end: Object.freeze({ x: shiftedLobbyX(-20.5), z: shiftedZ(8.2) }),
+    projection: 0.55,
+    bottomY: LOBBY_CEILING_PLAN.baseHeight,
+    topY: 10.6,
+    muralHeight: 4.3,
+  }),
   officePath: ["lobby", "office-overflow", "office"],
 });
 
 export const EQUIPMENT_ANCHORS = Object.freeze([
-  { id: "concession-popper-1", type: "popper", roomId: "concession-boh", position: [-23.5, 0, shiftedZ(14.5)], rotation: 0.34, footprint: [1.35, 0.9] },
-  { id: "concession-popper-2", type: "popper", roomId: "concession-boh", position: [-23.2, 0, shiftedZ(13.0)], rotation: 0.34, footprint: [1.35, 0.9] },
-  { id: "kitchen-grill", type: "grill", roomId: "kitchen", position: [-27.5, 0, shiftedZ(22.7)], rotation: 0, footprint: [1.35, 0.9] },
-  { id: "kitchen-fryer-1", type: "fryer", roomId: "kitchen", position: [-25.7, 0, shiftedZ(22.7)], rotation: 0, footprint: [0.9, 0.9] },
-  { id: "kitchen-fryer-2", type: "fryer", roomId: "kitchen", position: [-24.3, 0, shiftedZ(22.7)], rotation: 0, footprint: [0.9, 0.9] },
-  { id: "kitchen-turbo-oven", type: "turbo-oven", roomId: "kitchen", position: [-22.5, 0, shiftedZ(22.7)], rotation: 0, footprint: [1.15, 0.95] },
-  { id: "bar-well", type: "bar-well", roomId: "bar", position: [-12.3, 0, shiftedZ(22.7)], rotation: Math.PI, footprint: [1.5, 0.8] },
+  { id: "concession-popper-1", type: "popper", roomId: "concession-boh", position: [shiftedLobbyX(-23.5), 0, shiftedZ(14.5)], rotation: 0.34, footprint: [1.35, 0.9] },
+  { id: "concession-popper-2", type: "popper", roomId: "concession-boh", position: [shiftedLobbyX(-23.2), 0, shiftedZ(13.0)], rotation: 0.34, footprint: [1.35, 0.9] },
+  { id: "kitchen-grill", type: "grill", roomId: "kitchen", position: [shiftedLobbyX(-27.5), 0, shiftedZ(22.7)], rotation: 0, footprint: [1.35, 0.9] },
+  { id: "kitchen-fryer-1", type: "fryer", roomId: "kitchen", position: [shiftedLobbyX(-25.7), 0, shiftedZ(22.7)], rotation: 0, footprint: [0.9, 0.9] },
+  { id: "kitchen-fryer-2", type: "fryer", roomId: "kitchen", position: [shiftedLobbyX(-24.3), 0, shiftedZ(22.7)], rotation: 0, footprint: [0.9, 0.9] },
+  { id: "kitchen-turbo-oven", type: "turbo-oven", roomId: "kitchen", position: [shiftedLobbyX(-22.5), 0, shiftedZ(22.7)], rotation: 0, footprint: [1.15, 0.95] },
+  { id: "bar-well", type: "bar-well", roomId: "bar", position: [shiftedLobbyX(-12.3), 0, shiftedZ(22.7)], rotation: Math.PI, footprint: [1.5, 0.8] },
   { id: "soda-icee-left", type: "icee-fountain", roomId: "soda-service", position: [1.1, 0, 63.6], rotation: 0, footprint: [1.5, 0.95] },
   { id: "soda-fountain-1", type: "soda-fountain", roomId: "soda-service", position: [3.3, 0, 63.6], rotation: 0, footprint: [1.8, 0.95] },
   { id: "soda-fountain-2", type: "soda-fountain", roomId: "soda-service", position: [7.8, 0, 63.6], rotation: 0, footprint: [1.8, 0.95] },
@@ -358,8 +420,8 @@ export const EQUIPMENT_ANCHORS = Object.freeze([
 ]);
 
 export const POS_STATIONS = Object.freeze([
-  [-17.3, shiftedZ(16.8)], [-17.9, shiftedZ(15.0)], [-18.5, shiftedZ(13.3)],
-  [-19.2, shiftedZ(11.5)], [-19.8, shiftedZ(9.7)], [-20.3, shiftedZ(8.0)],
+  [shiftedLobbyX(-17.3), shiftedZ(16.8)], [shiftedLobbyX(-17.9), shiftedZ(15.0)], [shiftedLobbyX(-18.5), shiftedZ(13.3)],
+  [shiftedLobbyX(-19.2), shiftedZ(11.5)], [shiftedLobbyX(-19.8), shiftedZ(9.7)], [shiftedLobbyX(-20.3), shiftedZ(8.0)],
 ].map(([x, z], index) => ({
   id: `concession-pos-${index + 1}`,
   position: [x, 0, z],
@@ -385,7 +447,7 @@ export const ALL_ZONES = Object.freeze([
 ]);
 
 export const MAP_BOUNDS = Object.freeze(rect(-41, 114, shiftedZ(-10), 99));
-export const PLAYER_SPAWN_PLAN = Object.freeze({ x: 1.5, y: 0, z: shiftedZ(-6.8) });
+export const PLAYER_SPAWN_PLAN = Object.freeze({ x: shiftedLobbyX(1.5), y: 0, z: shiftedZ(-6.8) });
 
 export const AUDITORIUM_ENTRY_ZONES = Object.freeze([
   { id: "theater-3-entry", name: "Theater 3 Entrance", detail: "Shared courtyard door · horizontal under-tier storage left · straight gentle incline into the bowl", bounds: rect(-21.5, -4.3, COURTYARD_BACK_WALL_Z, 99) },
@@ -480,6 +542,76 @@ export function validateLayoutData() {
   }
   if (LOBBY_PLAN.kitchenStorageDoor.wall !== "diagonal" || LOBBY_PLAN.kitchenStorageDoor.partitionSegment !== 1) {
     errors.push("Kitchen storage must connect to the kitchen through the diagonal partition.");
+  }
+  const lobby = PUBLIC_SPACES.find(({ id }) => id === "lobby");
+  const frontWalk = PUBLIC_SPACES.find(({ id }) => id === "front-walk");
+  const ticketCheck = PUBLIC_SPACES.find(({ id }) => id === "ticket-check");
+  const nearlyEqual = (first, second) => Math.abs(first - second) <= 1e-9;
+  if (!nearlyEqual(LOBBY_SHIFT_X, 8.3)
+    || !nearlyEqual(LOBBY_PLAN.customerCounter[0].x, TICKET_APPROACH_PLAN.bounds.xMin)) {
+    errors.push("V11 must shift the rigid lobby module 8.3 m so the guest-bar end aligns with the ticket approach.");
+  }
+  if (!nearlyEqual(LOBBY_PLAN.envelope.xMin, -28.7)
+    || !nearlyEqual(LOBBY_PLAN.envelope.xMax, 31.3)
+    || !nearlyEqual(lobby?.bounds.xMin, -16.2)
+    || !nearlyEqual(lobby?.bounds.xMax, 31.3)
+    || !nearlyEqual(frontWalk?.bounds.xMin, -18.7)
+    || !nearlyEqual(frontWalk?.bounds.xMax, 37.3)) {
+    errors.push("The complete V11 front walk and lobby envelope must retain the authoritative rigid X translation.");
+  }
+  if (LOBBY_CEILING_PLAN.multiplier !== 3
+    || !nearlyEqual(LOBBY_CEILING_PLAN.highHeight, LOBBY_CEILING_PLAN.baseHeight * 3)
+    || !LOBBY_CEILING_PLAN.highPublicSpaceIds.includes("lobby")) {
+    errors.push("The open lobby ceiling must be exactly three times the retained service-room height.");
+  }
+  if (LOBBY_PLAN.kiosks.length !== 3
+    || LOBBY_PLAN.kiosks.some((kiosk, index) => (
+      kiosk.id !== `ticket-kiosk-${index + 1}`
+      || !nearlyEqual(kiosk.position[0], 29.7)
+      || !nearlyEqual(kiosk.position[2], 0.8 + index * 2)
+    ))) {
+    errors.push("The shifted lobby must contain three evenly spaced ticket kiosks along its east wall.");
+  }
+  const boxOffice = serviceRoomById.get("box-office");
+  if (LOBBY_PLAN.boxOfficePos?.id !== "box-office-pos"
+    || LOBBY_PLAN.boxOfficePos.counterSegment !== "box-office-vertical"
+    || !pointInBounds(LOBBY_PLAN.boxOfficePos.position[0], LOBBY_PLAN.boxOfficePos.position[2], boxOffice?.bounds ?? rect(0, 0, 0, 0))) {
+    errors.push("The box-office POS must remain centered on the long leg of the shifted L counter.");
+  }
+  if (LOBBY_PLAN.ticketPodium?.id !== "ticket-podium-center"
+    || LOBBY_PLAN.ticketPodium.style !== "lectern"
+    || !nearlyEqual(LOBBY_PLAN.ticketPodium.position[0], (TICKET_APPROACH_PLAN.bounds.xMin + TICKET_APPROACH_PLAN.bounds.xMax) / 2)
+    || !pointInBounds(LOBBY_PLAN.ticketPodium.position[0], LOBBY_PLAN.ticketPodium.position[2], ticketCheck?.bounds ?? rect(0, 0, 0, 0))) {
+    errors.push("Ticket check must use one centered wooden lectern.");
+  }
+  const boxOfficeEastGap = LOBBY_PLAN.envelope.xMax - LOBBY_PLAN.boxOfficeReturn.xMax;
+  const boxOfficeStairGap = LOBBY_PLAN.futureStairs.xMin - LOBBY_PLAN.boxOfficeReturn.xMax;
+  const stairEastGap = LOBBY_PLAN.envelope.xMax - LOBBY_PLAN.futureStairs.xMax;
+  const kioskEastGap = LOBBY_PLAN.envelope.xMax - LOBBY_PLAN.kiosks[0].position[0];
+  if (![boxOfficeEastGap - 7.5, boxOfficeStairGap - 0.4, stairEastGap - 1, kioskEastGap - 1.6]
+    .every((difference) => Math.abs(difference) <= 1e-9)) {
+    errors.push("The V11 lobby shift must preserve every box-office, stair, kiosk, and east-wall gap.");
+  }
+  const [westPillar, eastPillar] = FOUNTAIN_PLAN.pillars ?? [];
+  const westPillarHalfWidth = (westPillar?.footprint?.[0] ?? 0) / 2;
+  const dividerEastFace = COURTYARD_PLAN.waistPartition.x + COURTYARD_PLAN.waistPartition.thickness / 2;
+  const dividerPassage = (westPillar?.position?.[0] ?? -Infinity) - westPillarHalfWidth - dividerEastFace;
+  if (FOUNTAIN_PLAN.pillars?.length !== 2
+    || westPillar?.id !== "fountain-island-west-pillar"
+    || eastPillar?.id !== "fountain-island-east-pillar"
+    || !nearlyEqual(dividerPassage, 1.11)
+    || dividerPassage <= 0.68
+    || FOUNTAIN_PLAN.pillars.some((pillar) => !nearlyEqual(pillar.height, LOBBY_CEILING_PLAN.highHeight))) {
+    errors.push("Two full-height fountain pillars must preserve the narrow but traversable divider passage.");
+  }
+  if (LOBBY_PLAN.muralFacade?.id !== "concession-mural-facade"
+    || !nearlyEqual(LOBBY_PLAN.muralFacade.start.x, LOBBY_PLAN.customerCounter[2].x)
+    || !nearlyEqual(LOBBY_PLAN.muralFacade.start.z, LOBBY_PLAN.customerCounter[2].z)
+    || !nearlyEqual(LOBBY_PLAN.muralFacade.end.x, LOBBY_PLAN.customerCounter[3].x)
+    || !nearlyEqual(LOBBY_PLAN.muralFacade.end.z, LOBBY_PLAN.customerCounter[3].z)
+    || LOBBY_PLAN.muralFacade.bottomY < LOBBY_CEILING_PLAN.baseHeight
+    || LOBBY_PLAN.muralFacade.topY > LOBBY_CEILING_PLAN.highHeight) {
+    errors.push("The elevated mural facade must project above the translated diagonal concession run.");
   }
   if (EQUIPMENT_ANCHORS.filter(({ type }) => type === "drinking-fountain").length !== 2) {
     errors.push("Two drinking fountains are required outside the boys restroom.");

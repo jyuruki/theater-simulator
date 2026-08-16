@@ -105,10 +105,13 @@ const {
   AUDITORIUMS,
   COURTYARD_PLAN,
   EQUIPMENT_ANCHORS,
+  FOUNTAIN_PLAN,
   FRONT_SHIFT_Z,
   HALL_END_EXITS,
   HALL_PLAN,
+  LOBBY_CEILING_PLAN,
   LOBBY_PLAN,
+  LOBBY_SHIFT_X,
   MAP_BOUNDS,
   PLAYER_SPAWN_PLAN,
   PUBLIC_SPACES,
@@ -827,6 +830,49 @@ navigationTargets.push(
   { id: "t3-task-partition-west", x: COURTYARD_PLAN.waistPartition.x - 0.7, z: 65.5 },
   { id: "t3-task-partition-east", x: COURTYARD_PLAN.waistPartition.x + 0.7, z: 65.5 },
 );
+const [westFountainPillar, eastFountainPillar] = FOUNTAIN_PLAN.pillars;
+const partitionEastFace = COURTYARD_PLAN.waistPartition.x + COURTYARD_PLAN.waistPartition.thickness / 2;
+const westPillarWestFace = westFountainPillar.position[0] - westFountainPillar.footprint[0] / 2;
+const westSqueezeCenterX = (partitionEastFace + westPillarWestFace) / 2;
+const westSqueezeWidth = westPillarWestFace - partitionEastFace;
+assertNear(westSqueezeWidth, 1.11, "west fountain divider/pillar squeeze width");
+assert.ok(westSqueezeWidth > PLAYER_RADIUS * 2 + 0.1, "West fountain squeeze must clear the player capsule.");
+const eastPillarWestFace = eastFountainPillar.position[0] - eastFountainPillar.footprint[0] / 2;
+const eastSqueezeCenterX = (FOUNTAIN_PLAN.island.xMax + eastPillarWestFace) / 2;
+const eastSqueezeWidth = eastPillarWestFace - FOUNTAIN_PLAN.island.xMax;
+assertNear(eastSqueezeWidth, 1.18, "east fountain counter/pillar squeeze width");
+assert.ok(eastSqueezeWidth > PLAYER_RADIUS * 2 + 0.1, "East fountain squeeze must clear the player capsule.");
+for (const [id, x] of [["west", westSqueezeCenterX], ["east", eastSqueezeCenterX]]) {
+  assertOpenPlanPoint(`${id} fountain pillar squeeze`, x, westFountainPillar.position[2]);
+  navigationTargets.push(
+    { id: `fountain-${id}-pillar-south-mouth`, x, z: FOUNTAIN_PLAN.island.zMin - 0.35 },
+    { id: `fountain-${id}-pillar-squeeze`, x, z: westFountainPillar.position[2] },
+    { id: `fountain-${id}-pillar-north-mouth`, x, z: FOUNTAIN_PLAN.island.zMax + 0.55 },
+  );
+}
+
+assert.equal(LOBBY_SHIFT_X, 8.3, "V11 lobby X translation must remain authoritative.");
+assertNear(LOBBY_CEILING_PLAN.highHeight, LOBBY_CEILING_PLAN.baseHeight * 3, "triple-height public lobby ceiling");
+assert.equal(LOBBY_PLAN.kiosks.length, 3, "V11 circulation smoke expects exactly three kiosks.");
+for (const kiosk of LOBBY_PLAN.kiosks) {
+  navigationTargets.push({
+    id: `${kiosk.id}-customer-approach`,
+    x: kiosk.position[0] - 1.2,
+    z: kiosk.position[2],
+  });
+}
+navigationTargets.push({
+  id: "box-office-pos-customer-approach",
+  x: LOBBY_PLAN.boxOfficePos.position[0] - 1.45,
+  z: LOBBY_PLAN.boxOfficePos.position[2],
+});
+const podium = LOBBY_PLAN.ticketPodium;
+navigationTargets.push(
+  { id: "central-lectern-approach-side", x: podium.position[0], z: podium.position[2] - 1 },
+  { id: "central-lectern-hall-side", x: podium.position[0], z: podium.position[2] + 1 },
+  { id: "translated-lobby-to-approach-seam-lobby", x: podium.position[0], z: LOBBY_PLAN.envelope.zMax - 0.8 },
+  { id: "translated-lobby-to-approach-seam-hall", x: podium.position[0], z: LOBBY_PLAN.envelope.zMax + 0.8 },
+);
 addBoundsTarget("ticket-poster-alcove", TICKET_APPROACH_PLAN.posterAlcove);
 addBoundsTarget("ticket-empty-alcove", TICKET_APPROACH_PLAN.emptyAlcove);
 
@@ -941,6 +987,9 @@ const farVoidProbes = [
   { id: "v9-theater-8-vacated-slab", x: 112, z: 80 },
   { id: "v9-theater-10-vacated-slab", x: 97, z: 48 },
   { id: "v9-theater-12-vacated-slab", x: 54.5, z: 48 },
+  { id: "v11-old-kitchen-west-ghost", x: -34, z: 10 },
+  { id: "v11-old-front-walk-west-ghost", x: -24, z: -7.5 },
+  { id: "v11-old-service-west-ghost", x: -33, z: 15 },
   { id: "old-boys-main-ghost", x: -30, z: 67 },
   { id: "old-boys-men-cubby-ghost", x: -25.4, z: 63.45 },
   { id: "theater-9-east-exterior-void", x: theater9.bounds.xMax + 0.7, z: theater9.entry.innerDoorCenter },
@@ -953,7 +1002,7 @@ assert.deepEqual(
   [],
   `Player can escape to rear/far void probes: ${escapedVoidProbes.map(({ id }) => id).join(", ")}`,
 );
-const ghostStructureProbes = farVoidProbes.filter(({ id }) => id.startsWith("v9-"));
+const ghostStructureProbes = farVoidProbes.filter(({ id }) => id.startsWith("v9-") || id.startsWith("v11-"));
 const retainedGhostStructures = ghostStructureProbes.filter(({ x, z }) => (
   structuralSurfaceAt(structuralFloors, x, z, 0.01)
   || structuralSurfaceAt(structuralCeilings, x, z, 0.01)
@@ -961,12 +1010,12 @@ const retainedGhostStructures = ghostStructureProbes.filter(({ x, z }) => (
 assert.deepEqual(
   retainedGhostStructures.map(({ id }) => id),
   [],
-  `V9-only vacated slabs retain floor/ceiling geometry: ${retainedGhostStructures.map(({ id }) => id).join(", ")}`,
+  `Vacated V9/V11 slabs retain floor/ceiling geometry: ${retainedGhostStructures.map(({ id }) => id).join(", ")}`,
 );
 
 world.dispose();
 materials.dispose();
 
 console.log(
-  `Navigation smoke valid: 14 bowls + ${navigationTargets.length - 14} V10 route targets reachable under rendered floors/ceilings · moved portals open · T6 stair leaf contained · V9 ghosts empty · geometry overlap-free.`,
+  `Navigation smoke valid: 14 bowls + ${navigationTargets.length - 14} V11 route targets reachable under rendered floors/ceilings · lobby/pillar circulation open · moved portals open · V9/V11 ghosts empty · geometry overlap-free.`,
 );

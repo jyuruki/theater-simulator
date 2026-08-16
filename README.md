@@ -6,7 +6,14 @@ A first-person, browser-based layout prototype for a multiplayer movie-theater s
 
 This is a spatial prototype—not an official measured architectural plan. It is unaffiliated with Consolidated Theatres.
 
-## What is in v0.10
+## What is in v0.11
+
+- A rigidly translated front-lobby block whose guest-bar endpoint now aligns with the fixed ticket approach, while the concession, kitchen, office/overflow rooms, box office, entrance, and all attached equipment retain their established shapes and spacing
+- A three-times-taller public lobby and dark-tile fountain court with an exposed charcoal ceiling, while the red-carpet corridors and low office/kitchen service roofs remain at their prior height
+- A projecting mural fascia above the diagonal concession run, using original procedural botanical artwork informed by the supplied lobby reference rather than copying the photographed mural
+- Three customer ticket kiosks, one POS on the long box-office counter, and one central wooden ticket lectern replacing the former paired checkpoint stands
+- Two full-height white pillars bracketing the fountain island, including the deliberately narrow but player-tested passage beside the Theater 3 divider
+- Hallway-charcoal exterior faces and warm white interior faces on the Women's Restroom shell
 
 - A roughly 15%-shorter main theater hall, with complete auditorium and service-room modules shifted rigidly so none of their internal layouts, seating bowls, cubbies, or routes are stretched
 - Correct hall encounter order from ticket check toward the Theater 9 exit: Theaters 14/13/6 together, Women's Restroom, Theater 12, Theater 7, Theater 11, Theater 10, Theater 8, then Theater 9 with Candy Storage
@@ -19,7 +26,7 @@ This is a spatial prototype—not an official measured architectural plan. It is
 - Hallway-dark public finishes around the drinking fountains and MEN entry, while the restroom-facing surfaces retain their lighter interior finish
 
 - A physically corrected left/right plan: concessions are on the guest's left when entering, with the map and first-person heading using the same orientation
-- A much larger gray-stone lobby rebuilt from the detailed lobby sketch: three double-door banks, two ticket kiosks, the corrected L-shaped box office, a reserved future stair footprint, and an overflow-room-to-office sequence
+- A much larger gray-stone lobby rebuilt from the detailed lobby sketch: three double-door banks, three ticket kiosks, the corrected L-shaped box office, a reserved future stair footprint, and an overflow-room-to-office sequence
 - The deliberately bent concession/bar counter, with six POS systems only on its diagonal face, a separate back bar, the sketched angled kitchen partition, two poppers, two fryers, grill, and turbo oven
 - A real diagonal doorway connecting kitchen storage to the kitchen, while retaining the separate service doorway shown in the lobby sketch
 - All 14 stadium-style auditoriums with 1,093 procedurally placed brown-leather seats and tray tables
@@ -36,7 +43,7 @@ This is a spatial prototype—not an official measured architectural plan. It is
 - Deeper, joined turn pockets for paired Theaters 1/2 and 13/14, Theater 9's entrance on the first-person left of its cubby with the auditorium extending left from it, and clear rear landings that reach both side stairs without seat/wall clipping
 - A fountain-width ticket approach with true two-wall 90-degree poster/empty alcoves, a waist-high divider between Theater 3 and the task room, and a shallow rectangular candy room with one hall door and no invented exterior exit
 - Desktop and touch first-person controls, 30%-faster walking/running, grounded jump with low-ceiling headroom protection, wall sliding without teleport recovery, stadium aisle elevations, and a live floor-plan minimap
-- A source-driven V10 minimap that preserves plan orientation and draws the compressed stepped hall, reordered auditorium modules, revised BB/H₂O/MEN frontage, Theater 6 vestibule stair, Theater 3 route and lower storage, courtyard west edge, and Theater 9 cubby directly from the same layout records used by the world
+- A source-driven V11 minimap that preserves plan orientation and draws the translated lobby, compressed stepped hall, reordered auditorium modules, revised BB/H₂O/MEN frontage, Theater 6 vestibule stair, Theater 3 route and lower storage, courtyard west edge, and Theater 9 cubby directly from the same layout records used by the world
 - Always-resident auditorium interiors, extended fog distance, and single-owner floors/walls to eliminate proximity pop-in and the most common flashing surfaces
 - Procedural materials, original island-botanical lobby art, room signs, screens, acoustic panels, leather, trays, and instanced seating
 
@@ -72,7 +79,7 @@ npm test
 npm run build
 ```
 
-`npm test` protects the 14-theater grouping, exact 1,093-seat total, compact courtyard order, paired cubby handedness and clearance, top/bottom entry models, half-step side stairs, lower-storage and route roofs, exact restroom fixture banks, mirrored coordinate transform, room IDs, lobby-counter vertices, equipment anchors, and six diagonal POS stations. It constructs the complete Three.js world headlessly and checks rendered-floor continuity, ceiling coverage, room reachability, containment, wall sliding, no-teleport movement, low-roof jumping, and manual recovery. GitHub Actions runs the same checks and deploys the built `dist` directory after changes reach `main` once the repository's Pages source is set to **GitHub Actions**.
+`npm test` protects the 14-theater grouping, exact 1,093-seat total, compact courtyard order, paired cubby handedness and clearance, top/bottom entry models, half-step side stairs, lower-storage and route roofs, exact restroom fixture banks and face finishes, mirrored coordinate transform, room IDs, rigid lobby translation, high/low ceiling zones, equipment anchors, six concession POS stations, the box-office POS, lectern, kiosks, and fountain-pillar clearance. It constructs the complete Three.js world headlessly and checks rendered-floor continuity, ceiling coverage, room reachability, containment, wall sliding, no-teleport movement, low-roof jumping, and manual recovery. GitHub Actions runs the same checks and deploys the built `dist` directory after changes reach `main` once the repository's Pages source is set to **GitHub Actions**.
 
 ## Layout decisions and current limits
 
