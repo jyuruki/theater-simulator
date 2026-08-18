@@ -9,9 +9,11 @@ const rect = (xMin, xMax, zMin, zMax) => ({ xMin, xMax, zMin, zMax });
 // V12 closes the concession volume with an attached mural soffit, realigns the
 // kitchen back wall, and authors the photographed counter/service cadence.
 // V13 keeps those authored fixtures while tightening the stair / box-office
-// side of the lobby, attaching a longer mural surround to the kitchen volume,
-// closing the triangular back-of-house void, and moving the fountain island
-// deeper into its court.
+// side of the lobby and moving the fountain island deeper into its court.
+// V14 restores V12's kitchen partition and connector nook, limits the sealed
+// floor mismatch to its genuinely tiny triangular wedge, and fixes the mural
+// to the literal door-left-to-back-bar line with a continuous low roof and a
+// dense exposed-mechanical field overhead.
 export const FRONT_SHIFT_Z = -2.5;
 export const LOBBY_SHIFT_X = 8.3;
 const shiftedZ = (value) => value + FRONT_SHIFT_Z;
@@ -467,40 +469,35 @@ const CUSTOMER_COUNTER_SECTIONS = Object.freeze([
 const BACK_BAR_BOUNDS = shiftedLobbyRect(-16.1, -8.6, 23.05, 24);
 const KITCHEN_CEILING_BOUNDS = shiftedLobbyRect(-29, -17.8, 17, 24);
 const MURAL_FASCIA_DEPTH = 0.7;
-const MURAL_REAR_OFFSET = 1.1;
 const MURAL_ARTWORK_WIDTH = concessionRunLength - MURAL_FASCIA_DEPTH;
 const MURAL_ARTWORK_HEIGHT = 4.3;
-const MURAL_REAR_AXIS_START = KITCHEN_PARTITION[5];
-const muralAxisGuide = KITCHEN_PARTITION[3];
-const MURAL_REAR_AXIS_END_Z = BACK_BAR_BOUNDS.zMin - 0.5;
-const muralAxisEndT = (MURAL_REAR_AXIS_END_Z - MURAL_REAR_AXIS_START.z)
-  / (muralAxisGuide.z - MURAL_REAR_AXIS_START.z);
-const MURAL_REAR_AXIS_END = Object.freeze({
-  x: MURAL_REAR_AXIS_START.x + (muralAxisGuide.x - MURAL_REAR_AXIS_START.x) * muralAxisEndT,
-  z: MURAL_REAR_AXIS_END_Z,
-});
-const muralRearAxisDx = MURAL_REAR_AXIS_END.x - MURAL_REAR_AXIS_START.x;
-const muralRearAxisDz = MURAL_REAR_AXIS_END.z - MURAL_REAR_AXIS_START.z;
-const muralSurroundWidth = Math.hypot(muralRearAxisDx, muralRearAxisDz);
+const MURAL_BOTTOM_Y = LOBBY_CEILING_PLAN.baseHeight;
+const MURAL_TOP_Y = MURAL_BOTTOM_Y + MURAL_ARTWORK_HEIGHT;
+// The pink plan line is literal: the facade begins immediately below / to the
+// plan-left of the kitchen service door (partition p7) and terminates at the
+// southwest start of the isolated back-bar table.
+const MURAL_AXIS_START = KITCHEN_PARTITION[7];
+const MURAL_AXIS_END = Object.freeze({ x: BACK_BAR_BOUNDS.xMin, z: BACK_BAR_BOUNDS.zMin });
+const muralAxisDx = MURAL_AXIS_END.x - MURAL_AXIS_START.x;
+const muralAxisDz = MURAL_AXIS_END.z - MURAL_AXIS_START.z;
+const muralSurroundWidth = Math.hypot(muralAxisDx, muralAxisDz);
 const muralAxisUnit = Object.freeze({
-  x: muralRearAxisDx / muralSurroundWidth,
-  z: muralRearAxisDz / muralSurroundWidth,
+  x: muralAxisDx / muralSurroundWidth,
+  z: muralAxisDz / muralSurroundWidth,
 });
-const muralSurroundStart = Object.freeze({
-  x: MURAL_REAR_AXIS_START.x + concessionGuestNormal.x * MURAL_REAR_OFFSET,
-  z: MURAL_REAR_AXIS_START.z + concessionGuestNormal.z * MURAL_REAR_OFFSET,
+const muralGuestNormal = Object.freeze({
+  x: muralAxisUnit.z,
+  z: -muralAxisUnit.x,
 });
-const muralSurroundEnd = Object.freeze({
-  x: MURAL_REAR_AXIS_END.x + concessionGuestNormal.x * MURAL_REAR_OFFSET,
-  z: MURAL_REAR_AXIS_END.z + concessionGuestNormal.z * MURAL_REAR_OFFSET,
-});
+const muralSurroundStart = MURAL_AXIS_START;
+const muralSurroundEnd = MURAL_AXIS_END;
 const muralRearFaceStart = Object.freeze({
-  x: muralSurroundStart.x - concessionGuestNormal.x * MURAL_FASCIA_DEPTH / 2,
-  z: muralSurroundStart.z - concessionGuestNormal.z * MURAL_FASCIA_DEPTH / 2,
+  x: muralSurroundStart.x - muralGuestNormal.x * MURAL_FASCIA_DEPTH / 2,
+  z: muralSurroundStart.z - muralGuestNormal.z * MURAL_FASCIA_DEPTH / 2,
 });
 const muralRearFaceEnd = Object.freeze({
-  x: muralSurroundEnd.x - concessionGuestNormal.x * MURAL_FASCIA_DEPTH / 2,
-  z: muralSurroundEnd.z - concessionGuestNormal.z * MURAL_FASCIA_DEPTH / 2,
+  x: muralSurroundEnd.x - muralGuestNormal.x * MURAL_FASCIA_DEPTH / 2,
+  z: muralSurroundEnd.z - muralGuestNormal.z * MURAL_FASCIA_DEPTH / 2,
 });
 const muralGrayFillWidth = (muralSurroundWidth - MURAL_ARTWORK_WIDTH) / 2;
 const muralArtworkStart = Object.freeze({
@@ -515,40 +512,73 @@ const pointAtZ = (start, end, z) => Object.freeze({
   x: start.x + (end.x - start.x) * ((z - start.z) / (end.z - start.z)),
   z,
 });
-const muralAxisAtKitchenCeiling = pointAtZ(
-  MURAL_REAR_AXIS_START,
-  MURAL_REAR_AXIS_END,
-  KITCHEN_CEILING_BOUNDS.zMin,
-);
-const muralRearFaceAtKitchenCeiling = pointAtZ(
+const pointAtX = (start, end, x) => Object.freeze({
+  x,
+  z: start.z + (end.z - start.z) * ((x - start.x) / (end.x - start.x)),
+});
+const segmentLineIntersection = (firstStart, firstEnd, secondStart, secondEnd) => {
+  const firstDx = firstEnd.x - firstStart.x;
+  const firstDz = firstEnd.z - firstStart.z;
+  const secondDx = secondEnd.x - secondStart.x;
+  const secondDz = secondEnd.z - secondStart.z;
+  const denominator = firstDx * secondDz - firstDz * secondDx;
+  const offsetX = secondStart.x - firstStart.x;
+  const offsetZ = secondStart.z - firstStart.z;
+  const firstT = (offsetX * secondDz - offsetZ * secondDx) / denominator;
+  return Object.freeze({
+    x: firstStart.x + firstDx * firstT,
+    z: firstStart.z + firstDz * firstT,
+  });
+};
+const muralRearLowIntersection = pointAtX(
   muralRearFaceStart,
   muralRearFaceEnd,
-  KITCHEN_CEILING_BOUNDS.zMin,
+  KITCHEN_PARTITION[6].x,
 );
-// South of the rectangular kitchen ceiling this narrow quadrilateral closes
-// the gap between the rear-axis wall and the staff-side face of the surround.
-// North of the shared 14.5 m edge, the existing kitchen roof owns the plane.
-const MURAL_SOFFIT_VERTICES = Object.freeze([
+const muralRearHighIntersection = segmentLineIntersection(
   muralRearFaceStart,
-  MURAL_REAR_AXIS_START,
-  muralAxisAtKitchenCeiling,
-  muralRearFaceAtKitchenCeiling,
+  muralRearFaceEnd,
+  MURAL_AXIS_END,
+  KITCHEN_PARTITION[3],
+);
+// This low slab fills the clipped plan gap between the pink facade and the
+// restored V12 p7→p5→p3 kitchen wall. The endpoint strips are closed by the
+// fascia itself, while the clipped high edge meets the main kitchen roof.
+const MURAL_SOFFIT_VERTICES = Object.freeze([
+  muralRearLowIntersection,
+  muralRearHighIntersection,
+  KITCHEN_PARTITION[3],
+  KITCHEN_PARTITION[4],
+  KITCHEN_PARTITION[5],
+  KITCHEN_PARTITION[6],
 ]);
 
+// V13 accidentally sealed the entire p2/p3/p5 work triangle. V14 restores
+// that connector nook and isolates only the 0.2 m-deep sliver between the
+// nearly-horizontal p2→p3 wall and the restored counter-parallel p3→p5 wall.
+const DEAD_WEDGE_AXIS_POINT = pointAtZ(
+  KITCHEN_PARTITION[5],
+  KITCHEN_PARTITION[3],
+  KITCHEN_PARTITION[2].z,
+);
 const KITCHEN_DEAD_SPACE_VERTICES = Object.freeze([
   KITCHEN_PARTITION[2],
   KITCHEN_PARTITION[3],
+  DEAD_WEDGE_AXIS_POINT,
+]);
+const KITCHEN_CONNECTOR_NOOK_VERTICES = Object.freeze([
+  KITCHEN_PARTITION[2],
+  DEAD_WEDGE_AXIS_POINT,
   KITCHEN_PARTITION[5],
 ]);
-const deadSpaceWallAtKitchenCeiling = pointAtZ(
-  KITCHEN_PARTITION[5],
+const KITCHEN_MAIN_CEILING_VERTICES = Object.freeze([
   KITCHEN_PARTITION[2],
-  KITCHEN_CEILING_BOUNDS.zMin,
-);
-const KITCHEN_DEAD_SPACE_CEILING_VERTICES = Object.freeze([
-  KITCHEN_PARTITION[5],
-  deadSpaceWallAtKitchenCeiling,
-  muralAxisAtKitchenCeiling,
+  KITCHEN_PARTITION[3],
+  MURAL_AXIS_END,
+  Object.freeze({ x: KITCHEN_CEILING_BOUNDS.xMax, z: KITCHEN_CEILING_BOUNDS.zMax }),
+  Object.freeze({ x: KITCHEN_CEILING_BOUNDS.xMin, z: KITCHEN_CEILING_BOUNDS.zMax }),
+  KITCHEN_PARTITION[0],
+  KITCHEN_PARTITION[1],
 ]);
 
 const OFFICE_ATTIC_BOUNDS = shiftedLobbyRect(-36.5, -24.5, 0.4, 7);
@@ -561,6 +591,37 @@ const OFFICE_DOOR_WALL_END = Object.freeze({
   z: shiftedZ(3.8),
 });
 
+const mechanicalPoint = (x, y, z) => Object.freeze({ x, y, z });
+const mechanicalPlanPoint = (x, z) => Object.freeze({ x, z });
+const OVERHEAD_DUCTS = Object.freeze([
+  Object.freeze({ id: "lobby-overhead-duct-main-diagonal", start: mechanicalPlanPoint(-25.5, 6), end: mechanicalPlanPoint(1.5, 18), y: 12.4, width: 1.05, height: 0.8, materialKey: "hvacDuct" }),
+  Object.freeze({ id: "lobby-overhead-duct-rear-header", start: mechanicalPlanPoint(-24, 20.4), end: mechanicalPlanPoint(5, 20.4), y: 11.7, width: 0.9, height: 0.7, materialKey: "hvacDuct" }),
+  Object.freeze({ id: "lobby-overhead-duct-west-cross", start: mechanicalPlanPoint(-22, 1.2), end: mechanicalPlanPoint(-22, 21), y: 10.9, width: 0.7, height: 0.65, materialKey: "hvacDuct" }),
+  Object.freeze({ id: "lobby-overhead-duct-center-cross", start: mechanicalPlanPoint(-14.5, 0.5), end: mechanicalPlanPoint(-14.5, 21), y: 12.7, width: 0.65, height: 0.55, materialKey: "hvacDuct" }),
+  Object.freeze({ id: "lobby-overhead-duct-mural-diagonal", start: mechanicalPlanPoint(-18.5, 2), end: mechanicalPlanPoint(-6.3, 21), y: 11.25, width: 0.78, height: 0.62, materialKey: "hvacDuct" }),
+  Object.freeze({ id: "lobby-overhead-duct-east-branch", start: mechanicalPlanPoint(-8, -1), end: mechanicalPlanPoint(4, 16), y: 12, width: 0.6, height: 0.5, materialKey: "hvacDuct" }),
+]);
+const OVERHEAD_PIPES = Object.freeze([
+  Object.freeze({ id: "lobby-overhead-pipe-diagonal-1", start: mechanicalPoint(-27, 12.9, 3), end: mechanicalPoint(-5, 12.9, 21), radius: 0.14, materialKey: "utilityPipe" }),
+  Object.freeze({ id: "lobby-overhead-pipe-diagonal-2", start: mechanicalPoint(-24, 11.8, 2), end: mechanicalPoint(-2, 11.8, 20), radius: 0.12, materialKey: "black" }),
+  Object.freeze({ id: "lobby-overhead-pipe-diagonal-3", start: mechanicalPoint(-20, 10.4, 0), end: mechanicalPoint(1, 10.4, 17.5), radius: 0.1, materialKey: "utilityPipe" }),
+  Object.freeze({ id: "lobby-overhead-pipe-diagonal-4", start: mechanicalPoint(-17, 13.1, -1), end: mechanicalPoint(4, 13.1, 16), radius: 0.09, materialKey: "black" }),
+  Object.freeze({ id: "lobby-overhead-pipe-header-1", start: mechanicalPoint(-27, 10.2, 6), end: mechanicalPoint(3, 10.2, 6), radius: 0.12, materialKey: "black" }),
+  Object.freeze({ id: "lobby-overhead-pipe-header-2", start: mechanicalPoint(-26, 11.4, 9.2), end: mechanicalPoint(4, 11.4, 9.2), radius: 0.1, materialKey: "utilityPipe" }),
+  Object.freeze({ id: "lobby-overhead-pipe-header-3", start: mechanicalPoint(-25, 12.1, 12.4), end: mechanicalPoint(5, 12.1, 12.4), radius: 0.12, materialKey: "black" }),
+  Object.freeze({ id: "lobby-overhead-pipe-header-4", start: mechanicalPoint(-24, 10.8, 15.6), end: mechanicalPoint(5, 10.8, 15.6), radius: 0.11, materialKey: "utilityPipe" }),
+  Object.freeze({ id: "lobby-overhead-pipe-header-5", start: mechanicalPoint(-22, 12.9, 18.8), end: mechanicalPoint(4, 12.9, 18.8), radius: 0.13, materialKey: "black" }),
+  Object.freeze({ id: "lobby-overhead-pipe-cross-1", start: mechanicalPoint(-24, 13.2, 0.5), end: mechanicalPoint(-24, 13.2, 21), radius: 0.08, materialKey: "utilityPipe" }),
+  Object.freeze({ id: "lobby-overhead-pipe-cross-2", start: mechanicalPoint(-19, 11.1, -1), end: mechanicalPoint(-19, 11.1, 21), radius: 0.1, materialKey: "black" }),
+  Object.freeze({ id: "lobby-overhead-pipe-cross-3", start: mechanicalPoint(-11, 12.55, -1), end: mechanicalPoint(-11, 12.55, 21), radius: 0.09, materialKey: "utilityPipe" }),
+  Object.freeze({ id: "lobby-overhead-pipe-cross-4", start: mechanicalPoint(-4, 10.4, 1), end: mechanicalPoint(-4, 10.4, 20), radius: 0.11, materialKey: "black" }),
+  Object.freeze({ id: "lobby-overhead-pipe-branch-1", start: mechanicalPoint(-16, 9.8, 5), end: mechanicalPoint(-8, 9.8, 5), radius: 0.1, materialKey: "utilityPipe" }),
+  Object.freeze({ id: "lobby-overhead-pipe-branch-2", start: mechanicalPoint(-18, 9.9, 17), end: mechanicalPoint(-8, 9.9, 17), radius: 0.1, materialKey: "black" }),
+  Object.freeze({ id: "lobby-overhead-pipe-branch-3", start: mechanicalPoint(-9, 11, 8), end: mechanicalPoint(2, 11, 8), radius: 0.09, materialKey: "utilityPipe" }),
+  Object.freeze({ id: "lobby-overhead-pipe-riser-west", start: mechanicalPoint(-23, 9.4, 4), end: mechanicalPoint(-23, 12.8, 4), radius: 0.14, materialKey: "black" }),
+  Object.freeze({ id: "lobby-overhead-pipe-riser-east", start: mechanicalPoint(-6, 9.6, 19), end: mechanicalPoint(-6, 12.5, 19), radius: 0.12, materialKey: "utilityPipe" }),
+]);
+
 export const LOBBY_PLAN = Object.freeze({
   envelope: rect(LOBBY_ENVELOPE_WEST_X, LOBBY_EAST_X, shiftedZ(0), LOBBY_BACK_Z),
   frontDoorCenters: [shiftedLobbyX(-10.8), shiftedLobbyX(-2.2), shiftedLobbyX(8.7)],
@@ -571,10 +632,12 @@ export const LOBBY_PLAN = Object.freeze({
   hotLine: shiftedLobbyRect(-28.8, -17.8, 23.05, 24),
   kitchenPartition: KITCHEN_PARTITION,
   concessionBackWall: Object.freeze({
-    id: "concession-mural-rear-axis-wall",
-    start: MURAL_REAR_AXIS_START,
-    end: MURAL_REAR_AXIS_END,
-    junction: KITCHEN_PARTITION[3],
+    id: "concession-back-wall-parallel",
+    start: KITCHEN_PARTITION[3],
+    midpoint: KITCHEN_PARTITION[4],
+    end: KITCHEN_PARTITION[5],
+    counterRunFraction: 2 / 3,
+    mergedPartitionSegments: Object.freeze([3, 4]),
     height: LOBBY_CEILING_PLAN.baseHeight,
     materialKey: "wall",
   }),
@@ -587,30 +650,71 @@ export const LOBBY_PLAN = Object.freeze({
     connects: Object.freeze(["kitchen-storage", "kitchen"]),
   },
   kitchenDeadSpace: Object.freeze({
-    id: "kitchen-dead-space",
+    id: "kitchen-dead-wedge",
     vertices: KITCHEN_DEAD_SPACE_VERTICES,
+    area: Math.abs(
+      (KITCHEN_PARTITION[3].x - KITCHEN_PARTITION[2].x)
+        * (DEAD_WEDGE_AXIS_POINT.z - KITCHEN_PARTITION[2].z)
+      - (KITCHEN_PARTITION[3].z - KITCHEN_PARTITION[2].z)
+        * (DEAD_WEDGE_AXIS_POINT.x - KITCHEN_PARTITION[2].x)
+    ) / 2,
+    maxDepth: KITCHEN_PARTITION[3].z - KITCHEN_PARTITION[2].z,
     floorMaterialKey: "floorDark",
     separatingWall: Object.freeze({
-      id: "kitchen-dead-space-separating-wall",
-      start: KITCHEN_PARTITION[5],
-      end: KITCHEN_PARTITION[2],
+      id: "kitchen-dead-wedge-separating-wall",
+      start: KITCHEN_PARTITION[2],
+      end: DEAD_WEDGE_AXIS_POINT,
       height: LOBBY_CEILING_PLAN.baseHeight,
       materialKey: "wall",
     }),
+    sharedPartitionEdges: Object.freeze([
+      Object.freeze({ segmentIndex: 2, start: KITCHEN_PARTITION[2], end: KITCHEN_PARTITION[3] }),
+      Object.freeze({ segmentIndex: 3, start: KITCHEN_PARTITION[3], end: DEAD_WEDGE_AXIS_POINT }),
+    ]),
     ceiling: Object.freeze({
-      id: "kitchen-dead-space-ceiling",
+      id: "kitchen-dead-wedge-ceiling",
       elevation: LOBBY_CEILING_PLAN.baseHeight,
       thickness: 0.1,
-      vertices: KITCHEN_DEAD_SPACE_CEILING_VERTICES,
-      sharedKitchenEdgeZ: KITCHEN_CEILING_BOUNDS.zMin,
+      vertices: KITCHEN_DEAD_SPACE_VERTICES,
+    }),
+  }),
+  kitchenConnectorNook: Object.freeze({
+    id: "kitchen-storage-connector-nook",
+    vertices: KITCHEN_CONNECTOR_NOOK_VERTICES,
+    preservedDoorSegment: 1,
+    preservedBackWallSegments: Object.freeze([3, 4]),
+    connects: Object.freeze(["kitchen-storage", "kitchen"]),
+    floorMaterialKey: "floorDark",
+    ceiling: Object.freeze({
+      id: "kitchen-connector-nook-ceiling",
+      elevation: LOBBY_CEILING_PLAN.baseHeight,
+      thickness: 0.1,
+      vertices: KITCHEN_CONNECTOR_NOOK_VERTICES,
     }),
   }),
   kitchenCeiling: Object.freeze({
-    id: "kitchen-low-ceiling",
-    bounds: KITCHEN_CEILING_BOUNDS,
+    id: "kitchen-complete-low-ceiling",
+    legacyBounds: KITCHEN_CEILING_BOUNDS,
     elevation: LOBBY_CEILING_PLAN.baseHeight,
+    replacementForRoomId: "kitchen",
+    surfaces: Object.freeze([
+      Object.freeze({
+        id: "kitchen-complete-ceiling",
+        elevation: LOBBY_CEILING_PLAN.baseHeight,
+        thickness: 0.1,
+        vertices: KITCHEN_MAIN_CEILING_VERTICES,
+      }),
+      Object.freeze({
+        id: "kitchen-connector-nook-ceiling",
+        elevation: LOBBY_CEILING_PLAN.baseHeight,
+        thickness: 0.1,
+        vertices: KITCHEN_CONNECTOR_NOOK_VERTICES,
+      }),
+    ]),
     closureSurfaceIds: Object.freeze([
-      "kitchen-dead-space-ceiling",
+      "kitchen-complete-ceiling",
+      "kitchen-connector-nook-ceiling",
+      "kitchen-dead-wedge-ceiling",
       "concession-mural-soffit",
     ]),
   }),
@@ -618,7 +722,7 @@ export const LOBBY_PLAN = Object.freeze({
     id: "office-door-attic",
     bounds: OFFICE_ATTIC_BOUNDS,
     baseY: LOBBY_CEILING_PLAN.baseHeight,
-    topY: 10.6,
+    topY: MURAL_TOP_Y,
     materialKey: "wall",
     doorWall: Object.freeze({
       id: "office-door-attic-wall",
@@ -690,33 +794,35 @@ export const LOBBY_PLAN = Object.freeze({
   }),
   muralFacade: Object.freeze({
     id: "concession-mural-facade",
-    start: MURAL_REAR_AXIS_START,
-    end: MURAL_REAR_AXIS_END,
-    projection: MURAL_REAR_OFFSET,
-    rearOffset: MURAL_REAR_OFFSET,
+    start: MURAL_AXIS_START,
+    end: MURAL_AXIS_END,
+    projection: 0,
+    rearOffset: 0,
     fasciaDepth: MURAL_FASCIA_DEPTH,
     projectedStart: muralSurroundStart,
     projectedEnd: muralSurroundEnd,
-    bottomY: LOBBY_CEILING_PLAN.baseHeight,
-    topY: 10.6,
+    bottomY: MURAL_BOTTOM_Y,
+    topY: MURAL_TOP_Y,
     muralHeight: MURAL_ARTWORK_HEIGHT,
     axis: Object.freeze({
-      id: "concession-mural-rear-axis",
-      start: MURAL_REAR_AXIS_START,
-      end: MURAL_REAR_AXIS_END,
+      id: "concession-mural-door-to-bar-axis",
+      start: MURAL_AXIS_START,
+      end: MURAL_AXIS_END,
       direction: muralAxisUnit,
       length: muralSurroundWidth,
-      lowAnchor: "kitchen-partition-p5-north-door-jamb",
-      highClearanceToBackBar: BACK_BAR_BOUNDS.zMin - MURAL_REAR_AXIS_END.z,
+      guestNormal: muralGuestNormal,
+      lowAnchor: "kitchen-partition-p7-plan-left-door-side",
+      highAnchor: "back-bar-southwest-start",
     }),
     surround: Object.freeze({
       id: "concession-mural-surround",
       start: muralSurroundStart,
       end: muralSurroundEnd,
       width: muralSurroundWidth,
-      height: 10.6 - LOBBY_CEILING_PLAN.baseHeight,
+      height: MURAL_ARTWORK_HEIGHT,
       depth: MURAL_FASCIA_DEPTH,
-      rearOffset: MURAL_REAR_OFFSET,
+      rearOffset: 0,
+      verticalGrayFill: Object.freeze({ top: 0, bottom: 0 }),
       materialKey: "concrete",
     }),
     artwork: Object.freeze({
@@ -733,6 +839,7 @@ export const LOBBY_PLAN = Object.freeze({
         start: muralSurroundStart,
         end: muralArtworkStart,
         width: muralGrayFillWidth,
+        height: MURAL_ARTWORK_HEIGHT,
         materialKey: "concrete",
       }),
       Object.freeze({
@@ -740,22 +847,33 @@ export const LOBBY_PLAN = Object.freeze({
         start: muralArtworkEnd,
         end: muralSurroundEnd,
         width: muralGrayFillWidth,
+        height: MURAL_ARTWORK_HEIGHT,
         materialKey: "concrete",
       }),
     ]),
-    returnAnchors: Object.freeze({ start: MURAL_REAR_AXIS_START, end: MURAL_REAR_AXIS_END }),
-    // Returns meet the rear face of the projecting fascia, which is also the
-    // first soffit edge. Using the fascia centerline here leaves a triangular
-    // ceiling slit at the ends.
+    returnAnchors: Object.freeze({ start: MURAL_AXIS_START, end: MURAL_AXIS_END }),
+    // Returns meet the rear face of the projecting fascia. The soffit is
+    // clipped inward to its two wall intersections, so the fascia closes the
+    // short endpoint strips without a crossing or ceiling overlap.
     returnTargets: Object.freeze({ start: muralRearFaceStart, end: muralRearFaceEnd }),
     soffit: Object.freeze({
       id: "concession-mural-soffit",
       elevation: LOBBY_CEILING_PLAN.baseHeight,
       thickness: 0.1,
-      // Clipped at the rectangular kitchen ceiling's south edge so the low
-      // roofs meet without coplanar overlap or flashing.
+      // Runs from the two rear-face/wall intersections through p3→p6. The
+      // clipped high edge meets the complete kitchen roof; no coplanar regions
+      // overlap and the polygon remains simple.
       vertices: MURAL_SOFFIT_VERTICES,
     }),
+  }),
+  overheadMechanicals: Object.freeze({
+    id: "lobby-mural-overhead-mechanicals",
+    coverageBounds: rect(-27, 5, -1, 21),
+    minClearanceY: MURAL_TOP_Y + 0.5,
+    maxY: LOBBY_CEILING_PLAN.highHeight - 0.45,
+    ducts: OVERHEAD_DUCTS,
+    pipes: OVERHEAD_PIPES,
+    hangerSpacing: 2.4,
   }),
   officePath: ["lobby", "office-overflow", "office"],
 });
@@ -977,6 +1095,15 @@ export function validateLayoutData() {
     || !nearlyEqual(parallelMidpoint.z, (parallelStart.z + parallelEnd.z) / 2)) {
     errors.push("V12 kitchen partition points 3–5 must form a counter-parallel back wall spanning two-thirds of the concession run.");
   }
+  const concessionBackWall = LOBBY_PLAN.concessionBackWall;
+  if (concessionBackWall?.id !== "concession-back-wall-parallel"
+    || concessionBackWall.start !== parallelStart
+    || concessionBackWall.midpoint !== parallelMidpoint
+    || concessionBackWall.end !== parallelEnd
+    || !nearlyEqual(concessionBackWall.counterRunFraction, expectedParallelFraction)
+    || concessionBackWall.mergedPartitionSegments?.join(",") !== "3,4") {
+    errors.push("V14 must restore the merged p3→p5 counter-parallel kitchen wall and retain p4 only as its collinear midpoint.");
+  }
   if (LOBBY_PLAN.serviceDoor?.partitionSegment !== 5
     || !nearlyEqual(LOBBY_PLAN.serviceDoor?.x, (parallelEnd?.x + serviceDoorEnd?.x) / 2)
     || !nearlyEqual(LOBBY_PLAN.serviceDoor?.z, (parallelEnd?.z + serviceDoorEnd?.z) / 2)) {
@@ -1064,65 +1191,165 @@ export function validateLayoutData() {
   const muralArtwork = muralFacade?.artwork;
   const muralAxis = muralFacade?.axis;
   const segmentLength = (start, end) => Math.hypot(end.x - start.x, end.z - start.z);
+  const samePlanPoint = (first, second) => Boolean(first && second)
+    && nearlyEqual(first.x, second.x)
+    && nearlyEqual(first.z, second.z);
+  const polygonArea = (vertices = []) => Math.abs(vertices.reduce((sum, vertex, index) => {
+    const next = vertices[(index + 1) % vertices.length];
+    return sum + vertex.x * next.z - next.x * vertex.z;
+  }, 0)) / 2;
+  const expectedMuralAxisStart = partition[7];
+  const expectedMuralAxisEnd = Object.freeze({
+    x: LOBBY_PLAN.backBar.xMin,
+    z: LOBBY_PLAN.backBar.zMin,
+  });
+  const muralFillLow = muralFacade?.grayFills?.[0];
+  const muralFillHigh = muralFacade?.grayFills?.[1];
+  const muralFillRatio = muralFillLow?.width / muralArtwork?.width;
   if (muralFacade?.id !== "concession-mural-facade"
-    || muralAxis?.id !== "concession-mural-rear-axis"
-    || muralAxis?.start !== parallelEnd
-    || !nearlyEqual(muralAxis?.end.z, LOBBY_PLAN.backBar.zMin - 0.5)
+    || muralAxis?.id !== "concession-mural-door-to-bar-axis"
+    || !samePlanPoint(muralAxis?.start, expectedMuralAxisStart)
+    || !samePlanPoint(muralAxis?.end, expectedMuralAxisEnd)
+    || muralAxis?.lowAnchor !== "kitchen-partition-p7-plan-left-door-side"
+    || muralAxis?.highAnchor !== "back-bar-southwest-start"
+    || !nearlyEqual(muralAxis?.length, segmentLength(muralAxis.start, muralAxis.end))
+    || !nearlyEqual(Math.hypot(muralAxis?.direction?.x, muralAxis?.direction?.z), 1)
+    || !nearlyEqual(Math.hypot(muralAxis?.guestNormal?.x, muralAxis?.guestNormal?.z), 1)
     || !nearlyEqual(
-      (muralAxis.end.x - muralAxis.start.x) * concessionRunDz
-        - (muralAxis.end.z - muralAxis.start.z) * concessionRunDx,
+      muralAxis?.direction?.x * muralAxis?.guestNormal?.x
+        + muralAxis?.direction?.z * muralAxis?.guestNormal?.z,
       0,
     )
+    || !nearlyEqual(muralFacade.projection, 0)
+    || !nearlyEqual(muralFacade.rearOffset, 0)
+    || !samePlanPoint(muralFacade.start, expectedMuralAxisStart)
+    || !samePlanPoint(muralFacade.end, expectedMuralAxisEnd)
+    || !samePlanPoint(muralFacade.projectedStart, expectedMuralAxisStart)
+    || !samePlanPoint(muralFacade.projectedEnd, expectedMuralAxisEnd)
     || muralSurround?.id !== "concession-mural-surround"
+    || !samePlanPoint(muralSurround?.start, expectedMuralAxisStart)
+    || !samePlanPoint(muralSurround?.end, expectedMuralAxisEnd)
     || !nearlyEqual(muralSurround.width, segmentLength(muralSurround.start, muralSurround.end))
-    || !nearlyEqual(muralSurround.rearOffset, 1.1)
-    || !nearlyEqual(muralFacade.projectedStart.x, muralFacade.start.x + concessionGuestNormal.x * muralFacade.projection)
-    || !nearlyEqual(muralFacade.projectedStart.z, muralFacade.start.z + concessionGuestNormal.z * muralFacade.projection)
-    || !nearlyEqual(muralFacade.projectedEnd.x, muralFacade.end.x + concessionGuestNormal.x * muralFacade.projection)
-    || !nearlyEqual(muralFacade.projectedEnd.z, muralFacade.end.z + concessionGuestNormal.z * muralFacade.projection)
+    || !nearlyEqual(muralSurround.width, muralAxis.length)
+    || !nearlyEqual(muralSurround.height, MURAL_ARTWORK_HEIGHT)
+    || !nearlyEqual(muralSurround.depth, MURAL_FASCIA_DEPTH)
+    || !nearlyEqual(muralSurround.rearOffset, 0)
+    || !nearlyEqual(muralSurround.verticalGrayFill?.top, 0)
+    || !nearlyEqual(muralSurround.verticalGrayFill?.bottom, 0)
     || muralArtwork?.id !== "concession-botanical-mural"
     || muralArtwork?.preservedFromVersion !== 12
     || !nearlyEqual(muralArtwork?.width, concessionRunLength - MURAL_FASCIA_DEPTH)
     || !nearlyEqual(muralArtwork?.width, segmentLength(muralArtwork.start, muralArtwork.end))
-    || !nearlyEqual(muralArtwork?.height, 4.3)
+    || !nearlyEqual(muralArtwork?.height, MURAL_ARTWORK_HEIGHT)
+    || !nearlyEqual(muralFacade.muralHeight, MURAL_ARTWORK_HEIGHT)
+    || !nearlyEqual(muralFacade.bottomY, LOBBY_CEILING_PLAN.baseHeight)
+    || !nearlyEqual(muralFacade.topY - muralFacade.bottomY, muralArtwork.height)
     || muralFacade.grayFills?.length !== 2
-    || !nearlyEqual(muralFacade.grayFills?.[0]?.width, muralFacade.grayFills?.[1]?.width)
+    || muralFillLow?.id !== "concession-mural-gray-fill-low"
+    || muralFillHigh?.id !== "concession-mural-gray-fill-high"
+    || !nearlyEqual(muralFillLow?.width, muralFillHigh?.width)
+    || !nearlyEqual(muralFillLow?.height, muralArtwork.height)
+    || !nearlyEqual(muralFillHigh?.height, muralArtwork.height)
+    || muralFillRatio < 0.4
+    || muralFillRatio > 0.5
     || !nearlyEqual(
-      muralFacade.grayFills?.[0]?.width * 2 + muralArtwork?.width,
+      muralFillLow?.width * 2 + muralArtwork?.width,
       muralSurround?.width,
     )
-    || muralFacade.returnAnchors?.start !== muralAxis.start
-    || muralFacade.returnAnchors?.end !== muralAxis.end
-    || muralFacade.returnTargets?.start !== muralSoffit?.vertices?.[0]
-    || muralFacade.bottomY < LOBBY_CEILING_PLAN.baseHeight
+    || !samePlanPoint(muralFillLow?.start, muralSurround.start)
+    || !samePlanPoint(muralFillLow?.end, muralArtwork.start)
+    || !samePlanPoint(muralFillHigh?.start, muralArtwork.end)
+    || !samePlanPoint(muralFillHigh?.end, muralSurround.end)
+    || !samePlanPoint(muralFacade.returnAnchors?.start, muralAxis.start)
+    || !samePlanPoint(muralFacade.returnAnchors?.end, muralAxis.end)
+    || !samePlanPoint(muralFacade.returnTargets?.start, muralRearFaceStart)
+    || !samePlanPoint(muralFacade.returnTargets?.end, muralRearFaceEnd)
     || muralFacade.topY > LOBBY_CEILING_PLAN.highHeight) {
-    errors.push("V13 must use a door-jamb-to-back-bar rear axis, a 1.1 m attached surround, fixed V12 artwork dimensions, and equal gray side fills.");
+    errors.push("V14 mural surround must run exactly from kitchen p7 to the back-bar southwest start, retain the V12 artwork with zero vertical gray, and use equal near-half-width gray side panels.");
   }
   if (muralSoffit?.id !== "concession-mural-soffit"
     || !nearlyEqual(muralSoffit.elevation, LOBBY_CEILING_PLAN.baseHeight)
     || !nearlyEqual(muralSoffit.thickness, 0.1)
-    || muralSoffit.vertices?.length !== 4
-    || muralSoffit.vertices.some(({ x, z }) => !Number.isFinite(x) || !Number.isFinite(z)
-      || z > LOBBY_PLAN.kitchenCeiling.bounds.zMin + 1e-9)) {
-    errors.push("The V13 mural soffit must close the rear gap only south of the existing kitchen-ceiling edge.");
+    || muralSoffit.vertices?.length !== 6
+    || muralSoffit.vertices.some(({ x, z }) => !Number.isFinite(x) || !Number.isFinite(z))
+    || polygonArea(muralSoffit.vertices) <= 1
+    || !samePlanPoint(muralSoffit.vertices?.[0], muralRearLowIntersection)
+    || !samePlanPoint(muralSoffit.vertices?.[1], muralRearHighIntersection)
+    || muralSoffit.vertices?.[2] !== partition[3]
+    || muralSoffit.vertices?.[3] !== partition[4]
+    || muralSoffit.vertices?.[4] !== partition[5]
+    || muralSoffit.vertices?.[5] !== partition[6]) {
+    errors.push("The V14 mural soffit must be the simple six-point gap between the fascia rear face and restored p3→p6 kitchen boundary, without a crossing or roof overlap.");
   }
   const deadSpace = LOBBY_PLAN.kitchenDeadSpace;
-  if (deadSpace?.id !== "kitchen-dead-space"
+  const connectorNook = LOBBY_PLAN.kitchenConnectorNook;
+  const deadWedgeAxisPoint = deadSpace?.vertices?.[2];
+  const kitchenCeiling = LOBBY_PLAN.kitchenCeiling;
+  const kitchenMainCeiling = kitchenCeiling?.surfaces?.[0];
+  const connectorNookCeiling = kitchenCeiling?.surfaces?.[1];
+  const expectedClosureSurfaceIds = [
+    "kitchen-complete-ceiling",
+    "kitchen-connector-nook-ceiling",
+    "kitchen-dead-wedge-ceiling",
+    "concession-mural-soffit",
+  ];
+  if (deadSpace?.id !== "kitchen-dead-wedge"
     || deadSpace.vertices?.length !== 3
     || deadSpace.vertices?.[0] !== partition[2]
     || deadSpace.vertices?.[1] !== partition[3]
-    || deadSpace.vertices?.[2] !== partition[5]
-    || deadSpace.separatingWall?.id !== "kitchen-dead-space-separating-wall"
-    || deadSpace.separatingWall?.start !== partition[5]
-    || deadSpace.separatingWall?.end !== partition[2]
-    || deadSpace.ceiling?.id !== "kitchen-dead-space-ceiling"
+    || !samePlanPoint(deadWedgeAxisPoint, pointAtZ(partition[5], partition[3], partition[2].z))
+    || deadSpace.area >= 1
+    || !nearlyEqual(deadSpace.area, polygonArea(deadSpace.vertices))
+    || !nearlyEqual(deadSpace.maxDepth, 0.2)
+    || deadSpace.separatingWall?.id !== "kitchen-dead-wedge-separating-wall"
+    || deadSpace.separatingWall?.start !== partition[2]
+    || !samePlanPoint(deadSpace.separatingWall?.end, deadWedgeAxisPoint)
+    || deadSpace.sharedPartitionEdges?.length !== 2
+    || deadSpace.sharedPartitionEdges?.[0]?.segmentIndex !== 2
+    || deadSpace.sharedPartitionEdges?.[1]?.segmentIndex !== 3
+    || deadSpace.ceiling?.id !== "kitchen-dead-wedge-ceiling"
     || deadSpace.ceiling?.vertices?.length !== 3
-    || deadSpace.ceiling.vertices?.[0] !== muralSoffit?.vertices?.[1]
-    || deadSpace.ceiling.vertices?.[2] !== muralSoffit?.vertices?.[2]
-    || deadSpace.ceiling.vertices.some(({ z }) => z > LOBBY_PLAN.kitchenCeiling.bounds.zMin + 1e-9)
-    || !LOBBY_PLAN.kitchenCeiling.closureSurfaceIds?.includes(deadSpace.ceiling.id)
-    || !LOBBY_PLAN.kitchenCeiling.closureSurfaceIds?.includes(muralSoffit?.id)) {
-    errors.push("The changed-floor kitchen triangle must be dead space bounded by a separating wall and two non-overlapping low-roof closures.");
+    || deadSpace.ceiling.vertices !== deadSpace.vertices
+    || !nearlyEqual(deadSpace.ceiling.elevation, LOBBY_CEILING_PLAN.baseHeight)
+    || !nearlyEqual(deadSpace.ceiling.thickness, 0.1)) {
+    errors.push("V14 must isolate only the authored 0.2 m-deep kitchen wedge and give that tiny triangle its own separating wall and low ceiling.");
+  }
+  if (connectorNook?.id !== "kitchen-storage-connector-nook"
+    || connectorNook.vertices?.length !== 3
+    || connectorNook.vertices?.[0] !== partition[2]
+    || !samePlanPoint(connectorNook.vertices?.[1], deadWedgeAxisPoint)
+    || connectorNook.vertices?.[2] !== partition[5]
+    || connectorNook.preservedDoorSegment !== 1
+    || connectorNook.preservedBackWallSegments?.join(",") !== "3,4"
+    || connectorNook.connects?.join(",") !== "kitchen-storage,kitchen"
+    || connectorNook.ceiling?.id !== "kitchen-connector-nook-ceiling"
+    || connectorNook.ceiling?.vertices !== connectorNook.vertices
+    || !nearlyEqual(connectorNook.ceiling?.elevation, LOBBY_CEILING_PLAN.baseHeight)
+    || !nearlyEqual(connectorNook.ceiling?.thickness, 0.1)) {
+    errors.push("The kitchen-storage connector nook must remain open beside the diagonal connector door and retain the restored p3→p5 wall.");
+  }
+  if (kitchenCeiling?.id !== "kitchen-complete-low-ceiling"
+    || Object.hasOwn(kitchenCeiling ?? {}, "bounds")
+    || kitchenCeiling?.legacyBounds !== KITCHEN_CEILING_BOUNDS
+    || kitchenCeiling?.replacementForRoomId !== "kitchen"
+    || !nearlyEqual(kitchenCeiling?.elevation, LOBBY_CEILING_PLAN.baseHeight)
+    || kitchenCeiling?.surfaces?.length !== 2
+    || kitchenMainCeiling?.id !== "kitchen-complete-ceiling"
+    || kitchenMainCeiling?.vertices?.length !== 7
+    || kitchenMainCeiling.vertices?.[0] !== partition[2]
+    || kitchenMainCeiling.vertices?.[1] !== partition[3]
+    || !samePlanPoint(kitchenMainCeiling.vertices?.[2], expectedMuralAxisEnd)
+    || !nearlyEqual(kitchenMainCeiling?.elevation, LOBBY_CEILING_PLAN.baseHeight)
+    || !nearlyEqual(kitchenMainCeiling?.thickness, 0.1)
+    || polygonArea(kitchenMainCeiling?.vertices) <= 20
+    || connectorNookCeiling?.id !== "kitchen-connector-nook-ceiling"
+    || connectorNookCeiling?.vertices !== connectorNook.vertices
+    || !nearlyEqual(connectorNookCeiling?.elevation, LOBBY_CEILING_PLAN.baseHeight)
+    || !nearlyEqual(connectorNookCeiling?.thickness, 0.1)
+    || kitchenCeiling.closureSurfaceIds?.join(",") !== expectedClosureSurfaceIds.join(",")
+    || !samePlanPoint(kitchenMainCeiling.vertices?.[1], muralSoffit.vertices?.[2])
+    || !samePlanPoint(kitchenMainCeiling.vertices?.[2], expectedMuralAxisEnd)) {
+    errors.push("The complete kitchen roof must use the authored main polygon plus connector-nook slab and meet the mural soffit edge without a coplanar rectangular overlap.");
   }
   const officeAttic = LOBBY_PLAN.officeAttic;
   if (officeAttic?.id !== "office-door-attic"
@@ -1132,6 +1359,66 @@ export function validateLayoutData() {
     || !nearlyEqual(officeAttic.doorWall?.start.x, officeAttic.bounds.xMax)
     || !nearlyEqual(officeAttic.doorWall?.end.x, officeAttic.bounds.xMax)) {
     errors.push("The office-door attic wall must rise from the service ceiling to the mural top.");
+  }
+  const overheadMechanicals = LOBBY_PLAN.overheadMechanicals;
+  const ducts = overheadMechanicals?.ducts ?? [];
+  const pipes = overheadMechanicals?.pipes ?? [];
+  const mechanicalIds = [...ducts, ...pipes].map(({ id }) => id);
+  const ductRunLength = ducts.reduce((sum, duct) => sum + segmentLength(duct.start, duct.end), 0);
+  const pipeRunLength = pipes.reduce((sum, pipe) => sum + Math.hypot(
+    pipe.end.x - pipe.start.x,
+    pipe.end.y - pipe.start.y,
+    pipe.end.z - pipe.start.z,
+  ), 0);
+  const mechanicalPointInCoverage = ({ x, z }) => pointInBounds(
+    x,
+    z,
+    overheadMechanicals?.coverageBounds ?? rect(0, 0, 0, 0),
+  );
+  const hasDiagonalPipe = pipes.some(({ start, end }) => (
+    !nearlyEqual(start.x, end.x) && !nearlyEqual(start.z, end.z)
+  ));
+  const hasHeaderPipe = pipes.some(({ start, end }) => (
+    !nearlyEqual(start.x, end.x) && nearlyEqual(start.z, end.z)
+  ));
+  const hasCrossPipe = pipes.some(({ start, end }) => (
+    nearlyEqual(start.x, end.x) && !nearlyEqual(start.z, end.z)
+  ));
+  const hasRiserPipe = pipes.some(({ start, end }) => (
+    nearlyEqual(start.x, end.x) && nearlyEqual(start.z, end.z) && !nearlyEqual(start.y, end.y)
+  ));
+  if (overheadMechanicals?.id !== "lobby-mural-overhead-mechanicals"
+    || ducts.length !== 6
+    || pipes.length !== 18
+    || new Set(mechanicalIds).size !== mechanicalIds.length
+    || !nearlyEqual(overheadMechanicals?.minClearanceY, muralFacade.topY + 0.5)
+    || !nearlyEqual(overheadMechanicals?.maxY, LOBBY_CEILING_PLAN.highHeight - 0.45)
+    || !nearlyEqual(overheadMechanicals?.hangerSpacing, 2.4)
+    || ducts.some((duct) => duct.materialKey !== "hvacDuct"
+      || duct.width < 0.6
+      || duct.height < 0.5
+      || duct.y < overheadMechanicals.minClearanceY
+      || duct.y > overheadMechanicals.maxY
+      || !mechanicalPointInCoverage(duct.start)
+      || !mechanicalPointInCoverage(duct.end))
+    || pipes.some((pipe) => !["black", "utilityPipe"].includes(pipe.materialKey)
+      || pipe.radius < 0.08
+      || pipe.radius > 0.14
+      || pipe.start.y < overheadMechanicals.minClearanceY
+      || pipe.end.y < overheadMechanicals.minClearanceY
+      || pipe.start.y > overheadMechanicals.maxY
+      || pipe.end.y > overheadMechanicals.maxY
+      || !mechanicalPointInCoverage(pipe.start)
+      || !mechanicalPointInCoverage(pipe.end))
+    || Math.max(...ducts.map(({ width }) => width)) < 1
+    || Math.max(...pipes.map(({ radius }) => radius)) < 0.14
+    || ductRunLength < 140
+    || pipeRunLength < 370
+    || !hasDiagonalPipe
+    || !hasHeaderPipe
+    || !hasCrossPipe
+    || !hasRiserPipe) {
+    errors.push("The V14 high lobby must carry six large HVAC ducts and eighteen distributed overhead pipe runs spanning the full mural zone, including diagonal, header, cross, branch, and riser routes.");
   }
 
   const expectedServiceTypes = ["pos", "pos", "candy", "pos", "pos", "candy", "pos", "pos"];
