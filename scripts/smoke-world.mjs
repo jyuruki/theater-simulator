@@ -171,6 +171,34 @@ function assertPolygonSlab(id, plan, label = id) {
   return { slab, bounds };
 }
 
+function assertPlanPipeSegment(plan, materialName, label = plan.id) {
+  const matches = objectsByName(plan.id);
+  assert.equal(matches.length, 1, `${label} must be authored exactly once.`);
+  const pipe = matches[0];
+  assert.ok(pipe.isMesh, `${label} must be a mesh.`);
+  assert.equal(pipe.geometry.type, "CylinderGeometry", `${label} must use round pipe geometry.`);
+  assert.equal(pipe.material.name, materialName, `${label} material`);
+
+  const worldStart = new THREE.Vector3(planToWorldX(plan.start.x), plan.start.y, plan.start.z);
+  const worldEnd = new THREE.Vector3(planToWorldX(plan.end.x), plan.end.y, plan.end.z);
+  const expectedCenter = worldStart.clone().add(worldEnd).multiplyScalar(0.5);
+  const expectedDirection = worldEnd.clone().sub(worldStart);
+  const expectedLength = expectedDirection.length();
+  expectedDirection.normalize();
+  scene.updateMatrixWorld(true);
+  const actualCenter = pipe.getWorldPosition(new THREE.Vector3());
+  const actualAxis = new THREE.Vector3(0, 1, 0).applyQuaternion(pipe.getWorldQuaternion(new THREE.Quaternion()));
+  assertNear(actualCenter.x, expectedCenter.x, `${label} center X`, 1e-5);
+  assertNear(actualCenter.y, expectedCenter.y, `${label} center Y`, 1e-5);
+  assertNear(actualCenter.z, expectedCenter.z, `${label} center Z`, 1e-5);
+  assertNear(pipe.scale.x, plan.radius * 2, `${label} diameter X`);
+  assertNear(pipe.scale.y, expectedLength, `${label} true 3D length`, 1e-5);
+  assertNear(pipe.scale.z, plan.radius * 2, `${label} diameter Z`);
+  assertNear(actualAxis.dot(expectedDirection), 1, `${label} 3D endpoint orientation`, 1e-5);
+  assert.equal(colliderIdsMatching(world, new RegExp(`^${plan.id}(?:$|-collider-)`)).length, 0, `${label} must remain overhead decoration, not collision.`);
+  return pipe;
+}
+
 const rendererStub = { capabilities: { getMaxAnisotropy: () => 4 } };
 const materials = createMaterialLibrary(rendererStub);
 const scene = new THREE.Scene();
@@ -188,7 +216,7 @@ const auditoriumByNumber = new Map(AUDITORIUMS.map((auditorium) => [auditorium.n
 assert.equal(world.stats.auditoriumCount, 14);
 assert.equal(world.stats.seatCount, 1093);
 assert.equal(world.stats.equipmentAnchors, 13);
-assert.equal(world.stats.layoutVersion, "mililani-sketch-v13");
+assert.equal(world.stats.layoutVersion, "mililani-sketch-v14");
 assert.ok(world.stats.meshCount > 0);
 assert.ok(world.stats.colliderCount > 0);
 assert.equal(world.auditoriumGroups.size, 14);
@@ -222,8 +250,8 @@ const shiftedRuntimeBoxes = [
   ["ticket-empty-alcove-floor", TICKET_APPROACH_PLAN.emptyAlcove],
 ];
 for (const [id, bounds] of shiftedRuntimeBoxes) assertBoxMatchesBounds(id, bounds, `${id} rigid shift`);
-assert.equal(LOBBY_SHIFT_X, 8.3, "V13 retains the authoritative concession/office X translation.");
-assert.equal(LOBBY_PLAN.kiosks.length, 3, "V13 must author exactly three ticket kiosks.");
+assert.equal(LOBBY_SHIFT_X, 8.3, "V14 retains the authoritative concession/office X translation.");
+assert.equal(LOBBY_PLAN.kiosks.length, 3, "V14 must preserve exactly three ticket kiosks.");
 for (const kiosk of LOBBY_PLAN.kiosks) {
   const body = boxById(`${kiosk.id}-body`);
   assertNear(body.x, planToWorldX(kiosk.position[0]), `${kiosk.id} runtime X`);
@@ -297,6 +325,10 @@ assertNear(courtLight.y, LOBBY_CEILING_PLAN.baseHeight - 0.18, "court light elev
 assert.ok(courtLight.y + courtLight.height / 2 < lowCourtCeiling.y - lowCourtCeiling.height / 2, "Court light must sit below its roof.");
 for (const roomId of LOBBY_CEILING_PLAN.lowServiceRoomIds) {
   const room = serviceById.get(roomId);
+  if (roomId === LOBBY_PLAN.kitchenCeiling.replacementForRoomId) {
+    assert.deepEqual(objectsByName(`${roomId}-ceiling`), [], `${roomId} must use its traced V14 polygon roof rather than the obsolete room rectangle.`);
+    continue;
+  }
   const ceiling = assertBoxMatchesBounds(`${roomId}-ceiling`, room.bounds, `${roomId} retained service ceiling`);
   assertNear(ceiling.y, LOBBY_CEILING_PLAN.baseHeight, `${roomId} service ceiling elevation`);
   assertNear(ceiling.y - ceiling.height / 2, 4.55, `${roomId} service ceiling underside`);
@@ -401,34 +433,59 @@ for (const serviceItem of CONCESSION_SERVICE_SEQUENCE) {
 assert.equal(runtimeCandyIndex, CONCESSION_CANDY_DISPLAYS.length, "Both authored candy displays must render once.");
 
 assert.deepEqual(
-  authoredBoxes.filter(({ id }) => ["concession-back-wall-parallel", "kitchen-partition-3", "kitchen-partition-4"].includes(id)).map(({ id }) => id),
+  authoredBoxes.filter(({ id }) => ["concession-mural-rear-axis-wall", "kitchen-partition-3", "kitchen-partition-4"].includes(id)).map(({ id }) => id),
   [],
-  "V13 must remove the short V12 back wall and both overlapping anonymous pieces.",
+  "V14 must remove the overlong V13 rear-axis wall and both overlapping anonymous back-wall pieces.",
 );
 const concessionRearWall = LOBBY_PLAN.concessionBackWall;
 assertPlanSegment(concessionRearWall.id, concessionRearWall.start, concessionRearWall.end, {
   height: concessionRearWall.height,
   materialName: "Wall / warm neutral",
 });
-assert.ok(colliderIdsMatching(world, /^concession-mural-rear-axis-wall-collider-\d+$/).length >= 1, "The full door-to-back-bar rear wall needs segmented collision.");
+assert.ok(colliderIdsMatching(world, /^concession-back-wall-parallel-collider-\d+$/).length >= 1, "The two-thirds concession back wall needs segmented collision.");
+assertNear(
+  Math.hypot(concessionRearWall.end.x - concessionRearWall.start.x, concessionRearWall.end.z - concessionRearWall.start.z),
+  LOBBY_PLAN.concessionRun.length * 2 / 3,
+  "The rendered kitchen wall must stop at exactly two-thirds of the concession counter.",
+);
 
 const deadSpace = LOBBY_PLAN.kitchenDeadSpace;
 assertPlanSegment(deadSpace.separatingWall.id, deadSpace.separatingWall.start, deadSpace.separatingWall.end, {
   height: deadSpace.separatingWall.height,
   materialName: "Wall / warm neutral",
 });
-assert.ok(colliderIdsMatching(world, /^kitchen-dead-space-separating-wall-collider-\d+$/).length >= 1, "The triangular dead space must be physically sealed.");
-const { slab: deadSpaceCeiling } = assertPolygonSlab(deadSpace.ceiling.id, deadSpace.ceiling, "triangular kitchen dead-space ceiling");
+assert.ok(colliderIdsMatching(world, /^kitchen-dead-wedge-separating-wall-collider-\d+$/).length >= 1, "The tiny floor-mismatch wedge must be physically sealed.");
+const { slab: deadSpaceCeiling } = assertPolygonSlab(deadSpace.ceiling.id, deadSpace.ceiling, "tiny kitchen dead-wedge ceiling");
 assert.equal(deadSpaceCeiling.material.name, "Ceiling / acoustic tile");
-const kitchenCeiling = assertBoxMatchesBounds("kitchen-ceiling", LOBBY_PLAN.kitchenCeiling.bounds, "complete rectangular kitchen ceiling");
-assertNear(kitchenCeiling.y - kitchenCeiling.height / 2, 4.55, "complete kitchen ceiling underside");
-assertNear(deadSpace.ceiling.sharedKitchenEdgeZ, LOBBY_PLAN.kitchenCeiling.bounds.zMin, "dead-space/kitchen roof shared edge");
-assert.deepEqual(LOBBY_PLAN.kitchenCeiling.closureSurfaceIds, [deadSpace.ceiling.id, LOBBY_PLAN.muralFacade.soffit.id]);
+assert.deepEqual(objectsByName("kitchen-ceiling"), [], "The obsolete rectangular kitchen ceiling must not overlap the traced V14 roof.");
+assert.deepEqual(objectsByName("kitchen-dead-space-ceiling"), [], "The oversized V13 dead-space roof must be absent.");
+const completeKitchenSurface = LOBBY_PLAN.kitchenCeiling.surfaces[0];
+const connectorNookSurface = LOBBY_PLAN.kitchenCeiling.surfaces[1];
+const { slab: completeKitchenCeiling } = assertPolygonSlab(
+  completeKitchenSurface.id,
+  completeKitchenSurface,
+  "complete traced kitchen ceiling",
+);
+const { slab: connectorNookCeiling } = assertPolygonSlab(
+  connectorNookSurface.id,
+  connectorNookSurface,
+  "preserved kitchen-storage connector-nook ceiling",
+);
+assert.equal(completeKitchenCeiling.material.name, "Ceiling / acoustic tile");
+assert.equal(connectorNookCeiling.material.name, "Ceiling / acoustic tile");
+assert.deepEqual(connectorNookSurface, LOBBY_PLAN.kitchenConnectorNook.ceiling, "The traversable connector nook needs its exact independent roof owner.");
+assert.deepEqual(LOBBY_PLAN.kitchenCeiling.closureSurfaceIds, [
+  completeKitchenSurface.id,
+  connectorNookSurface.id,
+  deadSpace.ceiling.id,
+  LOBBY_PLAN.muralFacade.soffit.id,
+]);
 
 const atticHeight = LOBBY_PLAN.muralFacade.topY - LOBBY_CEILING_PLAN.baseHeight;
 const atticY = LOBBY_CEILING_PLAN.baseHeight + atticHeight / 2;
 for (const [id, start, end] of [
-  ["kitchen-attic-wall-upper", deadSpace.separatingWall.start, deadSpace.separatingWall.end],
+  ["kitchen-connector-attic-upper", LOBBY_PLAN.kitchenPartition[2], LOBBY_PLAN.kitchenPartition[3]],
+  ["kitchen-parallel-attic-upper", concessionRearWall.start, concessionRearWall.end],
   ["kitchen-service-attic-upper", LOBBY_PLAN.kitchenPartition[5], LOBBY_PLAN.kitchenPartition.at(-1)],
   [LOBBY_PLAN.officeAttic.doorWall.id, LOBBY_PLAN.officeAttic.doorWall.start, LOBBY_PLAN.officeAttic.doorWall.end],
 ]) {
@@ -438,6 +495,7 @@ for (const [id, start, end] of [
     materialName: "Wall / warm neutral",
   });
 }
+assert.deepEqual(objectsByName("kitchen-attic-wall-upper"), [], "The oversized V13 attic separator must not cap the restored connector nook.");
 const officeAtticContinuation = boxById("office-door-attic-continuation");
 const officeAtticContinuationEnd = { x: -16.2, z: 4.5 };
 assertNear(officeAtticContinuation.x, planToWorldX(-16.2), "office attic continuation X");
@@ -524,7 +582,7 @@ assertNear(westPillarWestFace - partitionEastFace, 1.11, "divider-to-west-pillar
 assert.ok(westPillarWestFace - partitionEastFace > 0.68, "The player capsule must fit through the divider/pillar squeeze.");
 
 const muralFacade = LOBBY_PLAN.muralFacade;
-const muralGuestNormal = LOBBY_PLAN.concessionRun.guestNormal;
+const muralGuestNormal = muralFacade.axis.guestNormal;
 const muralSurround = assertPlanSegment(
   muralFacade.surround.id,
   muralFacade.surround.start,
@@ -536,12 +594,16 @@ const muralSurround = assertPlanSegment(
     materialName: "Exterior / honed concrete",
   },
 );
-assertNear(muralSurround.width, 12.270992334584601, "extended mural surround width");
-assert.ok(muralSurround.width > muralFacade.artwork.width + 2.6, "The gray architectural surround must extend beyond both artwork sides.");
+assert.deepEqual(muralFacade.axis.start, LOBBY_PLAN.kitchenPartition.at(-1), "The runtime facade must begin at the kitchen-door left jamb.");
+assert.deepEqual(muralFacade.axis.end, { x: LOBBY_PLAN.backBar.xMin, z: LOBBY_PLAN.backBar.zMin }, "The runtime facade must end at the isolated bar start.");
+assertNear(muralSurround.width, 18.115256001503266, "literal kitchen-door-to-bar surround width");
+assertNear(muralSurround.height, muralFacade.artwork.height, "surround/art equal height with no top or bottom gray");
+assertNear(muralSurround.y, (muralFacade.bottomY + muralFacade.topY) / 2, "surround vertical center");
+assert.ok(muralSurround.width > muralFacade.artwork.width * 1.85, "The gray architectural surround must leave nearly half-art-width fields on both sides.");
 assert.deepEqual(
-  authoredBoxes.filter(({ id }) => id === "concession-mural-fascia").map(({ id }) => id),
+  authoredBoxes.filter(({ id }) => ["concession-mural-fascia", "concession-mural-rear-axis-wall"].includes(id)).map(({ id }) => id),
   [],
-  "The shorter V12 fascia must not remain behind the V13 surround.",
+  "Neither the short V12 fascia nor the overlong V13 rear-axis wall may remain behind the V14 surround.",
 );
 assert.deepEqual(
   authoredBoxes.filter(({ id }) => id === "concession-mural-shadow-lip").map(({ id }) => id),
@@ -552,15 +614,26 @@ for (const [id, anchor, target] of [
   ["concession-mural-return-start", muralFacade.returnAnchors.start, muralFacade.returnTargets.start],
   ["concession-mural-return-end", muralFacade.returnAnchors.end, muralFacade.returnTargets.end],
 ]) {
-  const muralReturn = boxById(id);
-  assertNear(muralReturn.x, planToWorldX((anchor.x + target.x) / 2), `${id} center X`);
-  assertNear(muralReturn.z, (anchor.z + target.z) / 2, `${id} center Z`);
+  const muralReturn = assertPlanSegment(id, anchor, target, {
+    height: muralFacade.topY - muralFacade.bottomY,
+    y: (muralFacade.bottomY + muralFacade.topY) / 2,
+    depth: 0.18,
+    materialName: "Exterior / honed concrete",
+  });
+  assert.equal(colliderIdsMatching(world, new RegExp(`^${id}(?:$|-collider-)`)).length, 0, `${id} must remain a non-colliding facade closure.`);
   assertNear(muralReturn.width, Math.hypot(target.x - anchor.x, target.z - anchor.z), `${id} closure length`);
-  assertNear(muralReturn.height, muralFacade.topY - muralFacade.bottomY, `${id} height`);
 }
 const muralSoffitId = `${muralFacade.soffit.id}-ceiling`;
 const { slab: muralSoffit } = assertPolygonSlab(muralSoffitId, muralFacade.soffit, "full attached mural soffit");
 assert.equal(muralSoffit.material.name, "Ceiling / acoustic tile", "The soffit underside must read as ceiling, not a floating wall.");
+assert.deepEqual(muralFacade.soffit.vertices, [
+  { x: -16.2, z: 5.2548023333959675 },
+  { x: -8.573901425559662, z: 19.826097823844478 },
+  LOBBY_PLAN.kitchenPartition[3],
+  LOBBY_PLAN.kitchenPartition[4],
+  LOBBY_PLAN.kitchenPartition[5],
+  LOBBY_PLAN.kitchenPartition[6],
+], "The runtime soffit must be the simple clipped gap between facade and rear wall, without a self-crossing or protruding cap.");
 
 const muralFaceOffset = muralFacade.fasciaDepth / 2 + 0.018;
 for (const fill of muralFacade.grayFills) {
@@ -573,12 +646,24 @@ for (const fill of muralFacade.grayFills) {
     z: fill.end.z + muralGuestNormal.z * muralFaceOffset,
   };
   assertPlanSegment(fill.id, faceStart, faceEnd, {
-    height: muralFacade.topY - muralFacade.bottomY,
+    height: muralFacade.artwork.height,
+    y: (muralFacade.bottomY + muralFacade.topY) / 2,
     depth: 0.025,
     materialName: "Exterior / honed concrete",
   });
   assertNear(boxById(fill.id).width, fill.width, `${fill.id} exact gray-fill width`);
+  assert.ok(fill.width >= muralFacade.artwork.width * 0.4 && fill.width < muralFacade.artwork.width * 0.5, `${fill.id} must be almost half the artwork width.`);
 }
+assertNear(
+  muralFacade.grayFills[0].width + muralFacade.artwork.width + muralFacade.grayFills[1].width,
+  muralFacade.surround.width,
+  "side fills plus unchanged art span the entire surround",
+);
+assert.deepEqual(
+  authoredBoxes.filter(({ id }) => /concession-mural-gray-fill-(?:top|bottom)/.test(id)).map(({ id }) => id),
+  [],
+  "V14 permits gray only beside the artwork, never above or below it.",
+);
 const muralFace = scene.getObjectByName("concession-mural-face");
 assert.ok(muralFace?.isMesh, "The projecting concession fascia needs its botanical mural face.");
 assert.equal(objectsByName("concession-mural-face").length, 1, "The mural face must be authored exactly once.");
@@ -597,6 +682,67 @@ assertNear(
   (muralFacade.artwork.start.z + muralFacade.artwork.end.z) / 2 + muralGuestNormal.z * (muralFaceOffset + 0.015),
   "mural artwork centered between gray fills Z",
 );
+
+const overhead = LOBBY_PLAN.overheadMechanicals;
+let expectedHangerCount = 0;
+for (const duct of overhead.ducts) {
+  assertPlanSegment(duct.id, duct.start, duct.end, {
+    height: duct.height,
+    y: duct.y,
+    depth: duct.width,
+    materialName: materials[duct.materialKey].name,
+  });
+  assert.equal(colliderIdsMatching(world, new RegExp(`^${duct.id}(?:$|-collider-)`)).length, 0, `${duct.id} must remain above the player collision volume.`);
+  assert.ok(duct.y - duct.height / 2 > muralFacade.topY, `${duct.id} must clear the mural face.`);
+  assert.ok(duct.y + duct.height / 2 < LOBBY_CEILING_PLAN.highHeight, `${duct.id} must remain below the high lobby roof.`);
+
+  const dx = duct.end.x - duct.start.x;
+  const dz = duct.end.z - duct.start.z;
+  const length = Math.hypot(dx, dz);
+  const unitX = dx / length;
+  const unitZ = dz / length;
+  const normalX = -unitZ;
+  const normalZ = unitX;
+  const hangerCount = Math.max(1, Math.floor(length / overhead.hangerSpacing));
+  expectedHangerCount += hangerCount * 2;
+  for (let index = 0; index < hangerCount; index += 1) {
+    const t = (index + 1) / (hangerCount + 1);
+    const centerX = duct.start.x + dx * t;
+    const centerZ = duct.start.z + dz * t;
+    for (const side of [-1, 1]) {
+      const offset = side * duct.width * 0.38;
+      assertPlanPipeSegment({
+        id: `${duct.id}-hanger-${index + 1}-${side < 0 ? "left" : "right"}`,
+        start: {
+          x: centerX + normalX * offset,
+          y: duct.y + duct.height / 2,
+          z: centerZ + normalZ * offset,
+        },
+        end: {
+          x: centerX + normalX * offset,
+          y: LOBBY_CEILING_PLAN.highHeight - 0.05,
+          z: centerZ + normalZ * offset,
+        },
+        radius: 0.025,
+      }, materials.black.name, `${duct.id} paired hanger`);
+    }
+  }
+}
+for (const pipe of overhead.pipes) {
+  assertPlanPipeSegment(pipe, materials[pipe.materialKey].name);
+  const lowestEnd = Math.min(pipe.start.y, pipe.end.y) - pipe.radius;
+  const highestEnd = Math.max(pipe.start.y, pipe.end.y) + pipe.radius;
+  assert.ok(lowestEnd >= overhead.minClearanceY - pipe.radius, `${pipe.id} must remain in the exposed overhead field.`);
+  assert.ok(highestEnd < LOBBY_CEILING_PLAN.highHeight, `${pipe.id} must remain below the high lobby roof.`);
+}
+assert.equal(overhead.ducts.length, 6, "All six broad overhead ducts must render.");
+assert.equal(overhead.pipes.length, 18, "All eighteen distributed pipes must render.");
+const runtimeHangerIds = [];
+scene.traverse(({ name }) => {
+  if (/^lobby-overhead-duct-.+-hanger-\d+-(?:left|right)$/.test(name)) runtimeHangerIds.push(name);
+});
+assert.equal(runtimeHangerIds.length, expectedHangerCount, "Every large duct must retain its full paired hanger cadence.");
+assert.equal(new Set(runtimeHangerIds).size, runtimeHangerIds.length, "Overhead hanger IDs must be unique.");
 
 const t1 = world.auditoriumLayouts.get("theater-1");
 const t1FrontHeight = world.groundHeight(planToWorldX(t1.sideAisles.west.centerX), t1.frontRowZ, 0);
