@@ -122,6 +122,12 @@ const {
   TICKET_APPROACH_PLAN,
 } = await import("../src/layout-data.js");
 
+const structuralCeilingPolygons = [
+  ...LOBBY_PLAN.kitchenCeiling.surfaces,
+  LOBBY_PLAN.kitchenDeadSpace.ceiling,
+  { ...LOBBY_PLAN.muralFacade.soffit, id: `${LOBBY_PLAN.muralFacade.soffit.id}-ceiling` },
+];
+
 const rendererStub = { capabilities: { getMaxAnisotropy: () => 4 } };
 const materials = createMaterialLibrary(rendererStub);
 let world;
@@ -276,6 +282,78 @@ function surfaceContainsPlanPoint(surface, planX, planZ, tolerance = GEOMETRY_EP
     + Math.abs(Math.sin(surface.rotationX)) * surface.height
   ) / 2;
   return Math.abs(localX) <= halfWidth + tolerance && Math.abs(localZ) <= halfDepth + tolerance;
+}
+
+function pointOnPlanSegment(point, start, end, tolerance = GEOMETRY_EPSILON) {
+  const dx = end.x - start.x;
+  const dz = end.z - start.z;
+  const lengthSquared = dx * dx + dz * dz;
+  if (lengthSquared <= tolerance * tolerance) return Math.hypot(point.x - start.x, point.z - start.z) <= tolerance;
+  const t = ((point.x - start.x) * dx + (point.z - start.z) * dz) / lengthSquared;
+  if (t < -tolerance || t > 1 + tolerance) return false;
+  const projectedX = start.x + dx * t;
+  const projectedZ = start.z + dz * t;
+  return Math.hypot(point.x - projectedX, point.z - projectedZ) <= tolerance;
+}
+
+function polygonContainsPlanPoint(vertices, point, { includeBoundary = true } = {}) {
+  for (let index = 0; index < vertices.length; index += 1) {
+    if (pointOnPlanSegment(point, vertices[index], vertices[(index + 1) % vertices.length])) return includeBoundary;
+  }
+  let inside = false;
+  for (let first = 0, second = vertices.length - 1; first < vertices.length; second = first, first += 1) {
+    const a = vertices[first];
+    const b = vertices[second];
+    if ((a.z > point.z) === (b.z > point.z)) continue;
+    const crossingX = (b.x - a.x) * (point.z - a.z) / (b.z - a.z) + a.x;
+    if (point.x < crossingX) inside = !inside;
+  }
+  return inside;
+}
+
+function segmentsProperlyIntersect(firstStart, firstEnd, secondStart, secondEnd) {
+  const orientation = (a, b, c) => (b.x - a.x) * (c.z - a.z) - (b.z - a.z) * (c.x - a.x);
+  const firstA = orientation(firstStart, firstEnd, secondStart);
+  const firstB = orientation(firstStart, firstEnd, secondEnd);
+  const secondA = orientation(secondStart, secondEnd, firstStart);
+  const secondB = orientation(secondStart, secondEnd, firstEnd);
+  return firstA * firstB < -GEOMETRY_EPSILON && secondA * secondB < -GEOMETRY_EPSILON;
+}
+
+function polygonsHaveInteriorOverlap(firstVertices, secondVertices) {
+  if (firstVertices.some((point) => polygonContainsPlanPoint(secondVertices, point, { includeBoundary: false }))) return true;
+  if (secondVertices.some((point) => polygonContainsPlanPoint(firstVertices, point, { includeBoundary: false }))) return true;
+  for (let firstIndex = 0; firstIndex < firstVertices.length; firstIndex += 1) {
+    const firstStart = firstVertices[firstIndex];
+    const firstEnd = firstVertices[(firstIndex + 1) % firstVertices.length];
+    for (let secondIndex = 0; secondIndex < secondVertices.length; secondIndex += 1) {
+      if (segmentsProperlyIntersect(
+        firstStart,
+        firstEnd,
+        secondVertices[secondIndex],
+        secondVertices[(secondIndex + 1) % secondVertices.length],
+      )) return true;
+    }
+  }
+  return false;
+}
+
+function polygonProperSelfIntersections(vertices) {
+  const intersections = [];
+  for (let firstIndex = 0; firstIndex < vertices.length; firstIndex += 1) {
+    const firstNext = (firstIndex + 1) % vertices.length;
+    for (let secondIndex = firstIndex + 1; secondIndex < vertices.length; secondIndex += 1) {
+      const secondNext = (secondIndex + 1) % vertices.length;
+      if (firstIndex === secondIndex || firstNext === secondIndex || secondNext === firstIndex) continue;
+      if (segmentsProperlyIntersect(
+        vertices[firstIndex],
+        vertices[firstNext],
+        vertices[secondIndex],
+        vertices[secondNext],
+      )) intersections.push(`${firstIndex}-${firstNext} x ${secondIndex}-${secondNext}`);
+    }
+  }
+  return intersections;
 }
 
 for (const floor of structuralFloors) {
@@ -1048,52 +1126,106 @@ assert.deepEqual(
   [
     { x: -19, z: 14.8 },
     { x: -13.73333333333333, z: 15 },
-    { x: -16.2, z: 8.6 },
+    { x: -13.810416666666663, z: 14.8 },
   ],
-  "V13 must author the triangular concession/kitchen dead space exactly once.",
+  "V14 must seal only the tiny triangular floor-mismatch wedge.",
 );
-assert.equal(deadSpace.separatingWall.id, "kitchen-dead-space-separating-wall");
-assert.deepEqual(deadSpace.separatingWall.start, LOBBY_PLAN.kitchenPartition[5]);
-assert.deepEqual(deadSpace.separatingWall.end, LOBBY_PLAN.kitchenPartition[2]);
+assert.equal(deadSpace.separatingWall.id, "kitchen-dead-wedge-separating-wall");
+assert.deepEqual(deadSpace.separatingWall.start, LOBBY_PLAN.kitchenPartition[2]);
+assert.deepEqual(deadSpace.separatingWall.end, deadSpace.vertices[2]);
+assertNear(deadSpace.area, 0.5189583333333319, "tiny dead-wedge area");
+assertNear(deadSpace.maxDepth, 0.2, "tiny dead-wedge depth");
 assertBlockedPlanLine(
-  "kitchen dead-space separating wall",
+  "kitchen dead-wedge separating wall",
   deadSpace.separatingWall.start,
   deadSpace.separatingWall.end,
 );
 assertBlockedPlanLine(
-  "kitchen dead-space partition edge",
+  "kitchen dead-wedge partition edge",
   LOBBY_PLAN.kitchenPartition[2],
   LOBBY_PLAN.kitchenPartition[3],
 );
-assertBlockedPlanLine(
-  "kitchen dead-space mural rear-axis edge",
-  LOBBY_PLAN.concessionBackWall.start,
-  LOBBY_PLAN.concessionBackWall.end,
+assert.equal(
+  isBlocked(
+    (LOBBY_PLAN.kitchenPartition[3].x + deadSpace.vertices[2].x) / 2,
+    (LOBBY_PLAN.kitchenPartition[3].z + deadSpace.vertices[2].z) / 2,
+  ),
+  true,
+  "The short third edge of the tiny wedge must meet the two-thirds concession wall without a leak.",
 );
 const deadSpaceCentroid = deadSpace.vertices.reduce(
-  (center, vertex) => ({ x: center.x + vertex.x / 3, z: center.z + vertex.z / 3 }),
+  (center, vertex) => ({
+    x: center.x + vertex.x / deadSpace.vertices.length,
+    z: center.z + vertex.z / deadSpace.vertices.length,
+  }),
   { x: 0, z: 0 },
 );
 assert.equal(
   isReachable(deadSpaceCentroid.x, deadSpaceCentroid.z),
   false,
-  "The sealed triangular kitchen dead space must not be reachable from the lobby or kitchen.",
+  "The sealed tiny kitchen wedge must not be reachable from the lobby or kitchen.",
 );
+
+const connectorNook = LOBBY_PLAN.kitchenConnectorNook;
+assert.equal(connectorNook.id, "kitchen-storage-connector-nook");
+assert.deepEqual(connectorNook.vertices, [
+  LOBBY_PLAN.kitchenPartition[2],
+  deadSpace.vertices[2],
+  LOBBY_PLAN.kitchenPartition[5],
+]);
+assert.equal(connectorNook.preservedDoorSegment, LOBBY_PLAN.kitchenStorageDoor.partitionSegment);
+assert.deepEqual(connectorNook.preservedBackWallSegments, [3, 4]);
+const connectorNookCentroid = connectorNook.vertices.reduce(
+  (center, vertex) => ({
+    x: center.x + vertex.x / connectorNook.vertices.length,
+    z: center.z + vertex.z / connectorNook.vertices.length,
+  }),
+  { x: 0, z: 0 },
+);
+assert.equal(
+  isReachable(connectorNookCentroid.x, connectorNookCentroid.z),
+  true,
+  "Restoring the V12 floorplan means the kitchen-storage connector nook must remain traversable.",
+);
+navigationTargets.push({ id: "kitchen-storage-connector-nook", ...connectorNookCentroid });
+
 assert.deepEqual(
-  LOBBY_PLAN.kitchenCeiling.bounds,
+  LOBBY_PLAN.kitchenCeiling.legacyBounds,
   { xMin: -20.7, xMax: -9.5, zMin: 14.5, zMax: 21.5 },
-  "The rectangular kitchen roof must cover the complete hot-line footprint.",
+  "The original kitchen envelope remains a trace reference only.",
 );
-assertNear(deadSpace.ceiling.sharedKitchenEdgeZ, LOBBY_PLAN.kitchenCeiling.bounds.zMin, "dead-space/kitchen ceiling shared edge");
+assert.equal(Object.hasOwn(LOBBY_PLAN.kitchenCeiling, "bounds"), false, "The obsolete rectangular kitchen roof must not remain active.");
+assert.deepEqual(
+  LOBBY_PLAN.kitchenCeiling.surfaces.map(({ id }) => id),
+  ["kitchen-complete-ceiling", "kitchen-connector-nook-ceiling"],
+  "The kitchen and connector nook need separate traced roof owners.",
+);
+assert.deepEqual(LOBBY_PLAN.kitchenCeiling.surfaces[1], connectorNook.ceiling);
 assert.deepEqual(
   LOBBY_PLAN.kitchenCeiling.closureSurfaceIds,
-  [deadSpace.ceiling.id, LOBBY_PLAN.muralFacade.soffit.id],
-  "The kitchen roof must close through the triangular cap and attached mural soffit.",
+  [
+    "kitchen-complete-ceiling",
+    "kitchen-connector-nook-ceiling",
+    "kitchen-dead-wedge-ceiling",
+    LOBBY_PLAN.muralFacade.soffit.id,
+  ],
+  "Four edge-sharing, non-overlapping surfaces must close the kitchen, connector nook, tiny wedge, and mural underside.",
 );
-const runtimeKitchenCeiling = structuralCeilings.find(({ id }) => id === "kitchen-ceiling");
-assert.ok(runtimeKitchenCeiling, "The complete rectangular kitchen ceiling must render.");
-assertNear(runtimeKitchenCeiling.width, 11.2, "complete kitchen ceiling width");
-assertNear(runtimeKitchenCeiling.depth, 7, "complete kitchen ceiling depth");
+for (const surface of structuralCeilingPolygons) {
+  const selfIntersections = polygonProperSelfIntersections(surface.vertices);
+  assert.deepEqual(selfIntersections, [], `${surface.id} self-intersects at ${selfIntersections.join(", ")}.`);
+}
+for (let firstIndex = 0; firstIndex < structuralCeilingPolygons.length; firstIndex += 1) {
+  for (let secondIndex = firstIndex + 1; secondIndex < structuralCeilingPolygons.length; secondIndex += 1) {
+    const first = structuralCeilingPolygons[firstIndex];
+    const second = structuralCeilingPolygons[secondIndex];
+    assert.equal(
+      polygonsHaveInteriorOverlap(first.vertices, second.vertices),
+      false,
+      `${first.id} and ${second.id} may share a closure edge but must not overlap and flash.`,
+    );
+  }
+}
 navigationTargets.push(
   { id: "kitchen-west-service-aisle", x: -19.2, z: 18.3 },
   { id: "kitchen-center-service-aisle", x: -17, z: 18.3 },
@@ -1107,20 +1239,41 @@ assert.deepEqual(officeAttic.doorWall.start, { x: -16.2, z: -2.1 });
 assert.deepEqual(officeAttic.doorWall.end, { x: -16.2, z: 1.2999999999999998 });
 
 const muralFacade = LOBBY_PLAN.muralFacade;
-assert.ok(muralFacade.surround.width > muralFacade.artwork.width, "The V13 gray mural surround must extend beyond the unchanged art.");
+assert.deepEqual(muralFacade.axis.start, LOBBY_PLAN.kitchenPartition.at(-1), "The mural must begin at the left side of the kitchen door.");
+assert.deepEqual(muralFacade.axis.end, { x: LOBBY_PLAN.backBar.xMin, z: LOBBY_PLAN.backBar.zMin }, "The mural must end at the isolated bar start.");
+assertNear(muralFacade.surround.width, 18.115256001503266, "literal kitchen-door-to-bar mural span");
 assertNear(muralFacade.artwork.width, 9.588342918079668, "preserved V12 mural artwork width");
 assertNear(muralFacade.artwork.height, 4.3, "preserved V12 mural artwork height");
 assert.equal(muralFacade.grayFills.length, 2, "Both exposed gray mural side fills must remain authored.");
+assert.deepEqual(muralFacade.surround.verticalGrayFill, { top: 0, bottom: 0 }, "There must be no gray field above or below the artwork.");
+assert.ok(muralFacade.grayFills.every(({ width, height }) => (
+  width >= muralFacade.artwork.width * 0.4
+  && width < muralFacade.artwork.width * 0.5
+  && Math.abs(height - muralFacade.artwork.height) <= GEOMETRY_EPSILON
+)), "Both gray side fields must be nearly half the artwork width and exactly its height.");
 assertNear(
   muralFacade.grayFills[0].width + muralFacade.artwork.width + muralFacade.grayFills[1].width,
   muralFacade.surround.width,
   "gray fills plus unchanged artwork span the full mural surround",
 );
-assert.equal(
-  muralFacade.soffit.vertices.every(({ z }) => z <= LOBBY_PLAN.kitchenCeiling.bounds.zMin + GEOMETRY_EPSILON),
-  true,
-  "The attached mural soffit must terminate on the complete kitchen ceiling edge without leaving a roof hole.",
-);
+assert.deepEqual(muralFacade.soffit.vertices, [
+  { x: -16.2, z: 5.2548023333959675 },
+  { x: -8.573901425559662, z: 19.826097823844478 },
+  LOBBY_PLAN.kitchenPartition[3],
+  LOBBY_PLAN.kitchenPartition[4],
+  LOBBY_PLAN.kitchenPartition[5],
+  LOBBY_PLAN.kitchenPartition[6],
+], "The soffit must be the simple clipped gap between the long facade and rear kitchen wall.");
+
+const overhead = LOBBY_PLAN.overheadMechanicals;
+assert.equal(overhead.ducts.length, 6, "Six large ducts must span the exposed mural volume.");
+assert.equal(overhead.pipes.length, 18, "Eighteen substantial pipe runs must span the exposed mural volume.");
+assert.ok(overhead.minClearanceY > muralFacade.topY, "All exposed mechanicals must remain above the mural.");
+const overheadPoints = [...overhead.ducts, ...overhead.pipes].flatMap(({ start, end }) => [start, end]);
+assertNear(Math.min(...overheadPoints.map(({ x }) => x)), overhead.coverageBounds.xMin, "overhead west extent");
+assertNear(Math.max(...overheadPoints.map(({ x }) => x)), overhead.coverageBounds.xMax, "overhead east extent");
+assertNear(Math.min(...overheadPoints.map(({ z }) => z)), overhead.coverageBounds.zMin, "overhead south extent");
+assertNear(Math.max(...overheadPoints.map(({ z }) => z)), overhead.coverageBounds.zMax, "overhead north extent");
 
 const unreachableTargets = navigationTargets.filter(({ x, z }) => !isReachable(x, z));
 assert.deepEqual(
@@ -1137,7 +1290,11 @@ assert.deepEqual(
 );
 
 function structuralSurfaceAt(surfaces, planX, planZ, tolerance = 0.05) {
-  return surfaces.some((surface) => surfaceContainsPlanPoint(surface, planX, planZ, tolerance));
+  if (surfaces.some((surface) => surfaceContainsPlanPoint(surface, planX, planZ, tolerance))) return true;
+  if (surfaces !== structuralCeilings) return false;
+  return structuralCeilingPolygons.some(({ vertices }) => (
+    polygonContainsPlanPoint(vertices, { x: planX, z: planZ })
+  ));
 }
 
 const ceilingRouteFailures = navigationTargets.filter(({ x, z }) => !structuralSurfaceAt(structuralCeilings, x, z));
@@ -1200,5 +1357,5 @@ world.dispose();
 materials.dispose();
 
 console.log(
-  `Navigation smoke valid: 14 bowls + ${navigationTargets.length - 14} V13 route targets reachable under rendered floors/ceilings · sealed kitchen wedge contained · compact box-office sightline open · shifted fountain/pillar circulation open · concession service aisle reachable · V9/V11 ghosts empty · geometry overlap-free.`,
+  `Navigation smoke valid: 14 bowls + ${navigationTargets.length - 14} V14 route targets reachable under rendered floors/ceilings · tiny wedge contained + connector nook open · complete non-overlapping kitchen/soffit roof · compact box-office sightline open · shifted fountain/pillar circulation open · concession service aisle reachable · V9/V11 ghosts empty · geometry overlap-free.`,
 );
