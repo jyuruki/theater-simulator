@@ -6,7 +6,11 @@ A first-person, browser-based layout prototype for a multiplayer movie-theater s
 
 This is a spatial prototype—not an official measured architectural plan. It is unaffiliated with Consolidated Theatres.
 
-## What is in v0.13
+## What is in v0.14
+
+- A corrected diagonal mural surround running from the kitchen-door side to the isolated back-bar start, retaining the existing artwork scale while using substantial gray panels only at its left and right ends
+- The previous kitchen footprint and two-thirds counter-parallel service wall restored, with only the small floor wedge sealed and the kitchen-storage connector nook preserved
+- One continuous lower ceiling beneath the mural, complete kitchen roof coverage, and larger exposed mechanical pipes and ducts distributed across the full mural overhead instead of clustered decorative strips
 
 - A deeper, longer diagonal mural surround that begins beside the kitchen door and stops before the back bar; the original procedural mural artwork retains its V12 dimensions while new gray end panels fill the wider fascia
 - A restored kitchen boundary that seals the triangular V12 floor remnant as inaccessible dead space, closes the service ceiling, and carries the office-side wall up to the mural datum to form the intended attic-like volume above the kitchen
@@ -49,7 +53,7 @@ This is a spatial prototype—not an official measured architectural plan. It is
 - Deeper, joined turn pockets for paired Theaters 1/2 and 13/14, Theater 9's entrance on the first-person left of its cubby with the auditorium extending left from it, and clear rear landings that reach both side stairs without seat/wall clipping
 - A fountain-width ticket approach with true two-wall 90-degree poster/empty alcoves, a waist-high divider between Theater 3 and the task room, and a shallow rectangular candy room with one hall door and no invented exterior exit
 - Desktop and touch first-person controls, 30%-faster walking/running, grounded jump with low-ceiling headroom protection, wall sliding without teleport recovery, stadium aisle elevations, and a live floor-plan minimap
-- A source-driven V13 minimap that preserves plan orientation and draws the translated lobby, compact box-office side, compressed stepped hall, reordered auditorium modules, revised BB/H₂O/MEN frontage, Theater 6 vestibule stair, Theater 3 route and lower storage, courtyard west edge, and Theater 9 cubby directly from the same layout records used by the world
+- A source-driven V14 minimap that preserves plan orientation and draws the translated lobby, compact box-office side, compressed stepped hall, reordered auditorium modules, revised BB/H₂O/MEN frontage, Theater 6 vestibule stair, Theater 3 route and lower storage, courtyard west edge, and Theater 9 cubby directly from the same layout records used by the world
 - Always-resident auditorium interiors, extended fog distance, and single-owner floors/walls to eliminate proximity pop-in and the most common flashing surfaces
 - Procedural materials, original island-botanical lobby art, room signs, screens, acoustic panels, leather, trays, and instanced seating
 
