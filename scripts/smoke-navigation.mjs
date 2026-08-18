@@ -445,20 +445,24 @@ function assertOpenPlanPoint(id, x, z) {
   assert.equal(isBlocked(x, z), false, `${id} must remain an open player-width seam at (${x}, ${z}).`);
 }
 
-function assertBlockedPlanSegment(id, { xMin, xMax, zMin, zMax }, inset = 0.4) {
-  const horizontal = Math.abs(zMax - zMin) <= GEOMETRY_EPSILON;
-  const length = horizontal ? xMax - xMin : zMax - zMin;
+function assertBlockedPlanLine(id, start, end, inset = 0.4) {
+  const deltaX = end.x - start.x;
+  const deltaZ = end.z - start.z;
+  const length = Math.hypot(deltaX, deltaZ);
   assert.ok(length > inset * 2, `${id} must have enough length for an interior collision audit.`);
   const sampleCount = Math.max(1, Math.ceil((length - inset * 2) / GRID_STEP));
   const misses = [];
   for (let sample = 0; sample <= sampleCount; sample += 1) {
-    const progress = sample / sampleCount;
-    const coordinate = inset + (length - inset * 2) * progress;
-    const x = horizontal ? xMin + coordinate : xMin;
-    const z = horizontal ? zMin : zMin + coordinate;
+    const distance = inset + (length - inset * 2) * sample / sampleCount;
+    const x = start.x + deltaX * distance / length;
+    const z = start.z + deltaZ * distance / length;
     if (!isBlocked(x, z)) misses.push(`(${x.toFixed(2)}, ${z.toFixed(2)})`);
   }
   assert.deepEqual(misses, [], `${id} has collision gaps at ${misses.join(", ")}.`);
+}
+
+function assertBlockedPlanSegment(id, { xMin, xMax, zMin, zMax }, inset = 0.4) {
+  assertBlockedPlanLine(id, { x: xMin, z: zMin }, { x: xMax, z: zMax }, inset);
 }
 
 const navigationTargets = [];
@@ -847,11 +851,32 @@ for (const number of [6, 7, 8]) {
 assertOpenPlanPoint("Girls restroom portal", girls.entry.coordinate, girls.entry.center);
 assertOpenPlanPoint("Candy storage portal", candy.doorCenter, candy.bounds.zMin);
 
-navigationTargets.push({ id: "fountain-working-aisle", x: 5.8, z: 65.7 });
+assertNear(FOUNTAIN_PLAN.shiftZ, 0.59, "V13 fountain-island rearward shift");
+assertNear(FOUNTAIN_PLAN.centerZ, 64.19, "V13 fountain-island center Z");
+assert.deepEqual(
+  FOUNTAIN_PLAN.island,
+  { xMin: -0.5, xMax: 12.1, zMin: 63.48, zMax: 64.9 },
+  "The fountain-island footprint must move rearward without changing its size.",
+);
+assertNear(FOUNTAIN_PLAN.rearPassage, 2.4, "fountain rear working passage");
+assertNear(COURTYARD_PLAN.waistPartition.zMin, FOUNTAIN_PLAN.island.zMin, "partition/fountain shifted front edge");
+assert.equal(
+  EQUIPMENT_ANCHORS.filter(({ roomId }) => roomId === "soda-service")
+    .every(({ position }) => position[2] === FOUNTAIN_PLAN.centerZ),
+  true,
+  "Every ICEE/soda fixture must move with the V13 fountain island.",
+);
+const fountainCenterX = (FOUNTAIN_PLAN.island.xMin + FOUNTAIN_PLAN.island.xMax) / 2;
+const fountainRearAisleZ = (FOUNTAIN_PLAN.island.zMax + FOUNTAIN_PLAN.rearCounter.zMin) / 2;
+assert.equal(isBlocked(fountainCenterX, FOUNTAIN_PLAN.centerZ), true, "The shifted fountain island must retain solid collision.");
 navigationTargets.push(
-  { id: "low-court-west-side", x: -5.8, z: 65.5 },
-  { id: "low-court-rear-aisle", x: 5.8, z: 66.5 },
-  { id: "low-court-east-side", x: 16.2, z: 65.5 },
+  { id: "fountain-south-approach", x: fountainCenterX, z: FOUNTAIN_PLAN.island.zMin - 0.7 },
+  { id: "fountain-working-aisle", x: fountainCenterX, z: fountainRearAisleZ },
+);
+navigationTargets.push(
+  { id: "low-court-west-side", x: -5.8, z: FOUNTAIN_PLAN.centerZ },
+  { id: "low-court-rear-aisle", x: fountainCenterX, z: fountainRearAisleZ },
+  { id: "low-court-east-side", x: 16.2, z: FOUNTAIN_PLAN.centerZ },
 );
 navigationTargets.push(
   { id: "t3-task-partition-west", x: COURTYARD_PLAN.waistPartition.x - 0.7, z: 65.5 },
@@ -878,11 +903,21 @@ for (const [id, x] of [["west", westSqueezeCenterX], ["east", eastSqueezeCenterX
   );
 }
 
-assert.equal(LOBBY_SHIFT_X, 8.3, "V12 retains the authoritative lobby X translation.");
+assert.equal(LOBBY_SHIFT_X, 8.3, "V13 retains the authoritative lobby X translation.");
 assertNear(LOBBY_CEILING_PLAN.highHeight, LOBBY_CEILING_PLAN.baseHeight * 3, "triple-height stone-floor lobby ceiling");
 assert.deepEqual(LOBBY_CEILING_PLAN.highPublicSpaceIds, ["lobby"], "Only the stone-floor lobby may retain the triple-height roof.");
 assert.equal(FOUNTAIN_PLAN.pillars.every(({ height }) => height === LOBBY_CEILING_PLAN.baseHeight), true, "Fountain pillars must terminate at the low court roof.");
-assert.equal(LOBBY_PLAN.kiosks.length, 3, "V12 circulation smoke expects exactly three kiosks.");
+assert.equal(LOBBY_PLAN.kiosks.length, 3, "V13 circulation smoke expects exactly three kiosks.");
+assert.deepEqual(
+  LOBBY_PLAN.kiosks.map(({ position }) => position[2]),
+  [0.5, 2.5, 4.5],
+  "The three kiosks must retain their two-metre cadence while clearing the stair south cap.",
+);
+assertNear(
+  LOBBY_PLAN.futureStairs.zMin - (LOBBY_PLAN.kiosks.at(-1).position[2] + 0.9 / 2),
+  0.15,
+  "third-kiosk/stair-south-cap clearance",
+);
 for (const kiosk of LOBBY_PLAN.kiosks) {
   navigationTargets.push({
     id: `${kiosk.id}-customer-approach`,
@@ -895,6 +930,37 @@ navigationTargets.push({
   x: LOBBY_PLAN.boxOfficePos.position[0] - 1.45,
   z: LOBBY_PLAN.boxOfficePos.position[2],
 });
+assert.deepEqual(
+  LOBBY_PLAN.boxOfficeVertical,
+  { xMin: 9.559999999999999, xMax: 10.659999999999998, zMin: 4.4, zMax: 11.9 },
+  "V13 must keep the narrow box-office long leg.",
+);
+assert.deepEqual(
+  LOBBY_PLAN.boxOfficeReturn,
+  { xMin: 9.559999999999999, xMax: 12.709999999999999, zMin: 4.4, zMax: 5.1000000000000005 },
+  "V13 must keep the compact half-length box-office return.",
+);
+assertNear(LOBBY_PLAN.boxOfficeReturn.xMax, LOBBY_PLAN.futureStairs.xMin, "box-office return flush to stair wall");
+assertNear(LOBBY_PLAN.boxOfficeReturn.xMax - LOBBY_PLAN.boxOfficeReturn.xMin, 3.15, "half-length box-office return");
+assertNear(LOBBY_PLAN.boxOfficeReturn.zMax - LOBBY_PLAN.boxOfficeReturn.zMin, 0.7, "narrow box-office return depth");
+assertNear(
+  LOBBY_PLAN.futureStairs.xMin - TICKET_APPROACH_PLAN.bounds.xMax,
+  LOBBY_PLAN.futureStairWall.approachReveal,
+  "ticket-approach/stair short reveal",
+);
+assertNear(LOBBY_PLAN.futureStairWall.approachReveal, 0.61, "two-foot ticket-approach/stair reveal");
+assert.equal(LOBBY_PLAN.futureStairWall.finish, "white", "The exposed future-stair wall must use the white hallway finish.");
+assert.equal(LOBBY_PLAN.futureStairWall.materialKey, "wall", "The white stair wall must use the standard hallway wall material.");
+assert.deepEqual(
+  LOBBY_PLAN.boxOfficeSightline.bounds,
+  { xMin: 9.559999999999999, xMax: 10.659999999999998, zMin: 11.9, zMax: 55.5 },
+  "The compact cubby must preserve a straight sightline to the ticket hall.",
+);
+assertNear(LOBBY_PLAN.boxOfficeSightline.axisX, 10.11, "box-office/ticket-hall sightline axis");
+for (const z of [12.6, 20.6, 22.3, 38.5, 54.6]) {
+  assertOpenPlanPoint(`box-office sightline z=${z}`, LOBBY_PLAN.boxOfficeSightline.axisX, z);
+  navigationTargets.push({ id: `box-office-sightline-${z}`, x: LOBBY_PLAN.boxOfficeSightline.axisX, z });
+}
 const concessionStaffNormal = LOBBY_PLAN.concessionRun.guestNormal;
 for (const serviceItem of CONCESSION_SERVICE_SEQUENCE) {
   navigationTargets.push({
@@ -976,6 +1042,86 @@ for (const side of [-1, 1]) {
   });
 }
 
+const deadSpace = LOBBY_PLAN.kitchenDeadSpace;
+assert.deepEqual(
+  deadSpace.vertices,
+  [
+    { x: -19, z: 14.8 },
+    { x: -13.73333333333333, z: 15 },
+    { x: -16.2, z: 8.6 },
+  ],
+  "V13 must author the triangular concession/kitchen dead space exactly once.",
+);
+assert.equal(deadSpace.separatingWall.id, "kitchen-dead-space-separating-wall");
+assert.deepEqual(deadSpace.separatingWall.start, LOBBY_PLAN.kitchenPartition[5]);
+assert.deepEqual(deadSpace.separatingWall.end, LOBBY_PLAN.kitchenPartition[2]);
+assertBlockedPlanLine(
+  "kitchen dead-space separating wall",
+  deadSpace.separatingWall.start,
+  deadSpace.separatingWall.end,
+);
+assertBlockedPlanLine(
+  "kitchen dead-space partition edge",
+  LOBBY_PLAN.kitchenPartition[2],
+  LOBBY_PLAN.kitchenPartition[3],
+);
+assertBlockedPlanLine(
+  "kitchen dead-space mural rear-axis edge",
+  LOBBY_PLAN.concessionBackWall.start,
+  LOBBY_PLAN.concessionBackWall.end,
+);
+const deadSpaceCentroid = deadSpace.vertices.reduce(
+  (center, vertex) => ({ x: center.x + vertex.x / 3, z: center.z + vertex.z / 3 }),
+  { x: 0, z: 0 },
+);
+assert.equal(
+  isReachable(deadSpaceCentroid.x, deadSpaceCentroid.z),
+  false,
+  "The sealed triangular kitchen dead space must not be reachable from the lobby or kitchen.",
+);
+assert.deepEqual(
+  LOBBY_PLAN.kitchenCeiling.bounds,
+  { xMin: -20.7, xMax: -9.5, zMin: 14.5, zMax: 21.5 },
+  "The rectangular kitchen roof must cover the complete hot-line footprint.",
+);
+assertNear(deadSpace.ceiling.sharedKitchenEdgeZ, LOBBY_PLAN.kitchenCeiling.bounds.zMin, "dead-space/kitchen ceiling shared edge");
+assert.deepEqual(
+  LOBBY_PLAN.kitchenCeiling.closureSurfaceIds,
+  [deadSpace.ceiling.id, LOBBY_PLAN.muralFacade.soffit.id],
+  "The kitchen roof must close through the triangular cap and attached mural soffit.",
+);
+const runtimeKitchenCeiling = structuralCeilings.find(({ id }) => id === "kitchen-ceiling");
+assert.ok(runtimeKitchenCeiling, "The complete rectangular kitchen ceiling must render.");
+assertNear(runtimeKitchenCeiling.width, 11.2, "complete kitchen ceiling width");
+assertNear(runtimeKitchenCeiling.depth, 7, "complete kitchen ceiling depth");
+navigationTargets.push(
+  { id: "kitchen-west-service-aisle", x: -19.2, z: 18.3 },
+  { id: "kitchen-center-service-aisle", x: -17, z: 18.3 },
+  { id: "kitchen-east-service-aisle", x: -14.6, z: 18.3 },
+);
+
+const officeAttic = LOBBY_PLAN.officeAttic;
+assertNear(officeAttic.baseY, LOBBY_CEILING_PLAN.baseHeight, "office attic starts at the low service roof");
+assertNear(officeAttic.topY, LOBBY_PLAN.muralFacade.topY, "office attic wall reaches the mural top");
+assert.deepEqual(officeAttic.doorWall.start, { x: -16.2, z: -2.1 });
+assert.deepEqual(officeAttic.doorWall.end, { x: -16.2, z: 1.2999999999999998 });
+
+const muralFacade = LOBBY_PLAN.muralFacade;
+assert.ok(muralFacade.surround.width > muralFacade.artwork.width, "The V13 gray mural surround must extend beyond the unchanged art.");
+assertNear(muralFacade.artwork.width, 9.588342918079668, "preserved V12 mural artwork width");
+assertNear(muralFacade.artwork.height, 4.3, "preserved V12 mural artwork height");
+assert.equal(muralFacade.grayFills.length, 2, "Both exposed gray mural side fills must remain authored.");
+assertNear(
+  muralFacade.grayFills[0].width + muralFacade.artwork.width + muralFacade.grayFills[1].width,
+  muralFacade.surround.width,
+  "gray fills plus unchanged artwork span the full mural surround",
+);
+assert.equal(
+  muralFacade.soffit.vertices.every(({ z }) => z <= LOBBY_PLAN.kitchenCeiling.bounds.zMin + GEOMETRY_EPSILON),
+  true,
+  "The attached mural soffit must terminate on the complete kitchen ceiling edge without leaving a roof hole.",
+);
+
 const unreachableTargets = navigationTargets.filter(({ x, z }) => !isReachable(x, z));
 assert.deepEqual(
   unreachableTargets.map(({ id }) => id),
@@ -1054,5 +1200,5 @@ world.dispose();
 materials.dispose();
 
 console.log(
-  `Navigation smoke valid: 14 bowls + ${navigationTargets.length - 14} V12 route targets reachable under rendered floors/ceilings · low-court/pillar circulation open · concession service aisle reachable · moved portals open · V9/V11 ghosts empty · geometry overlap-free.`,
+  `Navigation smoke valid: 14 bowls + ${navigationTargets.length - 14} V13 route targets reachable under rendered floors/ceilings · sealed kitchen wedge contained · compact box-office sightline open · shifted fountain/pillar circulation open · concession service aisle reachable · V9/V11 ghosts empty · geometry overlap-free.`,
 );

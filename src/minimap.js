@@ -253,7 +253,7 @@ function drawCenteredLabel(context, label, rectangle, options = {}) {
 function drawPublicSpaces(context, view) {
   for (const space of PUBLIC_SPACES) {
     if (COURTYARD_PLAN.publicSpaceIds.includes(space.id) || boysEntryFeatureIds.has(space.id)) continue;
-    // The V12 theater hall is a stepped union: its T9-side run is wider and
+    // The V13 theater hall is a stepped union: its T9-side run is wider and
     // narrows exactly at the drinking-fountain wall. Drawing its broad bounds
     // would invent floor in the notch, so all multi-rectangle public spaces
     // use the same footprint renderer as the concave restrooms.
@@ -400,7 +400,7 @@ function sharedBoundarySegments(first, second, epsilon = 0.001) {
   return segments;
 }
 
-function drawV12SpatialRelationships(context, view) {
+function drawV13SpatialRelationships(context, view) {
   const boys = SERVICE_ROOMS.find((room) => room.id === "boys-restroom");
   const lowerStorage = SERVICE_ROOMS.find((room) => room.id === "under-storage-3");
 
@@ -871,7 +871,7 @@ export function createMinimap(options = {}) {
     drawServiceRooms(context, view);
     drawBoysEntryFeatures(context, view);
     drawEntryRoutes(context, view);
-    drawV12SpatialRelationships(context, view);
+    drawV13SpatialRelationships(context, view);
     drawAuditoriumDoors(context, view);
     drawServiceDoors(context, view);
     drawHallExits(context, view);

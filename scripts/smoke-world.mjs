@@ -122,6 +122,55 @@ function colliderIdsMatching(world, pattern) {
   return world.colliders.map(({ id }) => id).filter((id) => pattern.test(id));
 }
 
+function assertPlanSegment(id, start, end, {
+  height,
+  y,
+  depth,
+  materialName,
+} = {}) {
+  const segment = boxById(id);
+  assertNear(segment.x, planToWorldX((start.x + end.x) / 2), `${id} center X`);
+  assertNear(segment.z, (start.z + end.z) / 2, `${id} center Z`);
+  assertNear(segment.width, Math.hypot(end.x - start.x, end.z - start.z), `${id} length`);
+  assertNear(segment.rotationY, Math.atan2(end.z - start.z, end.x - start.x), `${id} rotation`);
+  if (height !== undefined) assertNear(segment.height, height, `${id} height`);
+  if (y !== undefined) assertNear(segment.y, y, `${id} center Y`);
+  if (depth !== undefined) assertNear(segment.depth, depth, `${id} depth`);
+  if (materialName !== undefined) assert.deepEqual(segment.materialNames, [materialName], `${id} material`);
+  return segment;
+}
+
+function assertPolygonSlab(id, plan, label = id) {
+  const slab = scene.getObjectByName(id);
+  assert.ok(slab?.isMesh, `${label} must be a rendered mesh.`);
+  assert.equal(objectsByName(id).length, 1, `${label} must be authored exactly once.`);
+  assert.equal(slab.geometry.type, "ExtrudeGeometry", `${label} must follow its plan polygon.`);
+  scene.updateMatrixWorld(true);
+  const bounds = new THREE.Box3().setFromObject(slab);
+  const worldXs = plan.vertices.map(({ x }) => planToWorldX(x));
+  const planZs = plan.vertices.map(({ z }) => z);
+  assertNear(bounds.min.x, Math.min(...worldXs), `${label} minimum X`, 1e-5);
+  assertNear(bounds.max.x, Math.max(...worldXs), `${label} maximum X`, 1e-5);
+  assertNear(bounds.min.z, Math.min(...planZs), `${label} minimum Z`, 1e-5);
+  assertNear(bounds.max.z, Math.max(...planZs), `${label} maximum Z`, 1e-5);
+  assertNear(bounds.min.y, plan.elevation - plan.thickness / 2, `${label} underside`, 1e-5);
+  assertNear(bounds.max.y, plan.elevation + plan.thickness / 2, `${label} top`, 1e-5);
+  const positions = slab.geometry.getAttribute("position");
+  const vertices = Array.from({ length: positions.count }, (_, index) => slab.localToWorld(new THREE.Vector3(
+    positions.getX(index), positions.getY(index), positions.getZ(index),
+  )));
+  for (const [index, vertex] of plan.vertices.entries()) {
+    for (const capY of [bounds.min.y, bounds.max.y]) {
+      assert.ok(vertices.some((candidate) => (
+        Math.abs(candidate.x - planToWorldX(vertex.x)) <= 1e-5
+        && Math.abs(candidate.y - capY) <= 1e-5
+        && Math.abs(candidate.z - vertex.z) <= 1e-5
+      )), `${label} vertex ${index + 1} must exist on both solid caps.`);
+    }
+  }
+  return { slab, bounds };
+}
+
 const rendererStub = { capabilities: { getMaxAnisotropy: () => 4 } };
 const materials = createMaterialLibrary(rendererStub);
 const scene = new THREE.Scene();
@@ -139,7 +188,7 @@ const auditoriumByNumber = new Map(AUDITORIUMS.map((auditorium) => [auditorium.n
 assert.equal(world.stats.auditoriumCount, 14);
 assert.equal(world.stats.seatCount, 1093);
 assert.equal(world.stats.equipmentAnchors, 13);
-assert.equal(world.stats.layoutVersion, "mililani-sketch-v12");
+assert.equal(world.stats.layoutVersion, "mililani-sketch-v13");
 assert.ok(world.stats.meshCount > 0);
 assert.ok(world.stats.colliderCount > 0);
 assert.equal(world.auditoriumGroups.size, 14);
@@ -173,14 +222,19 @@ const shiftedRuntimeBoxes = [
   ["ticket-empty-alcove-floor", TICKET_APPROACH_PLAN.emptyAlcove],
 ];
 for (const [id, bounds] of shiftedRuntimeBoxes) assertBoxMatchesBounds(id, bounds, `${id} rigid shift`);
-assert.equal(LOBBY_SHIFT_X, 8.3, "V12 retains the authoritative lobby X translation.");
-assert.equal(LOBBY_PLAN.kiosks.length, 3, "V12 must author exactly three ticket kiosks.");
+assert.equal(LOBBY_SHIFT_X, 8.3, "V13 retains the authoritative concession/office X translation.");
+assert.equal(LOBBY_PLAN.kiosks.length, 3, "V13 must author exactly three ticket kiosks.");
 for (const kiosk of LOBBY_PLAN.kiosks) {
   const body = boxById(`${kiosk.id}-body`);
   assertNear(body.x, planToWorldX(kiosk.position[0]), `${kiosk.id} runtime X`);
   assertNear(body.z, kiosk.position[2], `${kiosk.id} runtime Z`);
   assert.equal(colliderIdsMatching(world, new RegExp(`^${kiosk.id}-body$`)).length, 1, `${kiosk.id} needs one body collider.`);
 }
+const lastKioskBody = boxById(`${LOBBY_PLAN.kiosks.at(-1).id}-body`);
+assert.ok(
+  lastKioskBody.z + lastKioskBody.depth / 2 < LOBBY_PLAN.futureStairs.zMin,
+  "The third kiosk must not collide with the compact stair south cap.",
+);
 for (const station of LOBBY_PLAN.customerCounter) {
   assert.ok(station.z <= LOBBY_PLAN.envelope.zMax, "Translated counter must remain inside the shifted lobby.");
 }
@@ -346,30 +400,79 @@ for (const serviceItem of CONCESSION_SERVICE_SEQUENCE) {
 }
 assert.equal(runtimeCandyIndex, CONCESSION_CANDY_DISPLAYS.length, "Both authored candy displays must render once.");
 
-const parallelWallStart = LOBBY_PLAN.kitchenPartition[3];
-const parallelWallEnd = LOBBY_PLAN.kitchenPartition[5];
-const parallelWall = boxById("concession-back-wall-parallel");
-assertNear(parallelWall.x, planToWorldX((parallelWallStart.x + parallelWallEnd.x) / 2), "parallel back wall center X");
-assertNear(parallelWall.z, (parallelWallStart.z + parallelWallEnd.z) / 2, "parallel back wall center Z");
-assertNear(parallelWall.width, LOBBY_PLAN.concessionRun.length * 2 / 3, "parallel back wall two-thirds length");
-assertNear(parallelWall.rotationY, Math.atan2(parallelWallEnd.z - parallelWallStart.z, parallelWallEnd.x - parallelWallStart.x), "parallel back wall rotation");
-assertNear(parallelWall.height, LOBBY_CEILING_PLAN.baseHeight, "parallel back wall height");
-assert.ok(colliderIdsMatching(world, /^concession-back-wall-parallel-collider-\d+$/).length >= 1, "Parallel back wall needs segmented colliders.");
 assert.deepEqual(
-  authoredBoxes.filter(({ id }) => ["kitchen-partition-3", "kitchen-partition-4"].includes(id)).map(({ id }) => id),
+  authoredBoxes.filter(({ id }) => ["concession-back-wall-parallel", "kitchen-partition-3", "kitchen-partition-4"].includes(id)).map(({ id }) => id),
   [],
-  "The stable parallel wall must replace the two anonymous collinear wall meshes.",
+  "V13 must remove the short V12 back wall and both overlapping anonymous pieces.",
 );
+const concessionRearWall = LOBBY_PLAN.concessionBackWall;
+assertPlanSegment(concessionRearWall.id, concessionRearWall.start, concessionRearWall.end, {
+  height: concessionRearWall.height,
+  materialName: "Wall / warm neutral",
+});
+assert.ok(colliderIdsMatching(world, /^concession-mural-rear-axis-wall-collider-\d+$/).length >= 1, "The full door-to-back-bar rear wall needs segmented collision.");
+
+const deadSpace = LOBBY_PLAN.kitchenDeadSpace;
+assertPlanSegment(deadSpace.separatingWall.id, deadSpace.separatingWall.start, deadSpace.separatingWall.end, {
+  height: deadSpace.separatingWall.height,
+  materialName: "Wall / warm neutral",
+});
+assert.ok(colliderIdsMatching(world, /^kitchen-dead-space-separating-wall-collider-\d+$/).length >= 1, "The triangular dead space must be physically sealed.");
+const { slab: deadSpaceCeiling } = assertPolygonSlab(deadSpace.ceiling.id, deadSpace.ceiling, "triangular kitchen dead-space ceiling");
+assert.equal(deadSpaceCeiling.material.name, "Ceiling / acoustic tile");
+const kitchenCeiling = assertBoxMatchesBounds("kitchen-ceiling", LOBBY_PLAN.kitchenCeiling.bounds, "complete rectangular kitchen ceiling");
+assertNear(kitchenCeiling.y - kitchenCeiling.height / 2, 4.55, "complete kitchen ceiling underside");
+assertNear(deadSpace.ceiling.sharedKitchenEdgeZ, LOBBY_PLAN.kitchenCeiling.bounds.zMin, "dead-space/kitchen roof shared edge");
+assert.deepEqual(LOBBY_PLAN.kitchenCeiling.closureSurfaceIds, [deadSpace.ceiling.id, LOBBY_PLAN.muralFacade.soffit.id]);
+
+const atticHeight = LOBBY_PLAN.muralFacade.topY - LOBBY_CEILING_PLAN.baseHeight;
+const atticY = LOBBY_CEILING_PLAN.baseHeight + atticHeight / 2;
+for (const [id, start, end] of [
+  ["kitchen-attic-wall-upper", deadSpace.separatingWall.start, deadSpace.separatingWall.end],
+  ["kitchen-service-attic-upper", LOBBY_PLAN.kitchenPartition[5], LOBBY_PLAN.kitchenPartition.at(-1)],
+  [LOBBY_PLAN.officeAttic.doorWall.id, LOBBY_PLAN.officeAttic.doorWall.start, LOBBY_PLAN.officeAttic.doorWall.end],
+]) {
+  assertPlanSegment(id, start, end, {
+    height: atticHeight,
+    y: atticY,
+    materialName: "Wall / warm neutral",
+  });
+}
+const officeAtticContinuation = boxById("office-door-attic-continuation");
+const officeAtticContinuationEnd = { x: -16.2, z: 4.5 };
+assertNear(officeAtticContinuation.x, planToWorldX(-16.2), "office attic continuation X");
+assertNear(officeAtticContinuation.z, (1.3 + 4.5) / 2, "office attic continuation center Z");
+assertNear(officeAtticContinuation.width, 0.18, "office attic continuation thickness");
+assertNear(officeAtticContinuation.depth, officeAtticContinuationEnd.z - 1.3, "office attic continuation span");
+assertNear(officeAtticContinuation.y, atticY, "office attic continuation center Y");
+assertNear(officeAtticContinuation.height, atticHeight, "office attic continuation height to mural top");
+assert.deepEqual(officeAtticContinuation.materialNames, ["Wall / warm neutral"]);
 
 const backBar = assertBoxMatchesBounds("back-bar-cabinet", LOBBY_PLAN.backBar, "rigidly translated back bar");
 assertNear(backBar.depth, LOBBY_PLAN.backBar.zMax - LOBBY_PLAN.backBar.zMin, "back-bar depth preservation");
-const boxOfficeReturn = assertBoxMatchesBounds("box-office-return", LOBBY_PLAN.boxOfficeReturn, "rigidly translated box-office return");
-assertNear(
-  LOBBY_PLAN.envelope.xMax - LOBBY_PLAN.boxOfficeReturn.xMax,
-  7.5,
-  "box-office east-side spacing preservation",
-);
-assertNear(boxOfficeReturn.width, LOBBY_PLAN.boxOfficeReturn.xMax - LOBBY_PLAN.boxOfficeReturn.xMin, "box-office return width preservation");
+assertBoxMatchesBounds("box-office-vertical", LOBBY_PLAN.boxOfficeVertical, "narrow V13 box-office long leg");
+const boxOfficeReturn = assertBoxMatchesBounds("box-office-return", LOBBY_PLAN.boxOfficeReturn, "half-length V13 box-office return");
+assertNear(boxOfficeReturn.width, 3.15, "box-office return half-length");
+assertNear(boxOfficeReturn.depth, 0.7, "box-office return narrow depth");
+assertNear(LOBBY_PLAN.boxOfficeReturn.xMax, LOBBY_PLAN.futureStairs.xMin, "box-office return flush to stair wall");
+assertNear(LOBBY_PLAN.futureStairs.xMin - TICKET_APPROACH_PLAN.bounds.xMax, 0.61, "ticket-approach/stair reveal");
+for (const id of ["future-stair-construction-wall", "lobby-back-east-short-return", "future-stair-north-wall"]) {
+  assert.deepEqual(boxById(id).materialNames, ["Wall / warm neutral"], `${id} must use the white hallway finish.`);
+}
+for (const segment of authoredBoxes.filter(({ id }) => id.startsWith("future-stair-south-cap-"))) {
+  assert.deepEqual(segment.materialNames, ["Wall / warm neutral"], `${segment.id} must use the white hallway finish.`);
+}
+assertNear(boxById("lobby-back-east-short-return").width, 0.61, "half-length ticket cubby short return");
+const sightline = LOBBY_PLAN.boxOfficeSightline;
+for (let z = sightline.bounds.zMin + 0.5; z < sightline.bounds.zMax - 0.5; z += 1) {
+  const worldX = planToWorldX(sightline.axisX);
+  const blockers = world.colliders.filter((collider) => (
+    collider.maxY > 0.05 && collider.minY < 1.78
+    && worldX > collider.minX && worldX < collider.maxX
+    && z > collider.minZ && z < collider.maxZ
+  ));
+  assert.deepEqual(blockers.map(({ id }) => id), [], `Box-office sightline is blocked at z=${z.toFixed(2)}.`);
+}
 
 const podium = LOBBY_PLAN.ticketPodium;
 const podiumBoxes = authoredBoxes.filter(({ id }) => id.startsWith(`${podium.id}-`));
@@ -392,6 +495,13 @@ assert.deepEqual(
 );
 
 assert.equal(FOUNTAIN_PLAN.pillars.length, 2, "Exactly two fountain-counter pillars are required.");
+assertNear(FOUNTAIN_PLAN.shiftZ, 0.59, "fountain island rearward shift");
+assertNear(FOUNTAIN_PLAN.centerZ, 64.19, "fountain island center Z");
+const sodaIsland = assertBoxMatchesBounds("soda-island", FOUNTAIN_PLAN.island, "rear-shifted fountain island");
+const sodaIslandTop = assertBoxMatchesBounds("soda-island-top", FOUNTAIN_PLAN.island, "rear-shifted fountain island top");
+assertNear(sodaIsland.z, FOUNTAIN_PLAN.centerZ, "rear-shifted fountain island center");
+assertNear(sodaIslandTop.z, FOUNTAIN_PLAN.centerZ, "rear-shifted fountain top center");
+assertNear(FOUNTAIN_PLAN.rearCounter.zMin - FOUNTAIN_PLAN.island.zMax, 2.4, "fountain working aisle after shift");
 for (const pillar of FOUNTAIN_PLAN.pillars) {
   const box = boxById(pillar.id);
   assertNear(box.x, planToWorldX(pillar.position[0]), `${pillar.id} X`);
@@ -403,6 +513,10 @@ for (const pillar of FOUNTAIN_PLAN.pillars) {
   assert.ok(box.materialNames.every((name) => name === "Wall / warm neutral"), `${pillar.id} must be white.`);
   assert.equal(colliderIdsMatching(world, new RegExp(`^${pillar.id}$`)).length, 1, `${pillar.id} needs one collider.`);
 }
+for (const anchor of EQUIPMENT_ANCHORS.filter(({ roomId }) => roomId === "soda-service")) {
+  assertNear(anchor.position[2], FOUNTAIN_PLAN.centerZ, `${anchor.id} plan shift with island`);
+  assertNear(world.equipment.get(anchor.id).worldPosition.z, FOUNTAIN_PLAN.centerZ, `${anchor.id} runtime shift with island`);
+}
 const westPillar = FOUNTAIN_PLAN.pillars[0];
 const partitionEastFace = COURTYARD_PLAN.waistPartition.x + COURTYARD_PLAN.waistPartition.thickness / 2;
 const westPillarWestFace = westPillar.position[0] - westPillar.footprint[0] / 2;
@@ -410,25 +524,25 @@ assertNear(westPillarWestFace - partitionEastFace, 1.11, "divider-to-west-pillar
 assert.ok(westPillarWestFace - partitionEastFace > 0.68, "The player capsule must fit through the divider/pillar squeeze.");
 
 const muralFacade = LOBBY_PLAN.muralFacade;
-const muralDx = muralFacade.end.x - muralFacade.start.x;
-const muralDz = muralFacade.end.z - muralFacade.start.z;
-const muralRun = Math.hypot(muralDx, muralDz);
-const muralGuestNormal = { x: -muralDz / muralRun, z: muralDx / muralRun };
-const projectedMuralStart = {
-  x: muralFacade.start.x + muralGuestNormal.x * muralFacade.projection,
-  z: muralFacade.start.z + muralGuestNormal.z * muralFacade.projection,
-};
-const projectedMuralEnd = {
-  x: muralFacade.end.x + muralGuestNormal.x * muralFacade.projection,
-  z: muralFacade.end.z + muralGuestNormal.z * muralFacade.projection,
-};
-const muralFascia = boxById("concession-mural-fascia");
-assertNear(muralFascia.x, planToWorldX((projectedMuralStart.x + projectedMuralEnd.x) / 2), "projecting mural fascia X");
-assertNear(muralFascia.z, (projectedMuralStart.z + projectedMuralEnd.z) / 2, "projecting mural fascia Z");
-assertNear(muralFascia.y, (muralFacade.bottomY + muralFacade.topY) / 2, "mural fascia center Y");
-assertNear(muralFascia.width, muralRun, "mural fascia run length");
-assertNear(muralFascia.height, muralFacade.topY - muralFacade.bottomY, "mural fascia height");
-assert.ok(muralFascia.depth >= muralFacade.projection, "Mural fascia must project materially toward guests.");
+const muralGuestNormal = LOBBY_PLAN.concessionRun.guestNormal;
+const muralSurround = assertPlanSegment(
+  muralFacade.surround.id,
+  muralFacade.surround.start,
+  muralFacade.surround.end,
+  {
+    height: muralFacade.surround.height,
+    y: (muralFacade.bottomY + muralFacade.topY) / 2,
+    depth: muralFacade.surround.depth,
+    materialName: "Exterior / honed concrete",
+  },
+);
+assertNear(muralSurround.width, 12.270992334584601, "extended mural surround width");
+assert.ok(muralSurround.width > muralFacade.artwork.width + 2.6, "The gray architectural surround must extend beyond both artwork sides.");
+assert.deepEqual(
+  authoredBoxes.filter(({ id }) => id === "concession-mural-fascia").map(({ id }) => id),
+  [],
+  "The shorter V12 fascia must not remain behind the V13 surround.",
+);
 assert.deepEqual(
   authoredBoxes.filter(({ id }) => id === "concession-mural-shadow-lip").map(({ id }) => id),
   [],
@@ -445,54 +559,44 @@ for (const [id, anchor, target] of [
   assertNear(muralReturn.height, muralFacade.topY - muralFacade.bottomY, `${id} height`);
 }
 const muralSoffitId = `${muralFacade.soffit.id}-ceiling`;
-const muralSoffit = scene.getObjectByName(muralSoffitId);
-assert.ok(muralSoffit?.isMesh, "The projecting mural must have a solid soffit back to the concession wall.");
-assert.equal(objectsByName(muralSoffitId).length, 1, "The mural soffit must be authored exactly once.");
-assert.equal(muralSoffit.geometry.type, "ExtrudeGeometry", "The irregular soffit must follow its clipped polygon.");
-scene.updateMatrixWorld(true);
-const muralSoffitBounds = new THREE.Box3().setFromObject(muralSoffit);
-const soffitWorldXs = muralFacade.soffit.vertices.map(({ x }) => planToWorldX(x));
-const soffitPlanZs = muralFacade.soffit.vertices.map(({ z }) => z);
-assertNear(muralSoffitBounds.min.x, Math.min(...soffitWorldXs), "mural soffit minimum X", 1e-5);
-assertNear(muralSoffitBounds.max.x, Math.max(...soffitWorldXs), "mural soffit maximum X", 1e-5);
-assertNear(muralSoffitBounds.min.z, Math.min(...soffitPlanZs), "mural soffit minimum Z", 1e-5);
-assertNear(muralSoffitBounds.max.z, Math.max(...soffitPlanZs), "mural soffit maximum Z", 1e-5);
-assertNear(
-  muralSoffitBounds.min.y,
-  muralFacade.soffit.elevation - muralFacade.soffit.thickness / 2,
-  "mural soffit underside / lowest ceiling",
-  1e-5,
-);
-assertNear(
-  muralSoffitBounds.max.y,
-  muralFacade.soffit.elevation + muralFacade.soffit.thickness / 2,
-  "mural soffit top",
-  1e-5,
-);
+const { slab: muralSoffit } = assertPolygonSlab(muralSoffitId, muralFacade.soffit, "full attached mural soffit");
 assert.equal(muralSoffit.material.name, "Ceiling / acoustic tile", "The soffit underside must read as ceiling, not a floating wall.");
-const soffitPositions = muralSoffit.geometry.getAttribute("position");
-const soffitWorldVertices = Array.from({ length: soffitPositions.count }, (_, index) => muralSoffit.localToWorld(new THREE.Vector3(
-  soffitPositions.getX(index),
-  soffitPositions.getY(index),
-  soffitPositions.getZ(index),
-)));
-for (const [index, vertex] of muralFacade.soffit.vertices.entries()) {
-  for (const y of [muralSoffitBounds.min.y, muralSoffitBounds.max.y]) {
-    assert.ok(
-      soffitWorldVertices.some((candidate) => (
-        Math.abs(candidate.x - planToWorldX(vertex.x)) <= 1e-5
-        && Math.abs(candidate.y - y) <= 1e-5
-        && Math.abs(candidate.z - vertex.z) <= 1e-5
-      )),
-      `Mural soffit vertex ${index + 1} must exist on the ${y === muralSoffitBounds.min.y ? "underside" : "top"} cap.`,
-    );
-  }
+
+const muralFaceOffset = muralFacade.fasciaDepth / 2 + 0.018;
+for (const fill of muralFacade.grayFills) {
+  const faceStart = {
+    x: fill.start.x + muralGuestNormal.x * muralFaceOffset,
+    z: fill.start.z + muralGuestNormal.z * muralFaceOffset,
+  };
+  const faceEnd = {
+    x: fill.end.x + muralGuestNormal.x * muralFaceOffset,
+    z: fill.end.z + muralGuestNormal.z * muralFaceOffset,
+  };
+  assertPlanSegment(fill.id, faceStart, faceEnd, {
+    height: muralFacade.topY - muralFacade.bottomY,
+    depth: 0.025,
+    materialName: "Exterior / honed concrete",
+  });
+  assertNear(boxById(fill.id).width, fill.width, `${fill.id} exact gray-fill width`);
 }
 const muralFace = scene.getObjectByName("concession-mural-face");
 assert.ok(muralFace?.isMesh, "The projecting concession fascia needs its botanical mural face.");
 assert.equal(objectsByName("concession-mural-face").length, 1, "The mural face must be authored exactly once.");
 assert.equal(muralFace.userData.facadeId, muralFacade.id, "Mural face must remain bound to the authoritative facade plan.");
+assert.equal(muralFace.userData.artworkId, muralFacade.artwork.id, "Mural face must remain bound to the unchanged V12 artwork plan.");
 assert.equal(muralFace.material.name, "concession-botanical-mural-material");
+assertNear(muralFace.scale.x, 9.588342918079668, "unchanged V12 mural-art width");
+assertNear(muralFace.scale.y, 4.3, "unchanged V12 mural-art height");
+assertNear(
+  muralFace.position.x,
+  planToWorldX((muralFacade.artwork.start.x + muralFacade.artwork.end.x) / 2 + muralGuestNormal.x * (muralFaceOffset + 0.015)),
+  "mural artwork centered between gray fills X",
+);
+assertNear(
+  muralFace.position.z,
+  (muralFacade.artwork.start.z + muralFacade.artwork.end.z) / 2 + muralGuestNormal.z * (muralFaceOffset + 0.015),
+  "mural artwork centered between gray fills Z",
+);
 
 const t1 = world.auditoriumLayouts.get("theater-1");
 const t1FrontHeight = world.groundHeight(planToWorldX(t1.sideAisles.west.centerX), t1.frontRowZ, 0);

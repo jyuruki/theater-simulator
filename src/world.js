@@ -57,7 +57,7 @@ const publicById = (id) => PUBLIC_SPACES.find((space) => space.id === id);
 
 export function createTheaterWorld({ scene, materials }) {
   const root = new THREE.Group();
-  root.name = "Mililani 14 layout prototype v12";
+  root.name = "Mililani 14 layout prototype v13";
   scene.add(root);
 
   const colliders = [];
@@ -1579,7 +1579,24 @@ export function createTheaterWorld({ scene, materials }) {
   addWallZ("lobby-west", LOBBY_PLAN.envelope.xMin, lobbyFrontZ, lobbyBackZ, { height: LOBBY_PUBLIC_HEIGHT });
   addWallZ("lobby-east", LOBBY_PLAN.envelope.xMax, lobbyFrontZ, lobbyBackZ, { height: LOBBY_PUBLIC_HEIGHT });
   addWallX("lobby-back-west", LOBBY_PLAN.envelope.xMin, approach.bounds.xMin, lobbyBackZ, { height: LOBBY_PUBLIC_HEIGHT });
-  addWallX("lobby-back-east", approach.bounds.xMax, LOBBY_PLAN.envelope.xMax, lobbyBackZ, { height: LOBBY_PUBLIC_HEIGHT });
+  // Only the short two-foot return beside the ticket hall remains visually
+  // exposed. The remainder is the (now compact) future-stair north wall, so
+  // author the two ownership zones separately and keep the box-office view
+  // straight down the ticket approach.
+  addWallX(
+    "lobby-back-east-short-return",
+    approach.bounds.xMax,
+    LOBBY_PLAN.futureStairs.xMin,
+    lobbyBackZ,
+    { height: LOBBY_PUBLIC_HEIGHT, material: materials.wall },
+  );
+  addWallX(
+    "future-stair-north-wall",
+    LOBBY_PLAN.futureStairs.xMin,
+    LOBBY_PLAN.envelope.xMax,
+    lobbyBackZ,
+    { height: LOBBY_PUBLIC_HEIGHT, material: materials.wall },
+  );
   addWallX("lobby-back-approach-upper", approach.bounds.xMin, approach.bounds.xMax, lobbyBackZ, {
     baseY: LOBBY_SERVICE_HEIGHT,
     height: LOBBY_PUBLIC_HEIGHT - LOBBY_SERVICE_HEIGHT,
@@ -1596,7 +1613,7 @@ export function createTheaterWorld({ scene, materials }) {
   addLabel({ id: "facade-title", text: "CONSOLIDATED THEATRES  ·  MILILANI", position: [lobbyX(1.5), 3.62, frontZ(-4)], rotationY: Math.PI, width: 11.5, height: 0.74 });
   addBox({ id: "front-west-planter", x: frontWalk.bounds.xMin, y: 0.45, z: frontWalkCenterZ, width: 0.35, height: 0.9, depth: frontWalkDepth, material: materials.concrete, collide: true });
   addBox({ id: "front-east-planter", x: frontWalk.bounds.xMax, y: 0.45, z: frontWalkCenterZ, width: 0.35, height: 0.9, depth: frontWalkDepth, material: materials.concrete, collide: true });
-  addBox({ id: "front-south-planter", x: centerOf(frontWalk.bounds).x, y: 0.45, z: frontWalk.bounds.zMin, width: 55, height: 0.9, depth: 0.35, material: materials.concrete, collide: true });
+  addBox({ id: "front-south-planter", x: centerOf(frontWalk.bounds).x, y: 0.45, z: frontWalk.bounds.zMin, width: frontWalk.bounds.xMax - frontWalk.bounds.xMin, height: 0.9, depth: 0.35, material: materials.concrete, collide: true });
   addBox({ id: "front-east-stop", x: LOBBY_PLAN.envelope.xMax + 3, y: 0.45, z: lobbyFrontZ, width: 6, height: 0.9, depth: 0.35, material: materials.concrete, collide: true });
 
   const overflow = roomById("office-overflow");
@@ -1645,12 +1662,9 @@ export function createTheaterWorld({ scene, materials }) {
     const end = partition[index + 1];
     const isKitchenStorageDoor = index === LOBBY_PLAN.kitchenStorageDoor.partitionSegment;
     const isServiceDoor = index === LOBBY_PLAN.serviceDoor.partitionSegment;
-    if (index === 3) {
-      // Points 3→4→5 are collinear. Author one structural wall so its
-      // runtime identity and collider chain describe the full two-thirds run.
-      addPlanSegment("concession-back-wall-parallel", partition[3], partition[5], { material: materials.wall });
-    } else if (index === 4) {
-      // Merged into concession-back-wall-parallel above.
+    if (index === 3 || index === 4) {
+      // V13 replaces the short V12 wall with the single door-to-back-bar
+      // rear-axis wall below. Do not leave the old overlapping pieces behind.
       continue;
     } else if (isKitchenStorageDoor) {
       addPlanSegmentWithOpening(
@@ -1672,6 +1686,82 @@ export function createTheaterWorld({ scene, materials }) {
       addPlanSegment(`kitchen-partition-${index}`, start, end, { material: materials.wall });
     }
   }
+  const concessionBackWall = LOBBY_PLAN.concessionBackWall;
+  addPlanSegment(
+    concessionBackWall.id,
+    concessionBackWall.start,
+    concessionBackWall.end,
+    { height: concessionBackWall.height, material: materials.wall },
+  );
+
+  // Preserve the original kitchen edge and deliberately seal the triangular
+  // wedge created by the counter-parallel V12 wall. The existing lobby and
+  // service-strip floors already meet underneath it; a second polygon floor
+  // would overlap them and flash. The dedicated low roof and two boundary
+  // walls make the wedge true dead space instead of a visible crack or a
+  // place the player can enter.
+  const kitchenDeadSpace = LOBBY_PLAN.kitchenDeadSpace;
+  addPlanSegment(
+    kitchenDeadSpace.separatingWall.id,
+    kitchenDeadSpace.separatingWall.start,
+    kitchenDeadSpace.separatingWall.end,
+    { height: kitchenDeadSpace.separatingWall.height, material: materials.wall },
+  );
+  addPlanPolygonSlab(
+    kitchenDeadSpace.ceiling.id,
+    kitchenDeadSpace.ceiling.vertices,
+    kitchenDeadSpace.ceiling.elevation,
+    kitchenDeadSpace.ceiling.thickness,
+    materials.ceiling,
+  );
+
+  const atticUpperHeight = LOBBY_PLAN.muralFacade.topY - LOBBY_SERVICE_HEIGHT;
+  addPlanSegment(
+    "kitchen-attic-wall-upper",
+    kitchenDeadSpace.separatingWall.start,
+    kitchenDeadSpace.separatingWall.end,
+    {
+      y: LOBBY_SERVICE_HEIGHT + atticUpperHeight / 2,
+      height: atticUpperHeight,
+      material: materials.wall,
+      collide: false,
+    },
+  );
+  addPlanSegment(
+    "kitchen-service-attic-upper",
+    partition[5],
+    partition.at(-1),
+    {
+      y: LOBBY_SERVICE_HEIGHT + atticUpperHeight / 2,
+      height: atticUpperHeight,
+      material: materials.wall,
+      collide: false,
+    },
+  );
+  const officeAttic = LOBBY_PLAN.officeAttic;
+  addPlanSegment(
+    officeAttic.doorWall.id,
+    officeAttic.doorWall.start,
+    officeAttic.doorWall.end,
+    {
+      y: officeAttic.baseY + (officeAttic.topY - officeAttic.baseY) / 2,
+      height: officeAttic.topY - officeAttic.baseY,
+      material: materials.wall,
+      collide: false,
+    },
+  );
+  addWallZ(
+    "office-door-attic-continuation",
+    officeAttic.doorWall.end.x,
+    officeAttic.doorWall.end.z,
+    partition.at(-1).z,
+    {
+      baseY: officeAttic.baseY,
+      height: officeAttic.topY - officeAttic.baseY,
+      material: materials.wall,
+      collide: false,
+    },
+  );
   addWallZ("kitchen-partition-top-join", kitchenStorage.bounds.xMax, partition[0].z, lobbyBackZ);
   addLabel({ id: "kitchen-storage-label", text: "KITCHEN STORAGE", position: [kitchenStorage.bounds.xMax + 0.1, 3, frontZ(13)], rotationY: Math.PI / 2, width: 2.5, height: 0.42, small: true, accent: "#f0c36f" });
 
@@ -1687,25 +1777,30 @@ export function createTheaterWorld({ scene, materials }) {
 
   const stairReserve = LOBBY_PLAN.futureStairs;
   const stairDoorCenter = stairReserve.xMin + 3.1;
-  addWallZ("future-stair-construction-wall", stairReserve.xMin, stairReserve.zMin, stairReserve.zMax, { material: materials.darkWall });
-  addWallXWithOpenings("future-stair-south-cap", stairReserve.xMin, stairReserve.xMax, stairReserve.zMin, [{ center: stairDoorCenter, width: 1.7 }], { material: materials.darkWall });
+  addWallZ("future-stair-construction-wall", stairReserve.xMin, stairReserve.zMin, stairReserve.zMax, { material: materials.wall });
+  addWallXWithOpenings("future-stair-south-cap", stairReserve.xMin, stairReserve.xMax, stairReserve.zMin, [{ center: stairDoorCenter, width: 1.7 }], { material: materials.wall });
   addClosedDoor("future-stair-closed-door", "south", stairReserve.zMin, stairDoorCenter, { width: 1.7 });
   addLabel({ id: "future-stair-sign", text: "SECOND FLOOR · FUTURE PHASE", position: [stairReserve.xMin - 0.1, 2.7, frontZ(16)], rotationY: -Math.PI / 2, width: 3.5, height: 0.42, small: true, accent: "#8c6bd3" });
 
-  // The real concession mural is carried by a wall that projects toward the
-  // guests above the diagonal POS run. Build the projection and both returns
-  // from layout data so future counter shifts cannot strand the artwork.
+  // The artwork keeps its V12 dimensions, but V13 gives it the photographed
+  // longer architectural surround: kitchen-door jamb to just before the back
+  // bar, with exposed gray fields at both ends. The entire assembly sits
+  // staffward of the former floating location and returns to the real rear
+  // wall through a closed low soffit.
   const muralFacade = LOBBY_PLAN.muralFacade;
   const muralDx = muralFacade.projectedEnd.x - muralFacade.projectedStart.x;
   const muralDz = muralFacade.projectedEnd.z - muralFacade.projectedStart.z;
   const muralRun = Math.hypot(muralDx, muralDz);
-  const muralGuestNormal = { x: -muralDz / muralRun, z: muralDx / muralRun };
+  // The V13 surround axis runs low→high, opposite the old concession segment
+  // ordering. Reuse the authoritative concession guest normal so the artwork
+  // and gray face panels mount on the lobby side rather than behind the wall.
+  const muralGuestNormal = LOBBY_PLAN.concessionRun.guestNormal;
   const projectedMuralStart = muralFacade.projectedStart;
   const projectedMuralEnd = muralFacade.projectedEnd;
   const muralFacadeHeight = muralFacade.topY - muralFacade.bottomY;
   const muralFacadeY = (muralFacade.bottomY + muralFacade.topY) / 2;
   const muralFacadeDepth = muralFacade.fasciaDepth;
-  addPlanSegment("concession-mural-fascia", projectedMuralStart, projectedMuralEnd, {
+  addPlanSegment(muralFacade.surround.id, projectedMuralStart, projectedMuralEnd, {
     y: muralFacadeY,
     height: muralFacadeHeight,
     depth: muralFacadeDepth,
@@ -1733,23 +1828,63 @@ export function createTheaterWorld({ scene, materials }) {
     muralFacade.soffit.thickness,
     materials.ceiling,
   );
+  const muralFaceOffset = muralFacadeDepth / 2 + 0.018;
+  for (const grayFill of muralFacade.grayFills) {
+    const faceStart = {
+      x: grayFill.start.x + muralGuestNormal.x * muralFaceOffset,
+      z: grayFill.start.z + muralGuestNormal.z * muralFaceOffset,
+    };
+    const faceEnd = {
+      x: grayFill.end.x + muralGuestNormal.x * muralFaceOffset,
+      z: grayFill.end.z + muralGuestNormal.z * muralFaceOffset,
+    };
+    addPlanSegment(grayFill.id, faceStart, faceEnd, {
+      y: muralFacadeY,
+      height: muralFacadeHeight,
+      depth: 0.025,
+      material: materials.concrete,
+      collide: false,
+    });
+  }
   const muralTexture = createBotanicalMuralTexture();
   const muralMaterial = new THREE.MeshBasicMaterial({ map: muralTexture, side: THREE.DoubleSide, toneMapped: false });
   muralMaterial.name = "concession-botanical-mural-material";
   disposableDecorMaterials.push(muralMaterial);
   const mural = new THREE.Mesh(unitPlaneGeometry, muralMaterial);
-  const muralFaceOffset = muralFacadeDepth / 2 + 0.012;
   mural.name = "concession-mural-face";
   mural.position.set(
-    planToWorldX((projectedMuralStart.x + projectedMuralEnd.x) / 2 + muralGuestNormal.x * muralFaceOffset),
+    planToWorldX((muralFacade.artwork.start.x + muralFacade.artwork.end.x) / 2 + muralGuestNormal.x * (muralFaceOffset + 0.015)),
     muralFacadeY,
-    (projectedMuralStart.z + projectedMuralEnd.z) / 2 + muralGuestNormal.z * muralFaceOffset,
+    (muralFacade.artwork.start.z + muralFacade.artwork.end.z) / 2 + muralGuestNormal.z * (muralFaceOffset + 0.015),
   );
   mural.rotation.y = planToWorldYaw(-Math.atan2(muralDz, muralDx));
-  mural.scale.set(Math.max(1, muralRun - 0.7), muralFacade.muralHeight, 1);
+  mural.scale.set(muralFacade.artwork.width, muralFacade.artwork.height, 1);
   mural.userData.facadeId = muralFacade.id;
+  mural.userData.artworkId = muralFacade.artwork.id;
   root.add(mural);
   sourceMeshCount += 1;
+
+  // A few subdued mechanical runs above the kitchen roof make the new attic
+  // volume legible without turning it into a traversable second floor.
+  const atticDuctStart = muralFacade.axis.start;
+  const atticDuctEnd = muralFacade.axis.end;
+  for (const [index, inset] of [0.18, 0.42, 0.66].entries()) {
+    const start = {
+      x: atticDuctStart.x + muralGuestNormal.x * inset,
+      z: atticDuctStart.z + muralGuestNormal.z * inset,
+    };
+    const end = {
+      x: atticDuctEnd.x + muralGuestNormal.x * inset,
+      z: atticDuctEnd.z + muralGuestNormal.z * inset,
+    };
+    addPlanSegment(`kitchen-attic-duct-${index + 1}`, start, end, {
+      y: muralFacade.topY + 0.55 + index * 0.28,
+      height: 0.14,
+      depth: 0.14,
+      material: materials.stainless,
+      collide: false,
+    });
+  }
 
   const electrical = roomById("electrical-room");
   // The approach-east wall already forms the electrical room's west wall and
@@ -1992,7 +2127,7 @@ export function createTheaterWorld({ scene, materials }) {
       sourceMeshCount,
       colliderCount: colliders.length,
       lightCount: hallLights.length + 3,
-      layoutVersion: "mililani-sketch-v12",
+      layoutVersion: "mililani-sketch-v13",
     }),
   };
 }
