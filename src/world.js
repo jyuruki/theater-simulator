@@ -57,7 +57,7 @@ const publicById = (id) => PUBLIC_SPACES.find((space) => space.id === id);
 
 export function createTheaterWorld({ scene, materials }) {
   const root = new THREE.Group();
-  root.name = "Mililani 14 layout prototype v13";
+  root.name = "Mililani 14 layout prototype v14";
   scene.add(root);
 
   const colliders = [];
@@ -180,6 +180,31 @@ export function createTheaterWorld({ scene, materials }) {
     mesh.name = id;
     mesh.position.set(space === "plan" ? planToWorldX(x) : x, y, z);
     mesh.scale.set(radius * 2, height, radius * 2);
+    mesh.receiveShadow = true;
+    parent.add(mesh);
+    sourceMeshCount += 1;
+    return mesh;
+  };
+
+  // Mechanical pipe runs are authored in plan space but can rise, drop, and
+  // branch through the exposed lobby volume. Build each run between its true
+  // 3D endpoints so large ducts do not read as the thin horizontal fins used
+  // in the earlier placeholder attic treatment.
+  const addPlanPipeSegment = ({ id, start, end, radius, material, parent = root }) => {
+    const worldStart = new THREE.Vector3(planToWorldX(start.x), start.y, start.z);
+    const worldEnd = new THREE.Vector3(planToWorldX(end.x), end.y, end.z);
+    const direction = worldEnd.clone().sub(worldStart);
+    const length = direction.length();
+    if (length <= EPSILON) return null;
+    const mesh = new THREE.Mesh(unitCylinderGeometry, material);
+    mesh.name = id;
+    mesh.position.copy(worldStart).add(worldEnd).multiplyScalar(0.5);
+    mesh.quaternion.setFromUnitVectors(
+      new THREE.Vector3(0, 1, 0),
+      direction.normalize(),
+    );
+    mesh.scale.set(radius * 2, length, radius * 2);
+    mesh.castShadow = true;
     mesh.receiveShadow = true;
     parent.add(mesh);
     sourceMeshCount += 1;
@@ -1556,7 +1581,12 @@ export function createTheaterWorld({ scene, materials }) {
   // 4.6 m roof. The public stone lobby remains clear all the way to 13.8 m.
   for (const roomId of LOBBY_CEILING_PLAN.lowServiceRoomIds) {
     const serviceRoom = roomById(roomId);
-    if (serviceRoom) addCeiling(serviceRoom.id, serviceRoom.bounds, LOBBY_SERVICE_HEIGHT);
+    // The kitchen is a traced polygon in V14 rather than its old rectangular
+    // room bounds. Its dedicated surfaces are authored below so no slab can
+    // protrude through the diagonal mural or leave the connector nook open.
+    if (serviceRoom && roomId !== LOBBY_PLAN.kitchenCeiling.replacementForRoomId) {
+      addCeiling(serviceRoom.id, serviceRoom.bounds, LOBBY_SERVICE_HEIGHT);
+    }
   }
   addCeiling(approach.id, approach.bounds);
   addCeiling(posterAlcove.id, posterAlcove.bounds);
@@ -1657,14 +1687,25 @@ export function createTheaterWorld({ scene, materials }) {
     zMax: lobbyBackZ,
   }, materials.floorDark);
   const partition = LOBBY_PLAN.kitchenPartition;
+  const concessionBackWall = LOBBY_PLAN.concessionBackWall;
+  const mergedPartitionSegments = new Set(concessionBackWall.mergedPartitionSegments ?? []);
+  const mergedPartitionStart = Math.min(...mergedPartitionSegments);
   for (let index = 0; index < partition.length - 1; index += 1) {
     const start = partition[index];
     const end = partition[index + 1];
     const isKitchenStorageDoor = index === LOBBY_PLAN.kitchenStorageDoor.partitionSegment;
     const isServiceDoor = index === LOBBY_PLAN.serviceDoor.partitionSegment;
-    if (index === 3 || index === 4) {
-      // V13 replaces the short V12 wall with the single door-to-back-bar
-      // rear-axis wall below. Do not leave the old overlapping pieces behind.
+    if (index === mergedPartitionStart) {
+      // Restore the V12 two-thirds back wall as one physical owner. Its
+      // authored midpoint proves that the two source segments remain
+      // collinear, while one mesh avoids a flashing seam at p4.
+      addPlanSegment(
+        concessionBackWall.id,
+        concessionBackWall.start,
+        concessionBackWall.end,
+        { height: concessionBackWall.height, material: materials.wall },
+      );
+    } else if (mergedPartitionSegments.has(index)) {
       continue;
     } else if (isKitchenStorageDoor) {
       addPlanSegmentWithOpening(
@@ -1686,20 +1727,10 @@ export function createTheaterWorld({ scene, materials }) {
       addPlanSegment(`kitchen-partition-${index}`, start, end, { material: materials.wall });
     }
   }
-  const concessionBackWall = LOBBY_PLAN.concessionBackWall;
-  addPlanSegment(
-    concessionBackWall.id,
-    concessionBackWall.start,
-    concessionBackWall.end,
-    { height: concessionBackWall.height, material: materials.wall },
-  );
 
-  // Preserve the original kitchen edge and deliberately seal the triangular
-  // wedge created by the counter-parallel V12 wall. The existing lobby and
-  // service-strip floors already meet underneath it; a second polygon floor
-  // would overlap them and flash. The dedicated low roof and two boundary
-  // walls make the wedge true dead space instead of a visible crack or a
-  // place the player can enter.
+  // The V12 connector nook is traversable again. Only the tiny floor-finish
+  // sliver at its north edge is sealed, and the existing floor union remains
+  // its sole floor owner so there is no coplanar duplicate to flash.
   const kitchenDeadSpace = LOBBY_PLAN.kitchenDeadSpace;
   addPlanSegment(
     kitchenDeadSpace.separatingWall.id,
@@ -1715,11 +1746,36 @@ export function createTheaterWorld({ scene, materials }) {
     materials.ceiling,
   );
 
+  // Replace the kitchen room's obsolete rectangular roof with the exact
+  // traced surfaces. Together with the tiny wedge and mural soffit these
+  // polygons share edges but never overlap, closing the kitchen and its
+  // connector-door nook without protruding into the public lobby.
+  for (const surface of LOBBY_PLAN.kitchenCeiling.surfaces) {
+    addPlanPolygonSlab(
+      surface.id,
+      surface.vertices,
+      surface.elevation,
+      surface.thickness,
+      materials.ceiling,
+    );
+  }
+
   const atticUpperHeight = LOBBY_PLAN.muralFacade.topY - LOBBY_SERVICE_HEIGHT;
   addPlanSegment(
-    "kitchen-attic-wall-upper",
-    kitchenDeadSpace.separatingWall.start,
-    kitchenDeadSpace.separatingWall.end,
+    "kitchen-connector-attic-upper",
+    partition[2],
+    partition[3],
+    {
+      y: LOBBY_SERVICE_HEIGHT + atticUpperHeight / 2,
+      height: atticUpperHeight,
+      material: materials.wall,
+      collide: false,
+    },
+  );
+  addPlanSegment(
+    "kitchen-parallel-attic-upper",
+    concessionBackWall.start,
+    concessionBackWall.end,
     {
       y: LOBBY_SERVICE_HEIGHT + atticUpperHeight / 2,
       height: atticUpperHeight,
@@ -1782,19 +1838,13 @@ export function createTheaterWorld({ scene, materials }) {
   addClosedDoor("future-stair-closed-door", "south", stairReserve.zMin, stairDoorCenter, { width: 1.7 });
   addLabel({ id: "future-stair-sign", text: "SECOND FLOOR · FUTURE PHASE", position: [stairReserve.xMin - 0.1, 2.7, frontZ(16)], rotationY: -Math.PI / 2, width: 3.5, height: 0.42, small: true, accent: "#8c6bd3" });
 
-  // The artwork keeps its V12 dimensions, but V13 gives it the photographed
-  // longer architectural surround: kitchen-door jamb to just before the back
-  // bar, with exposed gray fields at both ends. The entire assembly sits
-  // staffward of the former floating location and returns to the real rear
-  // wall through a closed low soffit.
+  // The V14 pink line is literal: p7 beside the kitchen door to the southwest
+  // end of the isolated back bar. The V12 artwork keeps its exact dimensions;
+  // the extra width is gray only at the two sides, never above or below it.
   const muralFacade = LOBBY_PLAN.muralFacade;
   const muralDx = muralFacade.projectedEnd.x - muralFacade.projectedStart.x;
   const muralDz = muralFacade.projectedEnd.z - muralFacade.projectedStart.z;
-  const muralRun = Math.hypot(muralDx, muralDz);
-  // The V13 surround axis runs low→high, opposite the old concession segment
-  // ordering. Reuse the authoritative concession guest normal so the artwork
-  // and gray face panels mount on the lobby side rather than behind the wall.
-  const muralGuestNormal = LOBBY_PLAN.concessionRun.guestNormal;
+  const muralGuestNormal = muralFacade.axis.guestNormal;
   const projectedMuralStart = muralFacade.projectedStart;
   const projectedMuralEnd = muralFacade.projectedEnd;
   const muralFacadeHeight = muralFacade.topY - muralFacade.bottomY;
@@ -1840,7 +1890,7 @@ export function createTheaterWorld({ scene, materials }) {
     };
     addPlanSegment(grayFill.id, faceStart, faceEnd, {
       y: muralFacadeY,
-      height: muralFacadeHeight,
+      height: grayFill.height,
       depth: 0.025,
       material: materials.concrete,
       collide: false,
@@ -1864,25 +1914,51 @@ export function createTheaterWorld({ scene, materials }) {
   root.add(mural);
   sourceMeshCount += 1;
 
-  // A few subdued mechanical runs above the kitchen roof make the new attic
-  // volume legible without turning it into a traversable second floor.
-  const atticDuctStart = muralFacade.axis.start;
-  const atticDuctEnd = muralFacade.axis.end;
-  for (const [index, inset] of [0.18, 0.42, 0.66].entries()) {
-    const start = {
-      x: atticDuctStart.x + muralGuestNormal.x * inset,
-      z: atticDuctStart.z + muralGuestNormal.z * inset,
-    };
-    const end = {
-      x: atticDuctEnd.x + muralGuestNormal.x * inset,
-      z: atticDuctEnd.z + muralGuestNormal.z * inset,
-    };
-    addPlanSegment(`kitchen-attic-duct-${index + 1}`, start, end, {
-      y: muralFacade.topY + 0.55 + index * 0.28,
-      height: 0.14,
-      depth: 0.14,
-      material: materials.stainless,
+  // The Yelp reference reads as an exposed mechanical ceiling rather than a
+  // few decorative lines. Render the complete source-authored field: six
+  // broad rectangular trunks, crossing round utilities, risers, branches,
+  // and paired suspension rods distributed across the mural/lobby volume.
+  const overheadMechanicals = LOBBY_PLAN.overheadMechanicals;
+  const mechanicalMaterial = (materialKey, fallback) => materials[materialKey] ?? fallback;
+  for (const duct of overheadMechanicals.ducts) {
+    addPlanSegment(duct.id, duct.start, duct.end, {
+      y: duct.y,
+      height: duct.height,
+      depth: duct.width,
+      material: mechanicalMaterial(duct.materialKey, materials.stainless),
       collide: false,
+    });
+
+    const dx = duct.end.x - duct.start.x;
+    const dz = duct.end.z - duct.start.z;
+    const length = Math.hypot(dx, dz);
+    const unitX = dx / length;
+    const unitZ = dz / length;
+    const normalX = -unitZ;
+    const normalZ = unitX;
+    const hangerCount = Math.max(1, Math.floor(length / overheadMechanicals.hangerSpacing));
+    for (let index = 0; index < hangerCount; index += 1) {
+      const t = (index + 1) / (hangerCount + 1);
+      const centerX = duct.start.x + dx * t;
+      const centerZ = duct.start.z + dz * t;
+      for (const side of [-1, 1]) {
+        const offset = side * duct.width * 0.38;
+        const x = centerX + normalX * offset;
+        const z = centerZ + normalZ * offset;
+        addPlanPipeSegment({
+          id: `${duct.id}-hanger-${index + 1}-${side < 0 ? "left" : "right"}`,
+          start: { x, y: duct.y + duct.height / 2, z },
+          end: { x, y: LOBBY_PUBLIC_HEIGHT - 0.05, z },
+          radius: 0.025,
+          material: materials.black,
+        });
+      }
+    }
+  }
+  for (const pipe of overheadMechanicals.pipes) {
+    addPlanPipeSegment({
+      ...pipe,
+      material: mechanicalMaterial(pipe.materialKey, materials.stainless),
     });
   }
 
@@ -2127,7 +2203,7 @@ export function createTheaterWorld({ scene, materials }) {
       sourceMeshCount,
       colliderCount: colliders.length,
       lightCount: hallLights.length + 3,
-      layoutVersion: "mililani-sketch-v13",
+      layoutVersion: "mililani-sketch-v14",
     }),
   };
 }
