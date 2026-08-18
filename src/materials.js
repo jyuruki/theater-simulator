@@ -820,6 +820,22 @@ function createMaterialLibrary(renderer) {
       clearcoat: 0.24,
       clearcoatRoughness: 0.31,
     })),
+    counterWhite: track(new THREE.MeshPhysicalMaterial({
+      name: "Counter / satin white service and expo",
+      color: 0xf0f1ed,
+      roughness: 0.3,
+      metalness: 0,
+      clearcoat: 0.28,
+      clearcoatRoughness: 0.25,
+    })),
+    concessionBlue: track(new THREE.MeshPhysicalMaterial({
+      name: "Counter / deep blue concession",
+      color: 0x243d78,
+      roughness: 0.32,
+      metalness: 0.02,
+      clearcoat: 0.3,
+      clearcoatRoughness: 0.27,
+    })),
     stainless: track(new THREE.MeshStandardMaterial({
       name: "Metal / brushed stainless",
       color: 0xffffff,

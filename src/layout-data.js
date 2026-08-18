@@ -6,6 +6,8 @@ const rect = (xMin, xMax, zMin, zMax) => ({ xMin, xMax, zMin, zMax });
 // by 15 percent and rigidly re-stationing complete auditorium/service modules.
 // V11 retains that Z translation and moves only the complete front lobby module
 // to plan-right so the customer-bar end aligns with the ticket approach.
+// V12 closes the concession volume with an attached mural soffit, realigns the
+// kitchen back wall, and authors the photographed counter/service cadence.
 export const FRONT_SHIFT_Z = -2.5;
 export const LOBBY_SHIFT_X = 8.3;
 const shiftedZ = (value) => value + FRONT_SHIFT_Z;
@@ -22,7 +24,10 @@ export const LOBBY_CEILING_PLAN = Object.freeze({
   baseHeight: 4.6,
   multiplier: 3,
   highHeight: 13.8,
-  highPublicSpaceIds: Object.freeze(["lobby", "soda-service", "recessed-theater-court"]),
+  // Only the stone-floor front lobby rises into the exposed-volume ceiling.
+  // The ticket approach, main hall, and fountain / T3-5 court all share the
+  // retained 4.6 m ceiling datum.
+  highPublicSpaceIds: Object.freeze(["lobby"]),
   lowServiceRoomIds: Object.freeze([
     "office-overflow",
     "office",
@@ -107,14 +112,14 @@ export const FOUNTAIN_PLAN = Object.freeze({
       id: "fountain-island-west-pillar",
       position: Object.freeze([-2.03, 0, 63.6]),
       footprint: Object.freeze([0.7, 0.7]),
-      height: LOBBY_CEILING_PLAN.highHeight,
+      height: LOBBY_CEILING_PLAN.baseHeight,
       finish: "white",
     }),
     Object.freeze({
       id: "fountain-island-east-pillar",
       position: Object.freeze([13.63, 0, 63.6]),
       footprint: Object.freeze([0.7, 0.7]),
-      height: LOBBY_CEILING_PLAN.highHeight,
+      height: LOBBY_CEILING_PLAN.baseHeight,
       finish: "white",
     }),
   ]),
@@ -345,24 +350,127 @@ export const SERVICE_ROOMS = Object.freeze([
   { id: "under-storage-6", name: "Under-Seat Storage 6", short: "U/S 6", detail: "Shared two-door room below Theater 6's upper tiers", bounds: rect(31.7, 44.7, 68.5, 71.8), kind: "storage-lower", ceilingHeight: 2.32, doorSide: "south", doorCenters: [35.2, 41.7] },
 ]);
 
+const CUSTOMER_COUNTER = Object.freeze([
+  { x: shiftedLobbyX(-8.8), z: shiftedZ(20.4) },
+  { x: shiftedLobbyX(-16.1), z: shiftedZ(20.4) },
+  { x: shiftedLobbyX(-16.8), z: shiftedZ(17.8) },
+  { x: shiftedLobbyX(-20.5), z: shiftedZ(8.2) },
+  { x: shiftedLobbyX(-20.1), z: shiftedZ(4.9) },
+].map((point) => Object.freeze(point)));
+
+// After the public kitchen door, the back wall follows the concession face
+// for exactly two-thirds of its diagonal run. The midpoint preserves the
+// existing eight-vertex representation while both halves remain collinear.
+const KITCHEN_PARTITION = Object.freeze([
+  { x: shiftedLobbyX(-29), z: shiftedZ(23.5) },
+  { x: shiftedLobbyX(-29), z: shiftedZ(19.6) },
+  { x: shiftedLobbyX(-27.3), z: shiftedZ(17.3) },
+  { x: shiftedLobbyX(-22.03333333333333), z: shiftedZ(17.5) },
+  { x: shiftedLobbyX(-23.26666666666667), z: shiftedZ(14.3) },
+  { x: shiftedLobbyX(-24.5), z: shiftedZ(11.1) },
+  { x: shiftedLobbyX(-24.5), z: shiftedZ(9.6) },
+  { x: shiftedLobbyX(-24.5), z: shiftedZ(7) },
+].map((point) => Object.freeze(point)));
+
+const concessionRunStart = CUSTOMER_COUNTER[2];
+const concessionRunEnd = CUSTOMER_COUNTER[3];
+const concessionRunDx = concessionRunEnd.x - concessionRunStart.x;
+const concessionRunDz = concessionRunEnd.z - concessionRunStart.z;
+const concessionRunLength = Math.hypot(concessionRunDx, concessionRunDz);
+const concessionGuestNormal = Object.freeze({
+  x: -concessionRunDz / concessionRunLength,
+  z: concessionRunDx / concessionRunLength,
+});
+const concessionRunRotation = Math.atan2(-concessionRunDx, -concessionRunDz);
+// Fixture models use local X as their visible width. Rotate those fixtures a
+// quarter turn from the POS orientation so their width follows the counter
+// run and their depth faces the guest/back wall instead of becoming a fin.
+// Use the -90° equivalent so local +Z points toward the staff/back wall;
+// candy glass and contents authored at local -Z then face the guests.
+const concessionFixtureRotation = concessionRunRotation - Math.PI / 2;
+const CONCESSION_RUN = Object.freeze({
+  start: concessionRunStart,
+  end: concessionRunEnd,
+  length: concessionRunLength,
+  rotation: concessionRunRotation,
+  fixtureRotation: concessionFixtureRotation,
+  guestNormal: concessionGuestNormal,
+});
+
+const CUSTOMER_COUNTER_SECTIONS = Object.freeze([
+  Object.freeze({
+    id: "customer-counter-bar", segmentIndex: 0, role: "bar",
+    baseMaterialKey: "wood", topMaterialKey: "counterStone",
+  }),
+  Object.freeze({
+    id: "customer-counter-white-service", segmentIndex: 1, role: "service-white",
+    baseMaterialKey: "counterWhite", topMaterialKey: "counterStone",
+  }),
+  Object.freeze({
+    id: "customer-counter-concession", segmentIndex: 2, role: "concession",
+    baseMaterialKey: "concessionBlue", topMaterialKey: "counterStone",
+  }),
+  Object.freeze({
+    id: "customer-counter-expo", segmentIndex: 3, role: "expo",
+    baseMaterialKey: "counterWhite", topMaterialKey: "counterStone",
+  }),
+]);
+
+const MURAL_PROJECTION = 0.55;
+const MURAL_FASCIA_DEPTH = 0.7;
+const projectedMuralStart = Object.freeze({
+  x: concessionRunStart.x + concessionGuestNormal.x * MURAL_PROJECTION,
+  z: concessionRunStart.z + concessionGuestNormal.z * MURAL_PROJECTION,
+});
+const projectedMuralEnd = Object.freeze({
+  x: concessionRunEnd.x + concessionGuestNormal.x * MURAL_PROJECTION,
+  z: concessionRunEnd.z + concessionGuestNormal.z * MURAL_PROJECTION,
+});
+const muralRearFaceStart = Object.freeze({
+  x: projectedMuralStart.x - concessionGuestNormal.x * MURAL_FASCIA_DEPTH / 2,
+  z: projectedMuralStart.z - concessionGuestNormal.z * MURAL_FASCIA_DEPTH / 2,
+});
+const muralRearFaceEnd = Object.freeze({
+  x: projectedMuralEnd.x - concessionGuestNormal.x * MURAL_FASCIA_DEPTH / 2,
+  z: projectedMuralEnd.z - concessionGuestNormal.z * MURAL_FASCIA_DEPTH / 2,
+});
+const muralRearHigh = KITCHEN_PARTITION[3];
+const muralRearLow = KITCHEN_PARTITION.at(-1);
+const kitchenCeilingXMax = shiftedLobbyX(-17.8);
+const kitchenCeilingZMin = shiftedZ(17);
+const rearDoorHigh = KITCHEN_PARTITION[5];
+const rearAtKitchenSouthT = (kitchenCeilingZMin - rearDoorHigh.z) / (muralRearHigh.z - rearDoorHigh.z);
+const rearAtKitchenSouth = Object.freeze({
+  x: rearDoorHigh.x + (muralRearHigh.x - rearDoorHigh.x) * rearAtKitchenSouthT,
+  z: kitchenCeilingZMin,
+});
+const kitchenEastOnHighReturnT = (kitchenCeilingXMax - muralRearHigh.x) / (muralRearFaceStart.x - muralRearHigh.x);
+const kitchenEastOnHighReturn = Object.freeze({
+  x: kitchenCeilingXMax,
+  z: muralRearHigh.z + (muralRearFaceStart.z - muralRearHigh.z) * kitchenEastOnHighReturnT,
+});
+const MURAL_SOFFIT_VERTICES = Object.freeze([
+  muralRearFaceStart,
+  muralRearFaceEnd,
+  muralRearLow,
+  rearDoorHigh,
+  rearAtKitchenSouth,
+  Object.freeze({ x: kitchenCeilingXMax, z: kitchenCeilingZMin }),
+  kitchenEastOnHighReturn,
+]);
+
 export const LOBBY_PLAN = Object.freeze({
   envelope: shiftedLobbyRect(-37, 23, 0, 24),
   frontDoorCenters: [shiftedLobbyX(-10.8), shiftedLobbyX(-2.2), shiftedLobbyX(8.7)],
-  customerCounter: [
-    { x: shiftedLobbyX(-8.8), z: shiftedZ(20.4) },
-    { x: shiftedLobbyX(-16.1), z: shiftedZ(20.4) },
-    { x: shiftedLobbyX(-16.8), z: shiftedZ(17.8) },
-    { x: shiftedLobbyX(-20.5), z: shiftedZ(8.2) },
-    { x: shiftedLobbyX(-20.1), z: shiftedZ(4.9) },
-  ],
+  customerCounter: CUSTOMER_COUNTER,
+  customerCounterSections: CUSTOMER_COUNTER_SECTIONS,
+  concessionRun: CONCESSION_RUN,
   backBar: shiftedLobbyRect(-16.1, -8.6, 23.05, 24),
   hotLine: shiftedLobbyRect(-28.8, -17.8, 23.05, 24),
-  kitchenPartition: [
-    { x: shiftedLobbyX(-29), z: shiftedZ(23.5) }, { x: shiftedLobbyX(-29), z: shiftedZ(19.6) }, { x: shiftedLobbyX(-27.3), z: shiftedZ(17.3) },
-    { x: shiftedLobbyX(-24.4), z: shiftedZ(17.1) }, { x: shiftedLobbyX(-24.6), z: shiftedZ(15.5) }, { x: shiftedLobbyX(-24.5), z: shiftedZ(11.1) },
-    { x: shiftedLobbyX(-24.5), z: shiftedZ(9.6) }, { x: shiftedLobbyX(-24.5), z: shiftedZ(7) },
-  ],
-  serviceDoor: { x: shiftedLobbyX(-24.5), z: shiftedZ(10.35) },
+  kitchenPartition: KITCHEN_PARTITION,
+  serviceDoor: Object.freeze({
+    x: shiftedLobbyX(-24.5), z: shiftedZ(10.35), partitionSegment: 5,
+  }),
   kitchenStorageDoor: {
     x: shiftedLobbyX(-28.15), z: shiftedZ(18.45), width: 1.5,
     wall: "diagonal", partitionSegment: 1, segmentT: 0.5,
@@ -393,19 +501,45 @@ export const LOBBY_PLAN = Object.freeze({
   }),
   muralFacade: Object.freeze({
     id: "concession-mural-facade",
-    start: Object.freeze({ x: shiftedLobbyX(-16.8), z: shiftedZ(17.8) }),
-    end: Object.freeze({ x: shiftedLobbyX(-20.5), z: shiftedZ(8.2) }),
-    projection: 0.55,
+    start: concessionRunStart,
+    end: concessionRunEnd,
+    projection: MURAL_PROJECTION,
+    fasciaDepth: MURAL_FASCIA_DEPTH,
+    projectedStart: projectedMuralStart,
+    projectedEnd: projectedMuralEnd,
     bottomY: LOBBY_CEILING_PLAN.baseHeight,
     topY: 10.6,
     muralHeight: 4.3,
+    returnAnchors: Object.freeze({ start: muralRearHigh, end: muralRearLow }),
+    // Returns meet the rear face of the projecting fascia, which is also the
+    // first soffit edge. Using the fascia centerline here leaves a triangular
+    // ceiling slit at the ends.
+    returnTargets: Object.freeze({ start: muralRearFaceStart, end: muralRearFaceEnd }),
+    soffit: Object.freeze({
+      id: "concession-mural-soffit",
+      elevation: LOBBY_CEILING_PLAN.baseHeight,
+      thickness: 0.1,
+      // Clipped against the rectangular kitchen ceiling so the two low roofs
+      // meet at shared edges without coplanar overlap or flashing.
+      vertices: MURAL_SOFFIT_VERTICES,
+    }),
   }),
   officePath: ["lobby", "office-overflow", "office"],
 });
 
 export const EQUIPMENT_ANCHORS = Object.freeze([
-  { id: "concession-popper-1", type: "popper", roomId: "concession-boh", position: [shiftedLobbyX(-23.5), 0, shiftedZ(14.5)], rotation: 0.34, footprint: [1.35, 0.9] },
-  { id: "concession-popper-2", type: "popper", roomId: "concession-boh", position: [shiftedLobbyX(-23.2), 0, shiftedZ(13.0)], rotation: 0.34, footprint: [1.35, 0.9] },
+  {
+    id: "concession-popper-1", type: "popper", roomId: "concession-boh",
+    position: Object.freeze([shiftedLobbyX(-22.58), 0, shiftedZ(14.5)]),
+    rotation: concessionFixtureRotation, footprint: Object.freeze([1.35, 0.9]), height: 2.8,
+    glassBottom: 1.05, glassTop: 2.48, canopyBottom: 2.48, canopyTop: 2.76,
+  },
+  {
+    id: "concession-popper-2", type: "popper", roomId: "concession-boh",
+    position: Object.freeze([shiftedLobbyX(-23.16), 0, shiftedZ(13.0)]),
+    rotation: concessionFixtureRotation, footprint: Object.freeze([1.35, 0.9]), height: 2.8,
+    glassBottom: 1.05, glassTop: 2.48, canopyBottom: 2.48, canopyTop: 2.76,
+  },
   { id: "kitchen-grill", type: "grill", roomId: "kitchen", position: [shiftedLobbyX(-27.5), 0, shiftedZ(22.7)], rotation: 0, footprint: [1.35, 0.9] },
   { id: "kitchen-fryer-1", type: "fryer", roomId: "kitchen", position: [shiftedLobbyX(-25.7), 0, shiftedZ(22.7)], rotation: 0, footprint: [0.9, 0.9] },
   { id: "kitchen-fryer-2", type: "fryer", roomId: "kitchen", position: [shiftedLobbyX(-24.3), 0, shiftedZ(22.7)], rotation: 0, footprint: [0.9, 0.9] },
@@ -419,15 +553,46 @@ export const EQUIPMENT_ANCHORS = Object.freeze([
   { id: "boys-water-fountain-2", type: "drinking-fountain", roomId: "boys-fountain-alcove", position: [-13.36, 0, shiftedZ(63.83)], rotation: -Math.PI / 2, footprint: [0.65, 0.42] },
 ]);
 
-export const POS_STATIONS = Object.freeze([
-  [shiftedLobbyX(-17.3), shiftedZ(16.8)], [shiftedLobbyX(-17.9), shiftedZ(15.0)], [shiftedLobbyX(-18.5), shiftedZ(13.3)],
-  [shiftedLobbyX(-19.2), shiftedZ(11.5)], [shiftedLobbyX(-19.8), shiftedZ(9.7)], [shiftedLobbyX(-20.3), shiftedZ(8.0)],
-].map(([x, z], index) => ({
-  id: `concession-pos-${index + 1}`,
-  position: [x, 0, z],
-  rotation: 0.37,
-  counterSegment: "diagonal-pos-run",
-})));
+const concessionServiceTypes = Object.freeze(["pos", "pos", "candy", "pos", "pos", "candy", "pos", "pos"]);
+let concessionPosIndex = 0;
+let concessionCandyIndex = 0;
+export const CONCESSION_SERVICE_SEQUENCE = Object.freeze(concessionServiceTypes.map((type, slotIndex) => {
+  const slotT = (slotIndex + 0.5) / concessionServiceTypes.length;
+  const position = Object.freeze([
+    concessionRunStart.x + concessionRunDx * slotT,
+    0,
+    concessionRunStart.z + concessionRunDz * slotT,
+  ]);
+  if (type === "pos") {
+    concessionPosIndex += 1;
+    return Object.freeze({
+      id: `concession-pos-${concessionPosIndex}`,
+      type,
+      slotIndex,
+      slotT,
+      position,
+      rotation: concessionRunRotation,
+      counterSegment: "diagonal-pos-run",
+    });
+  }
+  concessionCandyIndex += 1;
+  return Object.freeze({
+    id: `concession-candy-${concessionCandyIndex}`,
+    type,
+    slotIndex,
+    slotT,
+    position,
+    rotation: concessionFixtureRotation,
+    footprint: Object.freeze([1, 0.12]),
+    guestOffset: 0.58,
+    counterSegment: "diagonal-pos-run",
+  });
+}));
+
+export const POS_STATIONS = Object.freeze(CONCESSION_SERVICE_SEQUENCE.filter(({ type }) => type === "pos"));
+export const CONCESSION_CANDY_DISPLAYS = Object.freeze(
+  CONCESSION_SERVICE_SEQUENCE.filter(({ type }) => type === "candy"),
+);
 
 export const HALL_END_EXITS = Object.freeze([
   { id: "hall-west-exit", side: "west", x: -40, z: 57.6, segment: "narrow" },
@@ -547,6 +712,43 @@ export function validateLayoutData() {
   const frontWalk = PUBLIC_SPACES.find(({ id }) => id === "front-walk");
   const ticketCheck = PUBLIC_SPACES.find(({ id }) => id === "ticket-check");
   const nearlyEqual = (first, second) => Math.abs(first - second) <= 1e-9;
+  const expectedCounterSections = [
+    ["customer-counter-bar", "bar", "wood"],
+    ["customer-counter-white-service", "service-white", "counterWhite"],
+    ["customer-counter-concession", "concession", "concessionBlue"],
+    ["customer-counter-expo", "expo", "counterWhite"],
+  ];
+  if (LOBBY_PLAN.customerCounterSections?.length !== expectedCounterSections.length
+    || LOBBY_PLAN.customerCounterSections.some((section, index) => {
+      const [id, role, baseMaterialKey] = expectedCounterSections[index] ?? [];
+      return section.id !== id
+        || section.segmentIndex !== index
+        || section.role !== role
+        || section.baseMaterialKey !== baseMaterialKey
+        || section.topMaterialKey !== "counterStone";
+    })) {
+    errors.push("V12 counter sections must run wood bar, white service, blue concession, then white Expo.");
+  }
+
+  const partition = LOBBY_PLAN.kitchenPartition ?? [];
+  const parallelStart = partition[3];
+  const parallelMidpoint = partition[4];
+  const parallelEnd = partition[5];
+  const serviceDoorEnd = partition[6];
+  const expectedParallelFraction = 2 / 3;
+  if (partition.length !== 8
+    || !parallelStart || !parallelMidpoint || !parallelEnd || !serviceDoorEnd
+    || !nearlyEqual(parallelEnd.x - parallelStart.x, concessionRunDx * expectedParallelFraction)
+    || !nearlyEqual(parallelEnd.z - parallelStart.z, concessionRunDz * expectedParallelFraction)
+    || !nearlyEqual(parallelMidpoint.x, (parallelStart.x + parallelEnd.x) / 2)
+    || !nearlyEqual(parallelMidpoint.z, (parallelStart.z + parallelEnd.z) / 2)) {
+    errors.push("V12 kitchen partition points 3–5 must form a counter-parallel back wall spanning two-thirds of the concession run.");
+  }
+  if (LOBBY_PLAN.serviceDoor?.partitionSegment !== 5
+    || !nearlyEqual(LOBBY_PLAN.serviceDoor?.x, (parallelEnd?.x + serviceDoorEnd?.x) / 2)
+    || !nearlyEqual(LOBBY_PLAN.serviceDoor?.z, (parallelEnd?.z + serviceDoorEnd?.z) / 2)) {
+    errors.push("The concession service door must remain centered in kitchen-partition segment 5 after the V12 wall realignment.");
+  }
   if (!nearlyEqual(LOBBY_SHIFT_X, 8.3)
     || !nearlyEqual(LOBBY_PLAN.customerCounter[0].x, TICKET_APPROACH_PLAN.bounds.xMin)) {
     errors.push("V11 must shift the rigid lobby module 8.3 m so the guest-bar end aligns with the ticket approach.");
@@ -561,8 +763,9 @@ export function validateLayoutData() {
   }
   if (LOBBY_CEILING_PLAN.multiplier !== 3
     || !nearlyEqual(LOBBY_CEILING_PLAN.highHeight, LOBBY_CEILING_PLAN.baseHeight * 3)
-    || !LOBBY_CEILING_PLAN.highPublicSpaceIds.includes("lobby")) {
-    errors.push("The open lobby ceiling must be exactly three times the retained service-room height.");
+    || LOBBY_CEILING_PLAN.highPublicSpaceIds.length !== 1
+    || LOBBY_CEILING_PLAN.highPublicSpaceIds[0] !== "lobby") {
+    errors.push("Only the open lobby may use the three-times-height ceiling; the fountain court stays at the lower datum.");
   }
   if (LOBBY_PLAN.kiosks.length !== 3
     || LOBBY_PLAN.kiosks.some((kiosk, index) => (
@@ -601,17 +804,79 @@ export function validateLayoutData() {
     || eastPillar?.id !== "fountain-island-east-pillar"
     || !nearlyEqual(dividerPassage, 1.11)
     || dividerPassage <= 0.68
-    || FOUNTAIN_PLAN.pillars.some((pillar) => !nearlyEqual(pillar.height, LOBBY_CEILING_PLAN.highHeight))) {
-    errors.push("Two full-height fountain pillars must preserve the narrow but traversable divider passage.");
+    || FOUNTAIN_PLAN.pillars.some((pillar) => !nearlyEqual(pillar.height, LOBBY_CEILING_PLAN.baseHeight))) {
+    errors.push("Two lower-court-height fountain pillars must preserve the narrow but traversable divider passage.");
   }
-  if (LOBBY_PLAN.muralFacade?.id !== "concession-mural-facade"
-    || !nearlyEqual(LOBBY_PLAN.muralFacade.start.x, LOBBY_PLAN.customerCounter[2].x)
-    || !nearlyEqual(LOBBY_PLAN.muralFacade.start.z, LOBBY_PLAN.customerCounter[2].z)
-    || !nearlyEqual(LOBBY_PLAN.muralFacade.end.x, LOBBY_PLAN.customerCounter[3].x)
-    || !nearlyEqual(LOBBY_PLAN.muralFacade.end.z, LOBBY_PLAN.customerCounter[3].z)
-    || LOBBY_PLAN.muralFacade.bottomY < LOBBY_CEILING_PLAN.baseHeight
-    || LOBBY_PLAN.muralFacade.topY > LOBBY_CEILING_PLAN.highHeight) {
-    errors.push("The elevated mural facade must project above the translated diagonal concession run.");
+  const muralFacade = LOBBY_PLAN.muralFacade;
+  const muralSoffit = muralFacade?.soffit;
+  if (muralFacade?.id !== "concession-mural-facade"
+    || !nearlyEqual(muralFacade.start.x, LOBBY_PLAN.customerCounter[2].x)
+    || !nearlyEqual(muralFacade.start.z, LOBBY_PLAN.customerCounter[2].z)
+    || !nearlyEqual(muralFacade.end.x, LOBBY_PLAN.customerCounter[3].x)
+    || !nearlyEqual(muralFacade.end.z, LOBBY_PLAN.customerCounter[3].z)
+    || !nearlyEqual(muralFacade.projectedStart.x, muralFacade.start.x + concessionGuestNormal.x * muralFacade.projection)
+    || !nearlyEqual(muralFacade.projectedStart.z, muralFacade.start.z + concessionGuestNormal.z * muralFacade.projection)
+    || !nearlyEqual(muralFacade.projectedEnd.x, muralFacade.end.x + concessionGuestNormal.x * muralFacade.projection)
+    || !nearlyEqual(muralFacade.projectedEnd.z, muralFacade.end.z + concessionGuestNormal.z * muralFacade.projection)
+    || muralFacade.returnAnchors?.start !== parallelStart
+    || muralFacade.returnAnchors?.end !== partition.at(-1)
+    || muralFacade.returnTargets?.start !== muralSoffit?.vertices?.[0]
+    || muralFacade.returnTargets?.end !== muralSoffit?.vertices?.[1]
+    || muralFacade.bottomY < LOBBY_CEILING_PLAN.baseHeight
+    || muralFacade.topY > LOBBY_CEILING_PLAN.highHeight) {
+    errors.push("The V12 mural facade must project above the diagonal concession run and return to the realigned back wall.");
+  }
+  if (muralSoffit?.id !== "concession-mural-soffit"
+    || !nearlyEqual(muralSoffit.elevation, LOBBY_CEILING_PLAN.baseHeight)
+    || !nearlyEqual(muralSoffit.thickness, 0.1)
+    || muralSoffit.vertices?.length !== 7
+    || muralSoffit.vertices.some(({ x, z }) => !Number.isFinite(x) || !Number.isFinite(z))) {
+    errors.push("The V12 mural must own a finite seven-vertex soffit that closes the concession volume at the lower ceiling datum.");
+  }
+
+  const expectedServiceTypes = ["pos", "pos", "candy", "pos", "pos", "candy", "pos", "pos"];
+  let expectedPosIndex = 0;
+  let expectedCandyIndex = 0;
+  if (CONCESSION_SERVICE_SEQUENCE.length !== expectedServiceTypes.length
+    || CONCESSION_SERVICE_SEQUENCE.some((station, slotIndex) => {
+      const type = expectedServiceTypes[slotIndex];
+      const slotT = (slotIndex + 0.5) / expectedServiceTypes.length;
+      if (type === "pos") expectedPosIndex += 1;
+      else expectedCandyIndex += 1;
+      const expectedId = type === "pos"
+        ? `concession-pos-${expectedPosIndex}`
+        : `concession-candy-${expectedCandyIndex}`;
+      return station.type !== type
+        || station.id !== expectedId
+        || station.slotIndex !== slotIndex
+        || !nearlyEqual(station.slotT, slotT)
+        || !nearlyEqual(station.position[0], concessionRunStart.x + concessionRunDx * slotT)
+        || !nearlyEqual(station.position[1], 0)
+        || !nearlyEqual(station.position[2], concessionRunStart.z + concessionRunDz * slotT)
+        || !nearlyEqual(
+          station.rotation,
+          type === "candy" ? concessionFixtureRotation : concessionRunRotation,
+        )
+        || station.counterSegment !== "diagonal-pos-run";
+    })
+    || POS_STATIONS.length !== 6
+    || CONCESSION_CANDY_DISPLAYS.length !== 2
+    || POS_STATIONS.some((station) => !CONCESSION_SERVICE_SEQUENCE.includes(station))
+    || CONCESSION_CANDY_DISPLAYS.some((station) => !CONCESSION_SERVICE_SEQUENCE.includes(station))) {
+    errors.push("Concession service must derive from the eight-slot 2 POS / candy / 2 POS / candy / 2 POS sequence.");
+  }
+
+  const poppers = EQUIPMENT_ANCHORS.filter(({ type }) => type === "popper");
+  if (poppers.length !== 2
+    || poppers.some((popper, index) => popper.id !== `concession-popper-${index + 1}`
+      || !nearlyEqual(popper.height, 2.8)
+      || !nearlyEqual(popper.glassBottom, 1.05)
+      || !nearlyEqual(popper.glassTop, 2.48)
+      || !nearlyEqual(popper.canopyBottom, popper.glassTop)
+      || !nearlyEqual(popper.canopyTop, 2.76)
+      || !nearlyEqual(popper.rotation, concessionFixtureRotation)
+      || popper.canopyTop > popper.height)) {
+    errors.push("The two V12 concession poppers must use the authored tall glass-and-canopy profile.");
   }
   if (EQUIPMENT_ANCHORS.filter(({ type }) => type === "drinking-fountain").length !== 2) {
     errors.push("Two drinking fountains are required outside the boys restroom.");

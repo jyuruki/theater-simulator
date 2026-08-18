@@ -51,6 +51,8 @@ const THREE = await import("three");
 const { planToWorldBounds, planToWorldX } = await import("../src/coordinates.js");
 const {
   AUDITORIUMS,
+  CONCESSION_CANDY_DISPLAYS,
+  CONCESSION_SERVICE_SEQUENCE,
   COURTYARD_PLAN,
   EQUIPMENT_ANCHORS,
   FOUNTAIN_PLAN,
@@ -82,6 +84,7 @@ THREE.Object3D.prototype.add = function captureAuthoredBoxes(...objects) {
       width: object.scale.x,
       height: object.scale.y,
       depth: object.scale.z,
+      rotationY: object.rotation.y,
       materialNames: (Array.isArray(object.material) ? object.material : [object.material]).map(({ name }) => name),
     });
   }
@@ -136,7 +139,7 @@ const auditoriumByNumber = new Map(AUDITORIUMS.map((auditorium) => [auditorium.n
 assert.equal(world.stats.auditoriumCount, 14);
 assert.equal(world.stats.seatCount, 1093);
 assert.equal(world.stats.equipmentAnchors, 13);
-assert.equal(world.stats.layoutVersion, "mililani-sketch-v11");
+assert.equal(world.stats.layoutVersion, "mililani-sketch-v12");
 assert.ok(world.stats.meshCount > 0);
 assert.ok(world.stats.colliderCount > 0);
 assert.equal(world.auditoriumGroups.size, 14);
@@ -170,8 +173,8 @@ const shiftedRuntimeBoxes = [
   ["ticket-empty-alcove-floor", TICKET_APPROACH_PLAN.emptyAlcove],
 ];
 for (const [id, bounds] of shiftedRuntimeBoxes) assertBoxMatchesBounds(id, bounds, `${id} rigid shift`);
-assert.equal(LOBBY_SHIFT_X, 8.3, "V11 lobby X translation must remain authoritative.");
-assert.equal(LOBBY_PLAN.kiosks.length, 3, "V11 must author exactly three ticket kiosks.");
+assert.equal(LOBBY_SHIFT_X, 8.3, "V12 retains the authoritative lobby X translation.");
+assert.equal(LOBBY_PLAN.kiosks.length, 3, "V12 must author exactly three ticket kiosks.");
 for (const kiosk of LOBBY_PLAN.kiosks) {
   const body = boxById(`${kiosk.id}-body`);
   assertNear(body.x, planToWorldX(kiosk.position[0]), `${kiosk.id} runtime X`);
@@ -198,30 +201,71 @@ for (const anchor of EQUIPMENT_ANCHORS.filter(({ roomId }) => ["concession-boh",
   assertNear(equipment.worldPosition.x, planToWorldX(anchor.position[0]), `${anchor.id} translated X`);
   assertNear(equipment.worldPosition.z, anchor.position[2], `${anchor.id} translated Z`);
 }
+for (const popper of EQUIPMENT_ANCHORS.filter(({ type }) => type === "popper")) {
+  const popperGroup = scene.getObjectByName(popper.id);
+  assertNear(
+    popperGroup.rotation.y,
+    -LOBBY_PLAN.concessionRun.fixtureRotation,
+    `${popper.id} runtime counter alignment`,
+  );
+  const glass = boxById(`${popper.id}-glass`);
+  const canopy = boxById(`${popper.id}-canopy`);
+  assertNear(glass.y - glass.height / 2, popper.glassBottom, `${popper.id} glass bottom`);
+  assertNear(glass.y + glass.height / 2, popper.glassTop, `${popper.id} glass top`);
+  assertNear(canopy.y - canopy.height / 2, popper.canopyBottom, `${popper.id} canopy bottom`);
+  assertNear(canopy.y + canopy.height / 2, popper.canopyTop, `${popper.id} canopy top`);
+  assertNear(popper.height, 2.8, `${popper.id} authored height`);
+  assert.ok(canopy.y + canopy.height / 2 > 2.7, `${popper.id} must read as a tall backline popper.`);
+  assert.deepEqual(canopy.materialNames, ["Accent / theater crimson"], `${popper.id} canopy finish`);
+}
 
 const highLobbyCeiling = boxById("lobby-ceiling");
 assertBoxMatchesBounds("lobby-ceiling", LOBBY_PLAN.envelope, "triple-height lobby ceiling");
 assertNear(highLobbyCeiling.y, LOBBY_CEILING_PLAN.highHeight, "triple-height lobby ceiling elevation");
 assertNear(highLobbyCeiling.y - highLobbyCeiling.height / 2, 13.75, "triple-height lobby ceiling underside");
 assertNear(LOBBY_CEILING_PLAN.highHeight, LOBBY_CEILING_PLAN.baseHeight * 3, "public ceiling 3x multiplier");
-const highCourtCeiling = assertBoxMatchesBounds(
+const lowCourtCeiling = assertBoxMatchesBounds(
   `${COURTYARD_PLAN.id}-ceiling`,
   COURTYARD_PLAN.bounds,
-  "triple-height fountain / T3-5 courtyard ceiling",
+  "ticket-height fountain / T3-5 courtyard ceiling",
 );
-assertNear(highCourtCeiling.y, LOBBY_CEILING_PLAN.highHeight, "courtyard ceiling elevation");
-const courtSouthUpper = boxById("fountain-courtyard-south-upper");
-assertNear(courtSouthUpper.x, planToWorldX((COURTYARD_PLAN.bounds.xMin + COURTYARD_PLAN.bounds.xMax) / 2), "court upper seam X");
-assertNear(courtSouthUpper.z, COURTYARD_PLAN.bounds.zMin, "court upper seam Z plane");
-assertNear(courtSouthUpper.width, COURTYARD_PLAN.bounds.xMax - COURTYARD_PLAN.bounds.xMin, "court upper seam full X span");
-assertNear(courtSouthUpper.y - courtSouthUpper.height / 2, LOBBY_CEILING_PLAN.baseHeight, "court upper seam base");
-assertNear(courtSouthUpper.y + courtSouthUpper.height / 2, LOBBY_CEILING_PLAN.highHeight, "court upper seam top");
-assert.equal(colliderIdsMatching(world, /^fountain-courtyard-south-upper$/).length, 0, "The overhead court seam must not block the hall route.");
+assertNear(lowCourtCeiling.y, LOBBY_CEILING_PLAN.baseHeight, "courtyard ceiling elevation");
+assertNear(lowCourtCeiling.y - lowCourtCeiling.height / 2, 4.55, "courtyard ceiling underside");
+assert.deepEqual(
+  authoredBoxes
+    .filter(({ id }) => ["fountain-courtyard-south-upper", "fountain-courtyard-west-upper"].includes(id))
+    .map(({ id }) => id),
+  [],
+  "A single low court roof must replace both obsolete triple-height seam walls.",
+);
+const courtLight = boxById("north-light-fountain-court");
+assertNear(courtLight.y, LOBBY_CEILING_PLAN.baseHeight - 0.18, "court light elevation below low ceiling");
+assert.ok(courtLight.y + courtLight.height / 2 < lowCourtCeiling.y - lowCourtCeiling.height / 2, "Court light must sit below its roof.");
 for (const roomId of LOBBY_CEILING_PLAN.lowServiceRoomIds) {
   const room = serviceById.get(roomId);
   const ceiling = assertBoxMatchesBounds(`${roomId}-ceiling`, room.bounds, `${roomId} retained service ceiling`);
   assertNear(ceiling.y, LOBBY_CEILING_PLAN.baseHeight, `${roomId} service ceiling elevation`);
   assertNear(ceiling.y - ceiling.height / 2, 4.55, `${roomId} service ceiling underside`);
+}
+const officeOverflow = SERVICE_ROOMS.find(({ id }) => id === "office-overflow");
+const managerOffice = SERVICE_ROOMS.find(({ id }) => id === "office");
+for (const [id, bounds] of [
+  ["office-perimeter-west", {
+    xMin: LOBBY_PLAN.envelope.xMin,
+    xMax: officeOverflow.bounds.xMin,
+    zMin: LOBBY_PLAN.envelope.zMin,
+    zMax: managerOffice.bounds.zMax,
+  }],
+  ["office-perimeter-front", {
+    xMin: officeOverflow.bounds.xMin,
+    xMax: officeOverflow.bounds.xMax,
+    zMin: LOBBY_PLAN.envelope.zMin,
+    zMax: officeOverflow.bounds.zMin,
+  }],
+]) {
+  assertBoxMatchesBounds(`${id}-floor`, bounds, `${id} closed floor strip`);
+  const ceiling = assertBoxMatchesBounds(`${id}-ceiling`, bounds, `${id} closed low-roof strip`);
+  assertNear(ceiling.y - ceiling.height / 2, 4.55, `${id} ceiling underside`);
 }
 assert.deepEqual(
   authoredBoxes
@@ -231,12 +275,92 @@ assert.deepEqual(
   "The open public lobby must not regain low concession, bar, or box-office roof slabs.",
 );
 
-const barCounter = boxById("customer-counter-0");
+const counterMaterialNames = {
+  wood: "Laminate / warm walnut",
+  counterWhite: "Counter / satin white service and expo",
+  concessionBlue: "Counter / deep blue concession",
+  counterStone: "Stone / charcoal quartz counter",
+};
+for (const section of LOBBY_PLAN.customerCounterSections) {
+  const start = LOBBY_PLAN.customerCounter[section.segmentIndex];
+  const end = LOBBY_PLAN.customerCounter[section.segmentIndex + 1];
+  const run = Math.hypot(end.x - start.x, end.z - start.z);
+  const base = boxById(section.id);
+  const top = boxById(`${section.id}-top`);
+  assertNear(base.x, planToWorldX((start.x + end.x) / 2), `${section.id} center X`);
+  assertNear(base.z, (start.z + end.z) / 2, `${section.id} center Z`);
+  assertNear(base.width, run, `${section.id} run length`);
+  assertNear(base.rotationY, Math.atan2(end.z - start.z, end.x - start.x), `${section.id} rotation`);
+  assert.deepEqual(base.materialNames, [counterMaterialNames[section.baseMaterialKey]], `${section.id} base finish`);
+  assert.deepEqual(top.materialNames, [counterMaterialNames[section.topMaterialKey]], `${section.id} top finish`);
+  assert.ok(colliderIdsMatching(world, new RegExp(`^${section.id}-collider-\\d+$`)).length >= 1, `${section.id} needs segmented collision.`);
+}
+assert.deepEqual(
+  LOBBY_PLAN.customerCounterSections.slice(1).map(({ role }) => role),
+  ["service-white", "concession", "expo"],
+  "The non-bar counter must read white, blue concession, white expo in order.",
+);
+const barCounter = boxById("customer-counter-bar");
 assertNear(
   barCounter.x - barCounter.width / 2,
   planToWorldX(TICKET_APPROACH_PLAN.bounds.xMin),
   "guest-bar physical-left end aligned to the ticket approach",
 );
+
+assert.deepEqual(
+  CONCESSION_SERVICE_SEQUENCE.map(({ type }) => type),
+  ["pos", "pos", "candy", "pos", "pos", "candy", "pos", "pos"],
+  "Runtime fixtures must retain the POS/POS/candy pairing pattern.",
+);
+let runtimeCandyIndex = 0;
+for (const serviceItem of CONCESSION_SERVICE_SEQUENCE) {
+  if (serviceItem.type === "pos") {
+    const posGroup = scene.getObjectByName(serviceItem.id);
+    assert.ok(posGroup?.isGroup, `${serviceItem.id} POS group must be authored.`);
+    assertNear(posGroup.position.x, planToWorldX(serviceItem.position[0]), `${serviceItem.id} runtime X`);
+    assertNear(posGroup.position.z, serviceItem.position[2], `${serviceItem.id} runtime Z`);
+    continue;
+  }
+  runtimeCandyIndex += 1;
+  const candyGroupId = `concession-candy-bay-${runtimeCandyIndex}`;
+  const candyGroup = scene.getObjectByName(candyGroupId);
+  assert.ok(candyGroup?.isGroup, `${candyGroupId} must interrupt the blue counter.`);
+  assert.equal(candyGroup.userData.sourceId, serviceItem.id, `${candyGroupId} source binding`);
+  assertNear(
+    candyGroup.rotation.y,
+    -LOBBY_PLAN.concessionRun.fixtureRotation,
+    `${candyGroupId} counter-aligned rotation`,
+  );
+  assertNear(
+    candyGroup.position.x,
+    planToWorldX(serviceItem.position[0] + LOBBY_PLAN.concessionRun.guestNormal.x * serviceItem.guestOffset),
+    `${candyGroupId} projected X`,
+  );
+  assertNear(
+    candyGroup.position.z,
+    serviceItem.position[2] + LOBBY_PLAN.concessionRun.guestNormal.z * serviceItem.guestOffset,
+    `${candyGroupId} projected Z`,
+  );
+  for (const suffix of ["back", "glass", "top", "bottom", "side--1", "side-1"]) boxById(`${candyGroupId}-${suffix}`);
+  assert.deepEqual(boxById(`${candyGroupId}-top`).materialNames, [counterMaterialNames.concessionBlue], `${candyGroupId} blue frame`);
+}
+assert.equal(runtimeCandyIndex, CONCESSION_CANDY_DISPLAYS.length, "Both authored candy displays must render once.");
+
+const parallelWallStart = LOBBY_PLAN.kitchenPartition[3];
+const parallelWallEnd = LOBBY_PLAN.kitchenPartition[5];
+const parallelWall = boxById("concession-back-wall-parallel");
+assertNear(parallelWall.x, planToWorldX((parallelWallStart.x + parallelWallEnd.x) / 2), "parallel back wall center X");
+assertNear(parallelWall.z, (parallelWallStart.z + parallelWallEnd.z) / 2, "parallel back wall center Z");
+assertNear(parallelWall.width, LOBBY_PLAN.concessionRun.length * 2 / 3, "parallel back wall two-thirds length");
+assertNear(parallelWall.rotationY, Math.atan2(parallelWallEnd.z - parallelWallStart.z, parallelWallEnd.x - parallelWallStart.x), "parallel back wall rotation");
+assertNear(parallelWall.height, LOBBY_CEILING_PLAN.baseHeight, "parallel back wall height");
+assert.ok(colliderIdsMatching(world, /^concession-back-wall-parallel-collider-\d+$/).length >= 1, "Parallel back wall needs segmented colliders.");
+assert.deepEqual(
+  authoredBoxes.filter(({ id }) => ["kitchen-partition-3", "kitchen-partition-4"].includes(id)).map(({ id }) => id),
+  [],
+  "The stable parallel wall must replace the two anonymous collinear wall meshes.",
+);
+
 const backBar = assertBoxMatchesBounds("back-bar-cabinet", LOBBY_PLAN.backBar, "rigidly translated back bar");
 assertNear(backBar.depth, LOBBY_PLAN.backBar.zMax - LOBBY_PLAN.backBar.zMin, "back-bar depth preservation");
 const boxOfficeReturn = assertBoxMatchesBounds("box-office-return", LOBBY_PLAN.boxOfficeReturn, "rigidly translated box-office return");
@@ -274,7 +398,7 @@ for (const pillar of FOUNTAIN_PLAN.pillars) {
   assertNear(box.y, pillar.height / 2, `${pillar.id} vertical center`);
   assertNear(box.z, pillar.position[2], `${pillar.id} Z`);
   assertNear(box.width, pillar.footprint[0], `${pillar.id} width`);
-  assertNear(box.height, LOBBY_CEILING_PLAN.highHeight, `${pillar.id} full ceiling height`);
+  assertNear(box.height, LOBBY_CEILING_PLAN.baseHeight, `${pillar.id} full low-court height`);
   assertNear(box.depth, pillar.footprint[1], `${pillar.id} depth`);
   assert.ok(box.materialNames.every((name) => name === "Wall / warm neutral"), `${pillar.id} must be white.`);
   assert.equal(colliderIdsMatching(world, new RegExp(`^${pillar.id}$`)).length, 1, `${pillar.id} needs one collider.`);
@@ -305,15 +429,64 @@ assertNear(muralFascia.y, (muralFacade.bottomY + muralFacade.topY) / 2, "mural f
 assertNear(muralFascia.width, muralRun, "mural fascia run length");
 assertNear(muralFascia.height, muralFacade.topY - muralFacade.bottomY, "mural fascia height");
 assert.ok(muralFascia.depth >= muralFacade.projection, "Mural fascia must project materially toward guests.");
-const muralShadowLip = boxById("concession-mural-shadow-lip");
-assert.ok(
-  muralShadowLip.y + muralShadowLip.height / 2 <= muralFascia.y - muralFascia.height / 2 + 1e-6,
-  "The mural shadow lip must hang below the fascia instead of overlapping its lower face.",
+assert.deepEqual(
+  authoredBoxes.filter(({ id }) => id === "concession-mural-shadow-lip").map(({ id }) => id),
+  [],
+  "The old floating shadow lip must be replaced by the complete soffit slab.",
 );
-for (const id of ["concession-mural-return-start", "concession-mural-return-end"]) {
+for (const [id, anchor, target] of [
+  ["concession-mural-return-start", muralFacade.returnAnchors.start, muralFacade.returnTargets.start],
+  ["concession-mural-return-end", muralFacade.returnAnchors.end, muralFacade.returnTargets.end],
+]) {
   const muralReturn = boxById(id);
-  assertNear(muralReturn.width, muralFacade.projection, `${id} projection return length`);
+  assertNear(muralReturn.x, planToWorldX((anchor.x + target.x) / 2), `${id} center X`);
+  assertNear(muralReturn.z, (anchor.z + target.z) / 2, `${id} center Z`);
+  assertNear(muralReturn.width, Math.hypot(target.x - anchor.x, target.z - anchor.z), `${id} closure length`);
   assertNear(muralReturn.height, muralFacade.topY - muralFacade.bottomY, `${id} height`);
+}
+const muralSoffitId = `${muralFacade.soffit.id}-ceiling`;
+const muralSoffit = scene.getObjectByName(muralSoffitId);
+assert.ok(muralSoffit?.isMesh, "The projecting mural must have a solid soffit back to the concession wall.");
+assert.equal(objectsByName(muralSoffitId).length, 1, "The mural soffit must be authored exactly once.");
+assert.equal(muralSoffit.geometry.type, "ExtrudeGeometry", "The irregular soffit must follow its clipped polygon.");
+scene.updateMatrixWorld(true);
+const muralSoffitBounds = new THREE.Box3().setFromObject(muralSoffit);
+const soffitWorldXs = muralFacade.soffit.vertices.map(({ x }) => planToWorldX(x));
+const soffitPlanZs = muralFacade.soffit.vertices.map(({ z }) => z);
+assertNear(muralSoffitBounds.min.x, Math.min(...soffitWorldXs), "mural soffit minimum X", 1e-5);
+assertNear(muralSoffitBounds.max.x, Math.max(...soffitWorldXs), "mural soffit maximum X", 1e-5);
+assertNear(muralSoffitBounds.min.z, Math.min(...soffitPlanZs), "mural soffit minimum Z", 1e-5);
+assertNear(muralSoffitBounds.max.z, Math.max(...soffitPlanZs), "mural soffit maximum Z", 1e-5);
+assertNear(
+  muralSoffitBounds.min.y,
+  muralFacade.soffit.elevation - muralFacade.soffit.thickness / 2,
+  "mural soffit underside / lowest ceiling",
+  1e-5,
+);
+assertNear(
+  muralSoffitBounds.max.y,
+  muralFacade.soffit.elevation + muralFacade.soffit.thickness / 2,
+  "mural soffit top",
+  1e-5,
+);
+assert.equal(muralSoffit.material.name, "Ceiling / acoustic tile", "The soffit underside must read as ceiling, not a floating wall.");
+const soffitPositions = muralSoffit.geometry.getAttribute("position");
+const soffitWorldVertices = Array.from({ length: soffitPositions.count }, (_, index) => muralSoffit.localToWorld(new THREE.Vector3(
+  soffitPositions.getX(index),
+  soffitPositions.getY(index),
+  soffitPositions.getZ(index),
+)));
+for (const [index, vertex] of muralFacade.soffit.vertices.entries()) {
+  for (const y of [muralSoffitBounds.min.y, muralSoffitBounds.max.y]) {
+    assert.ok(
+      soffitWorldVertices.some((candidate) => (
+        Math.abs(candidate.x - planToWorldX(vertex.x)) <= 1e-5
+        && Math.abs(candidate.y - y) <= 1e-5
+        && Math.abs(candidate.z - vertex.z) <= 1e-5
+      )),
+      `Mural soffit vertex ${index + 1} must exist on the ${y === muralSoffitBounds.min.y ? "underside" : "top"} cap.`,
+    );
+  }
 }
 const muralFace = scene.getObjectByName("concession-mural-face");
 assert.ok(muralFace?.isMesh, "The projecting concession fascia needs its botanical mural face.");

@@ -64,6 +64,7 @@ THREE.Object3D.prototype.add = function captureStructuralMeshes(...objects) {
         height: object.scale.y,
         depth: object.scale.z,
         rotationX: object.rotation.x,
+        rotationY: object.rotation.y,
       });
     }
 
@@ -77,6 +78,7 @@ THREE.Object3D.prototype.add = function captureStructuralMeshes(...objects) {
         height: object.scale.y,
         depth: object.scale.z,
         rotationX: object.rotation.x,
+        rotationY: object.rotation.y,
       });
     }
 
@@ -100,9 +102,10 @@ THREE.Object3D.prototype.add = function captureStructuralMeshes(...objects) {
 
 const { createMaterialLibrary } = await import("../src/materials.js");
 const { createTheaterWorld } = await import("../src/world.js");
-const { worldToPlanX } = await import("../src/coordinates.js");
+const { planToWorldX, worldToPlanX } = await import("../src/coordinates.js");
 const {
   AUDITORIUMS,
+  CONCESSION_SERVICE_SEQUENCE,
   COURTYARD_PLAN,
   EQUIPMENT_ANCHORS,
   FOUNTAIN_PLAN,
@@ -259,6 +262,22 @@ const planZAt = (gridZ) => MAP_BOUNDS.zMin + gridZ * GRID_STEP;
 // missing containment wall even though groundHeight has a fallback plane.
 // A second flood below requires these rendered surfaces and catches holes in
 // actual routes rather than allowing that fallback to mask them.
+function surfaceContainsPlanPoint(surface, planX, planZ, tolerance = GEOMETRY_EPSILON) {
+  const worldX = planToWorldX(planX);
+  const deltaX = worldX - surface.x;
+  const deltaZ = planZ - surface.z;
+  const cosine = Math.cos(surface.rotationY);
+  const sine = Math.sin(surface.rotationY);
+  const localX = cosine * deltaX - sine * deltaZ;
+  const localZ = sine * deltaX + cosine * deltaZ;
+  const halfWidth = surface.width / 2;
+  const halfDepth = (
+    Math.abs(Math.cos(surface.rotationX)) * surface.depth
+    + Math.abs(Math.sin(surface.rotationX)) * surface.height
+  ) / 2;
+  return Math.abs(localX) <= halfWidth + tolerance && Math.abs(localZ) <= halfDepth + tolerance;
+}
+
 for (const floor of structuralFloors) {
   const centerPlanX = worldToPlanX(floor.x);
   const halfWidth = floor.width / 2;
@@ -266,14 +285,17 @@ for (const floor of structuralFloors) {
     Math.abs(Math.cos(floor.rotationX)) * floor.depth
     + Math.abs(Math.sin(floor.rotationX)) * floor.height
   ) / 2;
-  const gridXMin = Math.max(0, Math.floor((centerPlanX - halfWidth - MAP_BOUNDS.xMin) / GRID_STEP));
-  const gridXMax = Math.min(gridWidth - 1, Math.ceil((centerPlanX + halfWidth - MAP_BOUNDS.xMin) / GRID_STEP));
-  const gridZMin = Math.max(0, Math.floor((floor.z - halfDepth - MAP_BOUNDS.zMin) / GRID_STEP));
-  const gridZMax = Math.min(gridDepth - 1, Math.ceil((floor.z + halfDepth - MAP_BOUNDS.zMin) / GRID_STEP));
+  const cosine = Math.abs(Math.cos(floor.rotationY));
+  const sine = Math.abs(Math.sin(floor.rotationY));
+  const planHalfWidth = cosine * halfWidth + sine * halfDepth;
+  const planHalfDepth = sine * halfWidth + cosine * halfDepth;
+  const gridXMin = Math.max(0, Math.floor((centerPlanX - planHalfWidth - MAP_BOUNDS.xMin) / GRID_STEP));
+  const gridXMax = Math.min(gridWidth - 1, Math.ceil((centerPlanX + planHalfWidth - MAP_BOUNDS.xMin) / GRID_STEP));
+  const gridZMin = Math.max(0, Math.floor((floor.z - planHalfDepth - MAP_BOUNDS.zMin) / GRID_STEP));
+  const gridZMax = Math.min(gridDepth - 1, Math.ceil((floor.z + planHalfDepth - MAP_BOUNDS.zMin) / GRID_STEP));
   for (let gridZ = gridZMin; gridZ <= gridZMax; gridZ += 1) {
-    if (Math.abs(planZAt(gridZ) - floor.z) > halfDepth + GEOMETRY_EPSILON) continue;
     for (let gridX = gridXMin; gridX <= gridXMax; gridX += 1) {
-      if (Math.abs(planXAt(gridX) - centerPlanX) > halfWidth + GEOMETRY_EPSILON) continue;
+      if (!surfaceContainsPlanPoint(floor, planXAt(gridX), planZAt(gridZ))) continue;
       floorSupported[gridIndex(gridX, gridZ)] = 1;
     }
   }
@@ -827,6 +849,11 @@ assertOpenPlanPoint("Candy storage portal", candy.doorCenter, candy.bounds.zMin)
 
 navigationTargets.push({ id: "fountain-working-aisle", x: 5.8, z: 65.7 });
 navigationTargets.push(
+  { id: "low-court-west-side", x: -5.8, z: 65.5 },
+  { id: "low-court-rear-aisle", x: 5.8, z: 66.5 },
+  { id: "low-court-east-side", x: 16.2, z: 65.5 },
+);
+navigationTargets.push(
   { id: "t3-task-partition-west", x: COURTYARD_PLAN.waistPartition.x - 0.7, z: 65.5 },
   { id: "t3-task-partition-east", x: COURTYARD_PLAN.waistPartition.x + 0.7, z: 65.5 },
 );
@@ -851,9 +878,11 @@ for (const [id, x] of [["west", westSqueezeCenterX], ["east", eastSqueezeCenterX
   );
 }
 
-assert.equal(LOBBY_SHIFT_X, 8.3, "V11 lobby X translation must remain authoritative.");
-assertNear(LOBBY_CEILING_PLAN.highHeight, LOBBY_CEILING_PLAN.baseHeight * 3, "triple-height public lobby ceiling");
-assert.equal(LOBBY_PLAN.kiosks.length, 3, "V11 circulation smoke expects exactly three kiosks.");
+assert.equal(LOBBY_SHIFT_X, 8.3, "V12 retains the authoritative lobby X translation.");
+assertNear(LOBBY_CEILING_PLAN.highHeight, LOBBY_CEILING_PLAN.baseHeight * 3, "triple-height stone-floor lobby ceiling");
+assert.deepEqual(LOBBY_CEILING_PLAN.highPublicSpaceIds, ["lobby"], "Only the stone-floor lobby may retain the triple-height roof.");
+assert.equal(FOUNTAIN_PLAN.pillars.every(({ height }) => height === LOBBY_CEILING_PLAN.baseHeight), true, "Fountain pillars must terminate at the low court roof.");
+assert.equal(LOBBY_PLAN.kiosks.length, 3, "V12 circulation smoke expects exactly three kiosks.");
 for (const kiosk of LOBBY_PLAN.kiosks) {
   navigationTargets.push({
     id: `${kiosk.id}-customer-approach`,
@@ -865,6 +894,22 @@ navigationTargets.push({
   id: "box-office-pos-customer-approach",
   x: LOBBY_PLAN.boxOfficePos.position[0] - 1.45,
   z: LOBBY_PLAN.boxOfficePos.position[2],
+});
+const concessionStaffNormal = LOBBY_PLAN.concessionRun.guestNormal;
+for (const serviceItem of CONCESSION_SERVICE_SEQUENCE) {
+  navigationTargets.push({
+    id: `${serviceItem.id}-staff-aisle`,
+    x: serviceItem.position[0] - concessionStaffNormal.x * 1.35,
+    z: serviceItem.position[2] - concessionStaffNormal.z * 1.35,
+  });
+}
+const expoSection = LOBBY_PLAN.customerCounterSections.find(({ role }) => role === "expo");
+const expoStart = LOBBY_PLAN.customerCounter[expoSection.segmentIndex];
+const expoEnd = LOBBY_PLAN.customerCounter[expoSection.segmentIndex + 1];
+navigationTargets.push({
+  id: "concession-expo-staff-aisle",
+  x: (expoStart.x + expoEnd.x) / 2 - concessionStaffNormal.x * 1.35,
+  z: (expoStart.z + expoEnd.z) / 2 - concessionStaffNormal.z * 1.35,
 });
 const podium = LOBBY_PLAN.ticketPodium;
 navigationTargets.push(
@@ -946,15 +991,7 @@ assert.deepEqual(
 );
 
 function structuralSurfaceAt(surfaces, planX, planZ, tolerance = 0.05) {
-  return surfaces.some((surface) => {
-    const centerPlanX = worldToPlanX(surface.x);
-    const halfDepth = (
-      Math.abs(Math.cos(surface.rotationX)) * surface.depth
-      + Math.abs(Math.sin(surface.rotationX)) * surface.height
-    ) / 2;
-    return Math.abs(planX - centerPlanX) <= surface.width / 2 + tolerance
-      && Math.abs(planZ - surface.z) <= halfDepth + tolerance;
-  });
+  return surfaces.some((surface) => surfaceContainsPlanPoint(surface, planX, planZ, tolerance));
 }
 
 const ceilingRouteFailures = navigationTargets.filter(({ x, z }) => !structuralSurfaceAt(structuralCeilings, x, z));
@@ -1017,5 +1054,5 @@ world.dispose();
 materials.dispose();
 
 console.log(
-  `Navigation smoke valid: 14 bowls + ${navigationTargets.length - 14} V11 route targets reachable under rendered floors/ceilings · lobby/pillar circulation open · moved portals open · V9/V11 ghosts empty · geometry overlap-free.`,
+  `Navigation smoke valid: 14 bowls + ${navigationTargets.length - 14} V12 route targets reachable under rendered floors/ceilings · low-court/pillar circulation open · concession service aisle reachable · moved portals open · V9/V11 ghosts empty · geometry overlap-free.`,
 );

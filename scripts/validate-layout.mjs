@@ -5,6 +5,8 @@ import {
   AUDITORIUM_ENTRY_ZONES,
   AUDITORIUMS,
   AUDITORIUM_PRESETS,
+  CONCESSION_CANDY_DISPLAYS,
+  CONCESSION_SERVICE_SEQUENCE,
   COURTYARD_PLAN,
   EQUIPMENT_ANCHORS,
   EXPECTED_SEAT_TOTAL,
@@ -648,12 +650,16 @@ assert.deepEqual(
   LOBBY_PLAN.kitchenPartition,
   [
     { x: -29, z: 23.5 }, { x: -29, z: 19.6 }, { x: -27.3, z: 17.3 },
-    { x: -24.4, z: 17.1 }, { x: -24.6, z: 15.5 }, { x: -24.5, z: 11.1 },
+    { x: -22.03333333333333, z: 17.5 }, { x: -23.26666666666667, z: 14.3 }, { x: -24.5, z: 11.1 },
     { x: -24.5, z: 9.6 }, { x: -24.5, z: 7 },
   ].map(({ x, z }) => ({ x: x + LOBBY_SHIFT_X, z: z + FRONT_SHIFT_Z })),
-  "Every kitchen-partition vertex must move by the common V11 lobby shift.",
+  "The V12 kitchen partition must preserve its angled return and two-thirds parallel concession wall.",
 );
-assert.deepEqual(LOBBY_PLAN.serviceDoor, { x: -24.5 + LOBBY_SHIFT_X, z: 10.35 + FRONT_SHIFT_Z });
+assert.deepEqual(LOBBY_PLAN.serviceDoor, {
+  x: -24.5 + LOBBY_SHIFT_X,
+  z: 10.35 + FRONT_SHIFT_Z,
+  partitionSegment: 5,
+});
 assertNear(LOBBY_PLAN.kitchenStorageDoor.x, -28.15 + LOBBY_SHIFT_X, "Kitchen-storage door X translation");
 assertNear(LOBBY_PLAN.kitchenStorageDoor.z, 18.45 + FRONT_SHIFT_Z, "Kitchen-storage door shift");
 assert.deepEqual(
@@ -669,7 +675,7 @@ assertNear(roomById("office-overflow").doorCenter, 2.7 + FRONT_SHIFT_Z, "Office-
 assertNear(roomById("electrical-room").doorCenter, 39 + FRONT_SHIFT_Z, "Electrical-room west door shift");
 
 const shiftedLobbyEquipment = new Map([
-  ["concession-popper-1", [-23.5, 14.5]], ["concession-popper-2", [-23.2, 13]],
+  ["concession-popper-1", [-22.58, 14.5]], ["concession-popper-2", [-23.16, 13]],
   ["kitchen-grill", [-27.5, 22.7]], ["kitchen-fryer-1", [-25.7, 22.7]], ["kitchen-fryer-2", [-24.3, 22.7]],
   ["kitchen-turbo-oven", [-22.5, 22.7]], ["bar-well", [-12.3, 22.7]],
 ]);
@@ -679,21 +685,73 @@ for (const [id, [oldX, oldZ]] of shiftedLobbyEquipment) {
   assertNear(anchor.position[2], oldZ + FRONT_SHIFT_Z, `${id} rigid lobby Z preservation`);
 }
 assert.deepEqual(
-  POS_STATIONS.map(({ position }) => [position[0], position[2]]),
-  [
-    [-17.3, 16.8], [-17.9, 15], [-18.5, 13.3],
-    [-19.2, 11.5], [-19.8, 9.7], [-20.3, 8],
-  ].map(([x, z]) => [x + LOBBY_SHIFT_X, z + FRONT_SHIFT_Z]),
-  "Every concession POS must move rigidly with its counter.",
+  CONCESSION_SERVICE_SEQUENCE.map(({ type }) => type),
+  ["pos", "pos", "candy", "pos", "pos", "candy", "pos", "pos"],
+  "The diagonal run must read POS, POS, candy, POS, POS, candy, POS, POS.",
 );
+assert.deepEqual(
+  CONCESSION_SERVICE_SEQUENCE.map(({ slotIndex }) => slotIndex),
+  [0, 1, 2, 3, 4, 5, 6, 7],
+  "Concession service slots must retain their guest-facing order.",
+);
+assert.deepEqual(POS_STATIONS.map(({ id }) => id), Array.from({ length: 6 }, (_, index) => `concession-pos-${index + 1}`));
+assert.deepEqual(CONCESSION_CANDY_DISPLAYS.map(({ id }) => id), ["concession-candy-1", "concession-candy-2"]);
+for (const [index, item] of CONCESSION_SERVICE_SEQUENCE.entries()) {
+  assertNear(item.slotT, (index + 0.5) / 8, `${item.id} service-run fraction`);
+  assertNear(
+    item.position[0],
+    LOBBY_PLAN.concessionRun.start.x
+      + (LOBBY_PLAN.concessionRun.end.x - LOBBY_PLAN.concessionRun.start.x) * item.slotT,
+    `${item.id} concession-run X`,
+  );
+  assertNear(
+    item.position[2],
+    LOBBY_PLAN.concessionRun.start.z
+      + (LOBBY_PLAN.concessionRun.end.z - LOBBY_PLAN.concessionRun.start.z) * item.slotT,
+    `${item.id} concession-run Z`,
+  );
+  assertNear(
+    item.rotation,
+    item.type === "candy"
+      ? LOBBY_PLAN.concessionRun.fixtureRotation
+      : LOBBY_PLAN.concessionRun.rotation,
+    `${item.id} concession-run rotation`,
+  );
+}
+
+assert.deepEqual(
+  LOBBY_PLAN.customerCounterSections.map(({ id, segmentIndex, role, baseMaterialKey, topMaterialKey }) => ({
+    id, segmentIndex, role, baseMaterialKey, topMaterialKey,
+  })),
+  [
+    { id: "customer-counter-bar", segmentIndex: 0, role: "bar", baseMaterialKey: "wood", topMaterialKey: "counterStone" },
+    { id: "customer-counter-white-service", segmentIndex: 1, role: "service-white", baseMaterialKey: "counterWhite", topMaterialKey: "counterStone" },
+    { id: "customer-counter-concession", segmentIndex: 2, role: "concession", baseMaterialKey: "concessionBlue", topMaterialKey: "counterStone" },
+    { id: "customer-counter-expo", segmentIndex: 3, role: "expo", baseMaterialKey: "counterWhite", topMaterialKey: "counterStone" },
+  ],
+  "The customer counter must preserve the white expo, blue concession, white end sequence after the bar.",
+);
+
+const concessionParallelStart = LOBBY_PLAN.kitchenPartition[3];
+const concessionParallelMidpoint = LOBBY_PLAN.kitchenPartition[4];
+const concessionParallelEnd = LOBBY_PLAN.kitchenPartition[5];
+const concessionRunDx = LOBBY_PLAN.concessionRun.end.x - LOBBY_PLAN.concessionRun.start.x;
+const concessionRunDz = LOBBY_PLAN.concessionRun.end.z - LOBBY_PLAN.concessionRun.start.z;
+const parallelDx = concessionParallelEnd.x - concessionParallelStart.x;
+const parallelDz = concessionParallelEnd.z - concessionParallelStart.z;
+assertNear(parallelDx * concessionRunDz - parallelDz * concessionRunDx, 0, "Concession back-wall/run cross product", 1e-8);
+assert.ok(parallelDx * concessionRunDx + parallelDz * concessionRunDz > 0, "Concession back wall must face the same run direction.");
+assertNear(Math.hypot(parallelDx, parallelDz), LOBBY_PLAN.concessionRun.length * 2 / 3, "Parallel back-wall length");
+assertNear(concessionParallelMidpoint.x, (concessionParallelStart.x + concessionParallelEnd.x) / 2, "Parallel back-wall midpoint X");
+assertNear(concessionParallelMidpoint.z, (concessionParallelStart.z + concessionParallelEnd.z) / 2, "Parallel back-wall midpoint Z");
 
 assert.deepEqual(LOBBY_CEILING_PLAN, {
   baseHeight: 4.6,
   multiplier: 3,
   highHeight: 13.8,
-  highPublicSpaceIds: ["lobby", "soda-service", "recessed-theater-court"],
+  highPublicSpaceIds: ["lobby"],
   lowServiceRoomIds: ["office-overflow", "office", "kitchen-storage", "kitchen"],
-}, "V11 needs one 13.8m non-carpet public ceiling plan and preserved 4.6m service roofs.");
+}, "V12 keeps only the stone-floor lobby at 13.8m and returns the fountain/T3–5 court to 4.6m.");
 
 const boxOfficePos = LOBBY_PLAN.boxOfficePos;
 assert.deepEqual(boxOfficePos, {
@@ -729,6 +787,38 @@ assert.ok(muralFacade.projection >= 0.5, "The mural fascia must visibly project 
 assert.equal(muralFacade.bottomY, LOBBY_CEILING_PLAN.baseHeight);
 assert.ok(muralFacade.topY > muralFacade.bottomY && muralFacade.topY <= LOBBY_CEILING_PLAN.highHeight);
 assert.ok(muralFacade.muralHeight < muralFacade.topY - muralFacade.bottomY, "The mural needs a visible fascia border.");
+assert.deepEqual(muralFacade.returnAnchors, {
+  start: LOBBY_PLAN.kitchenPartition[3],
+  end: LOBBY_PLAN.kitchenPartition.at(-1),
+}, "The mural returns must close against the concession back wall.");
+assert.deepEqual(muralFacade.returnTargets, {
+  start: muralFacade.soffit.vertices[0],
+  end: muralFacade.soffit.vertices[1],
+}, "The mural returns must terminate on the exact soffit/fascia rear edge.");
+assert.equal(muralFacade.soffit.id, "concession-mural-soffit");
+assert.equal(muralFacade.soffit.elevation, LOBBY_CEILING_PLAN.baseHeight, "The mural soffit must be the lowest lobby ceiling datum.");
+assert.equal(muralFacade.soffit.thickness, 0.1);
+assert.ok(muralFacade.soffit.vertices.length >= 7, "The mural soffit needs a closed clipped polygon, not a floating panel.");
+assert.deepEqual(muralFacade.soffit.vertices.slice(0, 2), [
+  {
+    x: muralFacade.projectedStart.x - LOBBY_PLAN.concessionRun.guestNormal.x * muralFacade.fasciaDepth / 2,
+    z: muralFacade.projectedStart.z - LOBBY_PLAN.concessionRun.guestNormal.z * muralFacade.fasciaDepth / 2,
+  },
+  {
+    x: muralFacade.projectedEnd.x - LOBBY_PLAN.concessionRun.guestNormal.x * muralFacade.fasciaDepth / 2,
+    z: muralFacade.projectedEnd.z - LOBBY_PLAN.concessionRun.guestNormal.z * muralFacade.fasciaDepth / 2,
+  },
+], "The soffit guest edge must attach to the mural fascia rear face.");
+
+for (const popper of EQUIPMENT_ANCHORS.filter(({ type }) => type === "popper")) {
+  assertNear(popper.rotation, LOBBY_PLAN.concessionRun.fixtureRotation, `${popper.id} counter-aligned rotation`);
+  assertNear(popper.height, 2.8, `${popper.id} full height`);
+  assertNear(popper.glassBottom, 1.05, `${popper.id} glass bottom`);
+  assertNear(popper.glassTop, 2.48, `${popper.id} glass top`);
+  assertNear(popper.canopyBottom, popper.glassTop, `${popper.id} glass/canopy seam`);
+  assertNear(popper.canopyTop, 2.76, `${popper.id} canopy top`);
+  assert.ok(popper.canopyTop > 2.7, `${popper.id} must read as a tall backline popper.`);
+}
 
 const boys = roomById("boys-restroom");
 assert.deepEqual(boys.bounds, {
@@ -902,17 +992,17 @@ assert.deepEqual(FOUNTAIN_PLAN.pillars, [
     id: "fountain-island-west-pillar",
     position: [-2.03, 0, 63.6],
     footprint: [0.7, 0.7],
-    height: LOBBY_CEILING_PLAN.highHeight,
+    height: LOBBY_CEILING_PLAN.baseHeight,
     finish: "white",
   },
   {
     id: "fountain-island-east-pillar",
     position: [13.63, 0, 63.6],
     footprint: [0.7, 0.7],
-    height: LOBBY_CEILING_PLAN.highHeight,
+    height: LOBBY_CEILING_PLAN.baseHeight,
     finish: "white",
   },
-], "V11 needs one white high-ceiling pillar immediately beyond each island end.");
+], "V12 needs one white 4.6m pillar immediately beyond each fountain-island end.");
 assertUnique(FOUNTAIN_PLAN.pillars.map(({ id }) => id), "Fountain pillar IDs");
 const [westPillar, eastPillar] = FOUNTAIN_PLAN.pillars;
 const westPillarEast = westPillar.position[0] + westPillar.footprint[0] / 2;
@@ -989,7 +1079,7 @@ assert.ok(worldBounds.xMin < worldBounds.xMax);
 assert.equal(worldBounds.xMax - worldBounds.xMin, MAP_BOUNDS.xMax - MAP_BOUNDS.xMin);
 
 console.log(
-  `Layout valid: v11 · rigid +8.3m lobby shift · 13.8m public ceiling · three kiosks · central lectern · fountain pillars · 153m hall · 14 theaters · 1,093 seats.`,
+  `Layout valid: v12 · closed mural soffit · white/blue/white concession · paired POS/candy sequence · 4.6m fountain court · 153m hall · 14 theaters · 1,093 seats.`,
 );
 
 function publicById(id) {
