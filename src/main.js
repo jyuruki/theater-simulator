@@ -178,6 +178,7 @@ try {
 
   function animate() {
     const delta = Math.min(clock.getDelta(), 0.1);
+    world.update?.(delta);
     controller.update(delta);
     updateHud();
 

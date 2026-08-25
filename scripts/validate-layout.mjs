@@ -22,6 +22,7 @@ import {
   POS_STATIONS,
   PUBLIC_SPACES,
   SERVICE_ROOMS,
+  T12_TICKET_SHIFT_X,
   T3_MEN_PLAN,
   TICKET_APPROACH_PLAN,
   pointInBounds,
@@ -183,13 +184,24 @@ assert.equal(HALL_PLAN.drinkingFountainWall.zMin, HALL_PLAN.narrowNorthZ);
 assert.equal(HALL_PLAN.drinkingFountainWall.zMax, HALL_PLAN.wideNorthZ);
 
 const v8StationaryTopEntryBounds = new Map([
-  [1, { xMin: -25.5, xMax: -16, zMin: 45, zMax: 58 }],
-  [2, { xMin: -35, xMax: -25.5, zMin: 45, zMax: 58 }],
   [13, { xMin: 28.5, xMax: 39, zMin: 44.5, zMax: 58 }],
   [14, { xMin: 18, xMax: 28.5, zMin: 44.5, zMax: 58 }],
 ]);
 for (const [number, baseline] of v8StationaryTopEntryBounds) {
   assertRigidZShift(auditoriumByNumber.get(number).bounds, baseline, `Theater ${number}`);
+}
+assert.equal(T12_TICKET_SHIFT_X, 1, "V15 must move the complete Theater 1/2 pair exactly one metre toward the ticket podium.");
+for (const [number, baseline] of new Map([
+  [1, { xMin: -25.5, xMax: -16, zMin: 45, zMax: 58 }],
+  [2, { xMin: -35, xMax: -25.5, zMin: 45, zMax: 58 }],
+])) {
+  assertRigidPlanShift(
+    auditoriumByNumber.get(number).bounds,
+    baseline,
+    T12_TICKET_SHIFT_X,
+    FRONT_SHIFT_Z,
+    `V15 Theater ${number}`,
+  );
 }
 
 const v9MovedTopEntryModules = new Map([
@@ -260,7 +272,7 @@ assert.deepEqual(
   "Small-theater cubby doors must retain the drawing-specific handedness.",
 );
 
-for (const [firstNumber, secondNumber, sharedBoundary] of [[1, 2, -25.5], [13, 14, 28.5]]) {
+for (const [firstNumber, secondNumber, sharedBoundary] of [[1, 2, -25.5 + T12_TICKET_SHIFT_X], [13, 14, 28.5]]) {
   const first = auditoriumByNumber.get(firstNumber);
   const second = auditoriumByNumber.get(secondNumber);
   assert.equal(first.bounds.xMin, sharedBoundary, `T${firstNumber} must meet its paired room at the shared wall.`);
@@ -294,13 +306,23 @@ for (const auditorium of AUDITORIUMS.filter(({ entry }) => entry.type === "trash
 }
 
 const v8ExplicitCubbies = new Map([
-  [1, { xMin: -25.5, xMax: -22.3, zMin: 54.4, zMax: 58 }],
-  [2, { xMin: -28.7, xMax: -25.5, zMin: 54.4, zMax: 58 }],
   [13, { xMin: 28.5, xMax: 31.7, zMin: 54.6, zMax: 58 }],
   [14, { xMin: 25.3, xMax: 28.5, zMin: 54.6, zMax: 58 }],
 ]);
 for (const [number, baseline] of v8ExplicitCubbies) {
   assertRigidZShift(auditoriumByNumber.get(number).entry.cubbyBounds, baseline, `Theater ${number} cubby`);
+}
+for (const [number, baseline] of new Map([
+  [1, { xMin: -25.5, xMax: -22.3, zMin: 54.4, zMax: 58 }],
+  [2, { xMin: -28.7, xMax: -25.5, zMin: 54.4, zMax: 58 }],
+])) {
+  assertRigidPlanShift(
+    auditoriumByNumber.get(number).entry.cubbyBounds,
+    baseline,
+    T12_TICKET_SHIFT_X,
+    FRONT_SHIFT_Z,
+    `V15 Theater ${number} cubby`,
+  );
 }
 for (const number of [1, 2]) {
   assertNear(auditoriumByNumber.get(number).entry.innerDoorCenter, 55.6 + FRONT_SHIFT_Z, `Theater ${number} inner door shift`);
@@ -626,7 +648,38 @@ for (const [label, actual, baseline] of [
   ["back bar", LOBBY_PLAN.backBar, { xMin: -16.1, xMax: -8.6, zMin: 23.05, zMax: 24 }],
   ["hot line", LOBBY_PLAN.hotLine, { xMin: -28.8, xMax: -17.8, zMin: 23.05, zMax: 24 }],
 ]) assertRigidPlanShift(actual, baseline, LOBBY_SHIFT_X, FRONT_SHIFT_Z, `V13 retained ${label}`);
-assertBoundsNear(LOBBY_PLAN.futureStairs, { xMin: 12.71, xMax: 18.81, zMin: 5.1, zMax: 21.5 }, "V13 future stairs");
+assertBoundsNear(LOBBY_PLAN.futureStairs, { xMin: 12.71, xMax: 15.11, zMin: 5.1, zMax: 21.5 }, "V15 narrow lobby stairs");
+assert.equal(LOBBY_PLAN.lobbyStair.id, "lobby-stair");
+assert.deepEqual(LOBBY_PLAN.lobbyStair.bounds, LOBBY_PLAN.futureStairs, "The rendered stair and reserved stair footprint must be identical.");
+assertNear(LOBBY_PLAN.lobbyStair.clearWidth, 2.4, "Two-person stair clear width");
+assertNear(LOBBY_PLAN.lobbyStair.bottomY, 0, "Lobby stair base elevation");
+assertNear(LOBBY_PLAN.lobbyStair.topY, LOBBY_CEILING_PLAN.baseHeight, "Lobby stair top elevation");
+assert.equal(LOBBY_PLAN.lobbyStair.treadCount, 26, "The narrow stair needs a complete tread run.");
+assert.ok(LOBBY_PLAN.lobbyStair.stepRise > 0 && LOBBY_PLAN.lobbyStair.stepRise <= 0.22, "Lobby stair risers must remain walkable.");
+assert.ok(LOBBY_PLAN.lobbyStair.treadDepth > 0, "Lobby stair treads must have positive depth.");
+assertBoundsNear(LOBBY_PLAN.lobbyStair.bottomLanding, { xMin: 12.71, xMax: 15.11, zMin: 5.1, zMax: 6.1 }, "Lobby stair bottom landing");
+assertBoundsNear(LOBBY_PLAN.lobbyStair.flightBounds, { xMin: 12.71, xMax: 15.11, zMin: 6.1, zMax: 20 }, "Lobby stair flight");
+assertBoundsNear(LOBBY_PLAN.lobbyStair.topLanding, { xMin: 12.71, xMax: 15.11, zMin: 20, zMax: 21.5 }, "Lobby stair top landing");
+assert.equal(LOBBY_PLAN.lobbyStair.bottomLanding.zMax, LOBBY_PLAN.lobbyStair.flightBounds.zMin, "Bottom landing must meet the first tread without a gap.");
+assert.equal(LOBBY_PLAN.lobbyStair.flightBounds.zMax, LOBBY_PLAN.lobbyStair.topLanding.zMin, "Last tread must meet the upper landing without a gap.");
+assert.equal(LOBBY_PLAN.lobbyStair.solidLobbyWall.side, "west");
+assertNear(LOBBY_PLAN.lobbyStair.solidLobbyWall.x, 12.71, "Lobby-stair solid-wall X");
+assertNear(LOBBY_PLAN.lobbyStair.solidLobbyWall.zMin, 5.1, "Lobby-stair solid-wall start");
+assertNear(LOBBY_PLAN.lobbyStair.solidLobbyWall.zMax, 11.4, "Lobby-stair solid-wall end");
+assertNear(LOBBY_PLAN.lobbyStair.solidLobbyWall.height, LOBBY_CEILING_PLAN.baseHeight, "Lobby-stair solid-wall height");
+assert.equal(LOBBY_PLAN.lobbyStair.exposedRailing.side, "west");
+assertNear(LOBBY_PLAN.lobbyStair.exposedRailing.x, 12.71, "Lobby-facing railing X");
+assertNear(LOBBY_PLAN.lobbyStair.exposedRailing.zMin, 11.4, "Lobby-facing railing start");
+assertNear(LOBBY_PLAN.lobbyStair.exposedRailing.zMax, 21.5, "Lobby-facing railing end");
+assertNear(LOBBY_PLAN.lobbyStair.exposedRailing.height, 1.05, "Lobby-facing railing height");
+assertNear(LOBBY_PLAN.lobbyStair.exposedRailing.postSpacing, 1.35, "Lobby-facing railing post spacing");
+assert.equal(LOBBY_PLAN.lobbyStair.solidLobbyWall.zMax, LOBBY_PLAN.lobbyStair.exposedRailing.zMin, "Stair wall and railing must meet without a hole or overlap.");
+assert.equal(LOBBY_PLAN.lobbyStair.upperDoor.side, "north");
+assertNear(LOBBY_PLAN.lobbyStair.upperDoor.z, 21.5, "Raised stair door wall plane");
+assertNear(LOBBY_PLAN.lobbyStair.upperDoor.center, 13.91, "Raised stair door center");
+assertNear(LOBBY_PLAN.lobbyStair.upperDoor.width, 1.8, "Raised stair door width");
+assertNear(LOBBY_PLAN.lobbyStair.upperDoor.baseY, 4.6, "Raised stair door base");
+assertNear(LOBBY_PLAN.lobbyStair.upperDoor.height, 2.48, "Raised stair door height");
 assertBoundsNear(LOBBY_PLAN.boxOfficeVertical, { xMin: 9.56, xMax: 10.66, zMin: 4.4, zMax: 11.9 }, "V13 box-office vertical");
 assertBoundsNear(LOBBY_PLAN.boxOfficeReturn, { xMin: 9.56, xMax: 12.71, zMin: 4.4, zMax: 5.1 }, "V13 box-office return");
 assert.equal(LOBBY_PLAN.boxOfficeCubby.id, "box-office-stair-cubby");
@@ -639,7 +692,7 @@ assert.equal(LOBBY_PLAN.futureStairWall.materialKey, "wall");
 assertNear(LOBBY_PLAN.futureStairWall.start.x, 12.71, "Future-stair white wall start X");
 assertNear(LOBBY_PLAN.futureStairWall.start.z, 5.1, "Future-stair white wall start Z");
 assertNear(LOBBY_PLAN.futureStairWall.end.x, 12.71, "Future-stair white wall end X");
-assertNear(LOBBY_PLAN.futureStairWall.end.z, 21.5, "Future-stair white wall end Z");
+assertNear(LOBBY_PLAN.futureStairWall.end.z, 11.4, "Lobby stair white wall must end where the exposed railing begins");
 assert.equal(LOBBY_PLAN.boxOfficeSightline.id, "box-office-ticket-hall-sightline");
 assertBoundsNear(
   LOBBY_PLAN.boxOfficeSightline.bounds,
@@ -681,12 +734,41 @@ assert.deepEqual(
     { id: "ticket-kiosk-2", position: [LOBBY_PLAN.envelope.xMax - 1.6, 0, 2.5], rotation: Math.PI / 2 },
     { id: "ticket-kiosk-3", position: [LOBBY_PLAN.envelope.xMax - 1.6, 0, 4.5], rotation: Math.PI / 2 },
   ],
-  "All three lobby kiosks must stay 1.6m inside the tightened east wall and clear the stair south cap.",
+  "All three lobby kiosks must stay 1.6m inside the tightened east wall and clear the stair foot.",
 );
 assert.ok(
   LOBBY_PLAN.kiosks.at(-1).position[2] + 0.9 / 2 < LOBBY_PLAN.futureStairs.zMin,
-  "Kiosk 3 must retain a physical gap before the white stair south wall.",
+  "Kiosk 3 must retain a physical gap before the stair foot.",
 );
+
+assert.equal(LOBBY_PLAN.barScreen.id, "lanai-bar-digital-screen");
+assert.equal(LOBBY_PLAN.barScreen.wallSide, "north");
+assertNear(LOBBY_PLAN.barScreen.wallZ, 21.5, "Bar-screen wall plane");
+assertNear(LOBBY_PLAN.barScreen.xMin, -7.8, "Bar-screen west edge");
+assertNear(LOBBY_PLAN.barScreen.xMax, -0.5, "Bar-screen east edge");
+assertNear(LOBBY_PLAN.barScreen.width, 7.3, "Bar-screen support width");
+assertNear(LOBBY_PLAN.barScreen.height, 4.3, "Bar-screen height");
+assertNear(LOBBY_PLAN.barScreen.bottomY, 4.6, "Bar-screen bottom");
+assertNear(LOBBY_PLAN.barScreen.topY, 8.9, "Bar-screen top");
+assertNear(LOBBY_PLAN.barScreen.intervalSeconds, 10, "Bar-screen rotation interval");
+assert.deepEqual(LOBBY_PLAN.barScreen.slideIds, ["island-grill", "garlic-fries-feature", "fries-and-rings", "previews-and-morning"]);
+assert.equal(LOBBY_PLAN.barScreen.xMin, LOBBY_PLAN.backBar.xMin, "Bar display must begin with the isolated bar wall.");
+assert.equal(LOBBY_PLAN.barScreen.xMax, TICKET_APPROACH_PLAN.bounds.xMin, "Bar display must end at the ticket-hall opening.");
+assert.equal(LOBBY_PLAN.barScreen.height, LOBBY_PLAN.muralFacade.artwork.height, "Bar screen and concession mural must have equal heights.");
+assertUnique(LOBBY_PLAN.barScreen.slideIds, "Bar-screen slide IDs");
+
+assert.equal(LOBBY_PLAN.oppositeLobbyMural.id, "stair-kiosk-botanical-mural");
+assert.equal(LOBBY_PLAN.oppositeLobbyMural.wallSide, "east");
+assertNear(LOBBY_PLAN.oppositeLobbyMural.wallX, 19.81, "Opposite-lobby mural wall plane");
+assertNear(LOBBY_PLAN.oppositeLobbyMural.zMin, 5.1, "Opposite-lobby mural south edge");
+assertNear(LOBBY_PLAN.oppositeLobbyMural.zMax, 21.5, "Opposite-lobby mural north edge");
+assertNear(LOBBY_PLAN.oppositeLobbyMural.width, 16.4, "Opposite-lobby mural width");
+assertNear(LOBBY_PLAN.oppositeLobbyMural.height, 4.3, "Opposite-lobby mural height");
+assertNear(LOBBY_PLAN.oppositeLobbyMural.bottomY, 4.6, "Opposite-lobby mural bottom");
+assertNear(LOBBY_PLAN.oppositeLobbyMural.topY, 8.9, "Opposite-lobby mural top");
+assert.equal(LOBBY_PLAN.oppositeLobbyMural.distinctFrom, "concession-botanical-mural");
+assert.equal(LOBBY_PLAN.oppositeLobbyMural.composition, "foliage-left-warm-portrait-right");
+assert.notEqual(LOBBY_PLAN.oppositeLobbyMural.id, LOBBY_PLAN.muralFacade.artwork.id, "The two lobby murals must retain distinct artwork identities.");
 assertNear(roomById("office-overflow").doorCenter, 2.7 + FRONT_SHIFT_Z, "Office-overflow east door shift");
 assertNear(roomById("electrical-room").doorCenter, 39 + FRONT_SHIFT_Z, "Electrical-room west door shift");
 
@@ -1016,9 +1098,19 @@ for (const [kind, banks] of Object.entries(boys.fixtures)) {
     assert.ok(bank.start >= boysMain.xMin && bank.end <= boysMain.xMax && bank.start < bank.end, `Boys ${kind} bank must fit inside the scaled main room.`);
   }
 }
-const boysStallDoorZ = boysMain.zMin + boys.fixtures.stalls[0].depth - 0.025;
+const boysStallBank = boys.fixtures.stalls[0];
+assert.equal(boysStallBank.side, "south");
+assert.equal(boysStallBank.recessedIntoWall, true, "V15 boys stalls must be pushed into a dedicated south-wall recess.");
+assertBoundsNear(boysStallBank.recessBounds, {
+  xMin: -21.17, xMax: -11.87, zMin: 63.55, zMax: 64.7,
+}, "V15 boys stall recess");
+assertNear(boysStallBank.recessBounds.zMax, boysMain.zMin, "Boys stall recess/main-room seam");
+assertNear(boundsDepth(boysStallBank.recessBounds), boysStallBank.depth, "Boys stall recess depth");
+assertNear(boundsWidth(boysStallBank.recessBounds), boysStallBank.end - boysStallBank.start, "Boys stall recess width");
+assert.ok(boysStallBank.recessBounds.zMin < boysMain.zMin, "Recessed stalls must occupy wall depth instead of stealing the main aisle.");
+const boysStallDoorZ = boysStallBank.recessBounds.zMax - 0.025;
 const boysUrinalFrontZ = boysMain.zMax - 0.32 - 0.42 / 2;
-assert.ok(boysUrinalFrontZ - boysStallDoorZ >= 1.55, "Boys restroom needs visibly more space between stalls and urinals.");
+assert.ok(boysUrinalFrontZ - boysStallDoorZ >= 2.9, "Recessing the stalls must preserve almost three metres between stall doors and urinals.");
 const boysFountainWall = publicById("boys-fountain-alcove");
 const boysMenCubby = publicById("boys-men-entry-cubby");
 assert.deepEqual(boysFountainWall.bounds, { xMin: -13.62, xMax: -11.72, zMin: 59.7, zMax: 62.2 });
@@ -1256,7 +1348,7 @@ assert.ok(worldBounds.xMin < worldBounds.xMax);
 assert.equal(worldBounds.xMax - worldBounds.xMin, MAP_BOUNDS.xMax - MAP_BOUNDS.xMin);
 
 console.log(
-  `Layout valid: v14 · door-to-bar mural with side-only gray · complete kitchen/nook roof · distributed overhead mechanicals · compact box-office sightline · shifted fountain island · 153m hall · 14 theaters · 1,093 seats.`,
+  `Layout valid: v15 · rotating bar display + distinct opposite mural · narrow open stair · recessed men's stalls · rigidly shifted T1/T2 · V14 concession/kitchen preserved · 153m hall · 14 theaters · 1,093 seats.`,
 );
 
 function publicById(id) {

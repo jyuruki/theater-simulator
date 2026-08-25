@@ -65,6 +65,7 @@ const {
   POS_STATIONS,
   PUBLIC_SPACES,
   SERVICE_ROOMS,
+  T12_TICKET_SHIFT_X,
   TICKET_APPROACH_PLAN,
 } = await import("../src/layout-data.js");
 const { createMaterialLibrary } = await import("../src/materials.js");
@@ -216,7 +217,7 @@ const auditoriumByNumber = new Map(AUDITORIUMS.map((auditorium) => [auditorium.n
 assert.equal(world.stats.auditoriumCount, 14);
 assert.equal(world.stats.seatCount, 1093);
 assert.equal(world.stats.equipmentAnchors, 13);
-assert.equal(world.stats.layoutVersion, "mililani-sketch-v14");
+assert.equal(world.stats.layoutVersion, "mililani-sketch-v15");
 assert.ok(world.stats.meshCount > 0);
 assert.ok(world.stats.colliderCount > 0);
 assert.equal(world.auditoriumGroups.size, 14);
@@ -508,19 +509,128 @@ assert.deepEqual(officeAtticContinuation.materialNames, ["Wall / warm neutral"])
 
 const backBar = assertBoxMatchesBounds("back-bar-cabinet", LOBBY_PLAN.backBar, "rigidly translated back bar");
 assertNear(backBar.depth, LOBBY_PLAN.backBar.zMax - LOBBY_PLAN.backBar.zMin, "back-bar depth preservation");
+
+const barScreen = LOBBY_PLAN.barScreen;
+const barScreenBacking = boxById(`${barScreen.id}-backing`);
+assertNear(barScreenBacking.x, planToWorldX((barScreen.xMin + barScreen.xMax) / 2), "bar-screen support center X");
+assertNear(barScreenBacking.y, (barScreen.bottomY + barScreen.topY) / 2, "bar-screen support center Y");
+assert.ok(Math.abs(barScreenBacking.z - barScreen.wallZ) <= 0.25, "Bar screen must mount flush to its north support wall.");
+assertNear(barScreenBacking.width, barScreen.width, "bar-screen outer width");
+assertNear(barScreenBacking.height, barScreen.height, "bar-screen outer height");
+const barScreenFace = scene.getObjectByName(`${barScreen.id}-face`);
+assert.ok(barScreenFace?.isMesh, "The bar wall needs one visible digital display face.");
+assert.equal(objectsByName(`${barScreen.id}-face`).length, 1, "The rotating bar display face must be authored exactly once.");
+assert.equal(barScreenFace.material.name, "lanai-bar-digital-screen-material");
+assert.ok(barScreenFace.scale.x <= barScreen.width && barScreenFace.scale.x >= barScreen.width - 0.25, "Bar-screen image must fill the 7.3m-wide frame.");
+assert.ok(barScreenFace.scale.y <= barScreen.height && barScreenFace.scale.y >= barScreen.height - 0.25, "Bar-screen image must fill the mural-height frame.");
+assert.ok(authoredBoxes.filter(({ id }) => id.startsWith(`${barScreen.id}-frame-`)).length >= 4, "The bar screen needs a complete four-sided frame.");
+
+const encounteredBarScreenTextures = new Set();
+const observeBarScreen = (expectedSlideId, label) => {
+  const texture = barScreenFace.material.map;
+  assert.ok(texture?.isTexture, `${label} needs a live screen texture.`);
+  assert.equal(texture.userData.slideId, expectedSlideId, `${label} slide ID`);
+  assertNear(texture.userData.holdSeconds, barScreen.intervalSeconds, `${label} authored hold interval`);
+  encounteredBarScreenTextures.add(texture);
+};
+observeBarScreen(barScreen.slideIds[0], "initial bar screen");
+world.update(barScreen.intervalSeconds - 0.001);
+observeBarScreen(barScreen.slideIds[0], "bar screen just before first boundary");
+world.update(0.001);
+observeBarScreen(barScreen.slideIds[1], "bar screen at first 10-second boundary");
+for (const slideId of barScreen.slideIds.slice(2)) {
+  world.update(barScreen.intervalSeconds);
+  observeBarScreen(slideId, `bar-screen ${slideId}`);
+}
+world.update(barScreen.intervalSeconds);
+observeBarScreen(barScreen.slideIds[0], "bar screen after one complete loop");
+assert.equal(encounteredBarScreenTextures.size, barScreen.slideIds.length, "The 10-second rotation must expose four distinct display textures.");
+const disposedBarScreenTextures = new Set();
+for (const texture of encounteredBarScreenTextures) {
+  texture.addEventListener("dispose", () => disposedBarScreenTextures.add(texture));
+}
+
+const oppositeMuralPlan = LOBBY_PLAN.oppositeLobbyMural;
+const oppositeMuralFace = scene.getObjectByName("stair-kiosk-mural-face");
+assert.ok(oppositeMuralFace?.isMesh, "The stair/kiosk side needs its own mural face.");
+assert.equal(objectsByName("stair-kiosk-mural-face").length, 1, "The opposite-lobby mural must be authored exactly once.");
+assert.equal(oppositeMuralFace.material.name, "stair-kiosk-botanical-mural-material");
+assert.equal(oppositeMuralFace.material.map?.name, "original-opposite-lobby-botanical-mural-v15");
+assert.equal(oppositeMuralFace.material.map?.userData.distinctArtwork, true, "The stair/kiosk mural texture must declare itself distinct.");
+assert.equal(oppositeMuralFace.userData.artworkId, oppositeMuralPlan.id, "The opposite mural must bind to its own layout ID.");
+assert.equal(oppositeMuralFace.userData.distinctFrom, oppositeMuralPlan.distinctFrom, "The opposite mural must not alias the concession artwork.");
+assertNear(oppositeMuralFace.position.x, planToWorldX(oppositeMuralPlan.wallX), "opposite mural wall X", 0.2);
+assertNear(oppositeMuralFace.position.y, (oppositeMuralPlan.bottomY + oppositeMuralPlan.topY) / 2, "opposite mural center Y");
+assertNear(oppositeMuralFace.position.z, (oppositeMuralPlan.zMin + oppositeMuralPlan.zMax) / 2, "opposite mural center Z");
+assertNear(oppositeMuralFace.scale.x, oppositeMuralPlan.width, "opposite mural width");
+assertNear(oppositeMuralFace.scale.y, oppositeMuralPlan.height, "opposite mural height");
+const concessionMuralFace = scene.getObjectByName("concession-mural-face");
+assert.notEqual(oppositeMuralFace.material, concessionMuralFace.material, "Opposite lobby and concession murals need independent materials.");
+assert.notEqual(oppositeMuralFace.material.map, concessionMuralFace.material.map, "Opposite lobby and concession murals need independent textures.");
+let oppositeMuralTextureDisposed = false;
+oppositeMuralFace.material.map.addEventListener("dispose", () => { oppositeMuralTextureDisposed = true; });
+
 assertBoxMatchesBounds("box-office-vertical", LOBBY_PLAN.boxOfficeVertical, "narrow V13 box-office long leg");
 const boxOfficeReturn = assertBoxMatchesBounds("box-office-return", LOBBY_PLAN.boxOfficeReturn, "half-length V13 box-office return");
 assertNear(boxOfficeReturn.width, 3.15, "box-office return half-length");
 assertNear(boxOfficeReturn.depth, 0.7, "box-office return narrow depth");
 assertNear(LOBBY_PLAN.boxOfficeReturn.xMax, LOBBY_PLAN.futureStairs.xMin, "box-office return flush to stair wall");
 assertNear(LOBBY_PLAN.futureStairs.xMin - TICKET_APPROACH_PLAN.bounds.xMax, 0.61, "ticket-approach/stair reveal");
-for (const id of ["future-stair-construction-wall", "lobby-back-east-short-return", "future-stair-north-wall"]) {
-  assert.deepEqual(boxById(id).materialNames, ["Wall / warm neutral"], `${id} must use the white hallway finish.`);
-}
-for (const segment of authoredBoxes.filter(({ id }) => id.startsWith("future-stair-south-cap-"))) {
-  assert.deepEqual(segment.materialNames, ["Wall / warm neutral"], `${segment.id} must use the white hallway finish.`);
-}
+assert.deepEqual(boxById("lobby-back-east-short-return").materialNames, ["Wall / warm neutral"], "The two-foot ticket-hall return must stay white.");
 assertNear(boxById("lobby-back-east-short-return").width, 0.61, "half-length ticket cubby short return");
+for (const obsoleteId of [
+  "future-stair-construction-wall",
+  "future-stair-north-wall",
+  "future-stair-closed-door-closed-leaf",
+  "future-stair-closed-door-closed-bar",
+]) {
+  assert.deepEqual(objectsByName(obsoleteId), [], `${obsoleteId} must not survive the V15 open-stair rebuild.`);
+}
+assert.deepEqual(
+  authoredBoxes.filter(({ id }) => id.startsWith("future-stair-south-cap-")).map(({ id }) => id),
+  [],
+  "The old full-width stair south cap must be removed.",
+);
+
+const lobbyStair = LOBBY_PLAN.lobbyStair;
+const stairTreads = authoredBoxes
+  .filter(({ id }) => /^lobby-stair-tread-\d+$/.test(id))
+  .sort((first, second) => first.z - second.z);
+assert.equal(stairTreads.length, lobbyStair.treadCount, "The rendered stair must include every planned tread.");
+for (const [index, tread] of stairTreads.entries()) {
+  assertNear(tread.x, planToWorldX((lobbyStair.bounds.xMin + lobbyStair.bounds.xMax) / 2), `${tread.id} center X`);
+  assertNear(tread.width, lobbyStair.clearWidth, `${tread.id} clear width`);
+  assert.ok(tread.depth >= lobbyStair.treadDepth && tread.depth <= lobbyStair.treadDepth + 0.05, `${tread.id} depth must close tread seams without stretching the run.`);
+  assertNear(tread.y + tread.height / 2, (index + 1) * lobbyStair.stepRise, `${tread.id} walking surface`);
+  const sampleHeight = world.groundHeight(planToWorldX((lobbyStair.bounds.xMin + lobbyStair.bounds.xMax) / 2), tread.z, tread.y);
+  assertNear(sampleHeight, (index + 1) * lobbyStair.stepRise, `${tread.id} ground sampler`);
+}
+assert.equal(world.groundHeight(
+  planToWorldX((lobbyStair.bottomLanding.xMin + lobbyStair.bottomLanding.xMax) / 2),
+  (lobbyStair.bottomLanding.zMin + lobbyStair.bottomLanding.zMax) / 2,
+  0,
+), lobbyStair.bottomY, "Stair bottom landing must meet the lobby floor.");
+const topLanding = assertBoxMatchesBounds("lobby-stair-top-landing-floor", lobbyStair.topLanding, "raised stair top landing");
+assertNear(topLanding.y + topLanding.height / 2, lobbyStair.topY, "raised stair top-landing surface");
+assertNear(world.groundHeight(
+  planToWorldX((lobbyStair.topLanding.xMin + lobbyStair.topLanding.xMax) / 2),
+  (lobbyStair.topLanding.zMin + lobbyStair.topLanding.zMax) / 2,
+  lobbyStair.topY,
+), lobbyStair.topY, "raised stair top-landing sampler");
+const westRailObjects = [];
+const eastRailObjects = [];
+scene.traverse((object) => {
+  if (object.name.startsWith("lobby-stair-west-rail-")) westRailObjects.push(object);
+  if (object.name.startsWith("lobby-stair-east-rail-")) eastRailObjects.push(object);
+});
+assert.ok(westRailObjects.length >= 3, "The exposed lobby side of the stair needs a continuous post-and-rail system.");
+assert.ok(eastRailObjects.length >= 3, "The kiosk side of the narrow stair needs its own guard rail.");
+assert.ok(colliderIdsMatching(world, /^lobby-stair-(?:west|east)-rail-/).length >= 2, "The open stair railings need physical guards.");
+const stairDoorLeaf = boxById("lobby-stair-upper-door-closed-leaf");
+assertNear(stairDoorLeaf.x, planToWorldX(lobbyStair.upperDoor.center), "raised stair door center X");
+assertNear(stairDoorLeaf.y - stairDoorLeaf.height / 2, lobbyStair.upperDoor.baseY, "raised stair door sill");
+assertNear(stairDoorLeaf.z, lobbyStair.upperDoor.z, "raised stair door wall plane", 0.2);
+boxById("lobby-stair-upper-door-closed-bar");
 const sightline = LOBBY_PLAN.boxOfficeSightline;
 for (let z = sightline.bounds.zMin + 0.5; z < sightline.bounds.zMax - 0.5; z += 1) {
   const worldX = planToWorldX(sightline.axisX);
@@ -745,6 +855,19 @@ assert.equal(runtimeHangerIds.length, expectedHangerCount, "Every large duct mus
 assert.equal(new Set(runtimeHangerIds).size, runtimeHangerIds.length, "Overhead hanger IDs must be unique.");
 
 const t1 = world.auditoriumLayouts.get("theater-1");
+const theater1 = auditoriumByNumber.get(1);
+const theater2 = auditoriumByNumber.get(2);
+assert.equal(T12_TICKET_SHIFT_X, 1, "V15 ticket-ward shift constant");
+assert.deepEqual(theater1.bounds, { xMin: -24.5, xMax: -15, zMin: 42.5, zMax: 55.5 }, "T1 must translate rigidly one metre toward the podium.");
+assert.deepEqual(theater2.bounds, { xMin: -34, xMax: -24.5, zMin: 42.5, zMax: 55.5 }, "T2 must translate rigidly with T1.");
+assert.deepEqual(theater1.entry.cubbyBounds, { xMin: -24.5, xMax: -21.3, zMin: 51.9, zMax: 55.5 }, "T1 cubby must translate with its bowl.");
+assert.deepEqual(theater2.entry.cubbyBounds, { xMin: -27.7, xMax: -24.5, zMin: 51.9, zMax: 55.5 }, "T2 cubby must translate with its bowl.");
+assertNear(theater1.entry.center, -22.9, "T1 outer door translation");
+assertNear(theater2.entry.center, -26.1, "T2 outer door translation");
+assert.equal(theater1.bounds.xMin, theater2.bounds.xMax, "T1/T2 shared wall must remain exact after translation.");
+assert.equal(theater1.entry.cubbyBounds.xMin, theater2.entry.cubbyBounds.xMax, "T1/T2 cubbies must remain back-to-back.");
+assertBoxMatchesBounds("theater-1-ceiling", theater1.bounds, "rigidly translated T1 ceiling");
+assertBoxMatchesBounds("theater-2-ceiling", theater2.bounds, "rigidly translated T2 ceiling");
 const t1FrontHeight = world.groundHeight(planToWorldX(t1.sideAisles.west.centerX), t1.frontRowZ, 0);
 const t1RearHeight = world.groundHeight(planToWorldX(t1.sideAisles.west.centerX), t1.backRowZ, 0);
 assert.equal(t1FrontHeight, t1.frontElevation);
@@ -849,6 +972,32 @@ assertBoxMatchesBounds("boys-restroom-section-0-floor", boys.footprintRects[0], 
 assertBoxMatchesBounds("boys-restroom-section-0-ceiling", boys.footprintRects[0], "boys main-room ceiling");
 assertBoxMatchesBounds("boys-restroom-section-1-floor", boys.footprintRects[1], "boys entry-lobe floor");
 assertBoxMatchesBounds("boys-restroom-section-1-ceiling", boys.footprintRects[1], "boys entry-lobe ceiling");
+const boysStallBank = boys.fixtures.stalls[0];
+const boysStallRecess = boysStallBank.recessBounds;
+assert.equal(boysStallBank.recessedIntoWall, true, "The men's stall bank must use its V15 wall recess.");
+assert.deepEqual(boysStallRecess, { xMin: -21.17, xMax: -11.87, zMin: 63.55, zMax: 64.7 });
+assertBoxMatchesBounds("boys-restroom-stall-recess-floor", boysStallRecess, "men's stall recess floor");
+assertBoxMatchesBounds("boys-restroom-stall-recess-ceiling", boysStallRecess, "men's stall recess ceiling");
+const boysStallRecessBackWall = boxById("boys-restroom-stall-recess-back-wall");
+assertNear(boysStallRecessBackWall.x, planToWorldX((boysStallRecess.xMin + boysStallRecess.xMax) / 2), "men's stall recess back-wall center X");
+assertNear(boysStallRecessBackWall.z, boysStallRecess.zMin, "men's stall recess back-wall Z");
+assertNear(boysStallRecessBackWall.width, boysStallRecess.xMax - boysStallRecess.xMin, "men's stall recess back-wall width");
+assert.equal(colliderIdsMatching(world, /^boys-restroom-stall-recess-back-wall$/).length, 1, "The recessed stall bank needs one solid back wall.");
+assert.deepEqual(objectsByName("boys-restroom-south"), [], "The former uninterrupted south wall must yield to the recessed stall bank.");
+for (const id of ["boys-restroom-south-segment-0", "boys-restroom-south-segment-last", "boys-restroom-south-header-0"]) {
+  const recessMouthPiece = boxById(id);
+  assert.equal(recessMouthPiece.materialNames.length, 6, `${id} needs per-face hall/restroom finishes.`);
+  assert.equal(recessMouthPiece.materialNames[5], materials.darkWall.name, `${id} public south face must match the hall.`);
+  assert.equal(recessMouthPiece.materialNames[4], materials.wall.name, `${id} bathroom north face must remain light.`);
+}
+for (const edge of [0, boysStallBank.count]) {
+  const partition = boxById(`boys-restroom-stall-bank-0-partition-${edge}`);
+  assertNear(partition.z, (boysStallRecess.zMin + boysStallRecess.zMax) / 2, `boys recessed partition ${edge} center Z`);
+}
+for (const index of [0, boysStallBank.count - 1]) {
+  const door = boxById(`boys-restroom-stall-bank-0-door-${index}`);
+  assertNear(door.z, boysStallRecess.zMax - 0.025, `boys recessed stall door ${index} mouth plane`);
+}
 assert.deepEqual(
   authoredBoxes.filter(({ id }) => /^boys-fountain-alcove-(?:floor|ceiling)$/.test(id)).map(({ id }) => id),
   [],
@@ -866,7 +1015,6 @@ assert.equal(sharedWall.materialNames.length, 6, "The shared wall needs per-face
 assert.equal(sharedWall.materialNames[4], materials.darkWall.name, "The shared wall's +Z storage face must use the dark finish.");
 assert.equal(sharedWall.materialNames[5], materials.wall.name, "The shared wall's -Z bathroom face must use the warm finish.");
 for (const [id, publicFaceIndex, interiorFaceIndex] of [
-  ["boys-restroom-south", 5, 4],
   ["boys-restroom-entry-south", 5, 4],
   ["boys-restroom-east", 1, 0],
 ]) {
@@ -1152,8 +1300,10 @@ minimap.updatePlayer({ x: -2, z: HALL_PLAN.wide.zMin + 1, directionX: 1, directi
 minimap.draw();
 minimap.destroy();
 world.dispose();
+assert.equal(disposedBarScreenTextures.size, encounteredBarScreenTextures.size, "World disposal must release every rotating bar-screen texture.");
+assert.equal(oppositeMuralTextureDisposed, true, "World disposal must release the distinct opposite-lobby mural texture.");
 materials.dispose();
 
 console.log(
-  `World smoke valid: ${world.stats.meshCount} runtime meshes · ${world.stats.instancedMeshCount} instanced · ${world.stats.colliderCount} colliders.`,
+  `World smoke valid: V15 · ${world.stats.meshCount} runtime meshes · ${world.stats.instancedMeshCount} instanced · ${world.stats.colliderCount} colliders · rotating bar screen + distinct opposite mural + walkable narrow stair + recessed men's stalls.`,
 );

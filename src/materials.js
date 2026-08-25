@@ -1259,4 +1259,454 @@ function createBotanicalMuralTexture() {
   return texture;
 }
 
-export { createMaterialLibrary, createSignTexture, createBotanicalMuralTexture };
+function drawMenuScreenHeader(context, title, subtitle, accent) {
+  context.fillStyle = "#09090d";
+  context.fillRect(0, 0, 1280, 720);
+
+  const glow = context.createLinearGradient(0, 0, 1280, 720);
+  glow.addColorStop(0, "#18224a");
+  glow.addColorStop(0.48, "#0e142b");
+  glow.addColorStop(1, "#21131d");
+  context.globalAlpha = 0.94;
+  context.fillStyle = glow;
+  context.fillRect(0, 0, 1280, 720);
+  context.globalAlpha = 1;
+
+  context.fillStyle = accent;
+  context.fillRect(48, 45, 770, 82);
+  context.fillStyle = "#11131b";
+  context.font = "800 52px Arial, Helvetica, sans-serif";
+  context.textAlign = "left";
+  context.textBaseline = "middle";
+  context.fillText(title, 78, 86);
+
+  context.fillStyle = "#f5f1ee";
+  context.font = "700 24px Arial, Helvetica, sans-serif";
+  context.fillText(subtitle, 52, 159);
+  context.strokeStyle = "#f5f1ee";
+  context.globalAlpha = 0.4;
+  context.lineWidth = 2;
+  context.beginPath();
+  context.moveTo(52, 183);
+  context.lineTo(810, 183);
+  context.stroke();
+  context.globalAlpha = 1;
+}
+
+function drawMenuRows(context, rows, options = {}) {
+  const x = options.x ?? 64;
+  const y = options.y ?? 226;
+  const width = options.width ?? 730;
+  const rowHeight = options.rowHeight ?? 70;
+  const titleSize = options.titleSize ?? 34;
+  const priceSize = options.priceSize ?? 25;
+
+  rows.forEach((row, index) => {
+    const rowY = y + index * rowHeight;
+    context.fillStyle = index % 2 === 0 ? "rgba(255,255,255,0.035)" : "rgba(109,131,220,0.055)";
+    context.fillRect(x - 14, rowY - rowHeight * 0.42, width, rowHeight * 0.82);
+    context.fillStyle = "#fbf9f5";
+    context.font = `800 ${titleSize}px Arial, Helvetica, sans-serif`;
+    context.textAlign = "left";
+    context.textBaseline = "middle";
+    context.fillText(row.label.toUpperCase(), x, rowY);
+    context.fillStyle = "#d9dbe6";
+    context.font = `500 ${priceSize}px Arial, Helvetica, sans-serif`;
+    context.textAlign = "right";
+    context.fillText(row.note, x + width - 30, rowY);
+  });
+}
+
+function drawScreenPanel(context, x, y, width, height, fill = "#161824") {
+  roundedRect(context, x, y, width, height, 24);
+  context.fillStyle = fill;
+  context.fill();
+  context.strokeStyle = "rgba(255,255,255,0.2)";
+  context.lineWidth = 3;
+  context.stroke();
+}
+
+function drawBurgerIllustration(context, x, y, scale = 1) {
+  context.save();
+  context.translate(x, y);
+  context.scale(scale, scale);
+
+  const bun = context.createLinearGradient(0, -105, 0, 100);
+  bun.addColorStop(0, "#f7c66c");
+  bun.addColorStop(1, "#b76624");
+  context.fillStyle = bun;
+  context.beginPath();
+  context.moveTo(-154, -30);
+  context.bezierCurveTo(-132, -146, 122, -154, 154, -30);
+  context.quadraticCurveTo(0, 2, -154, -30);
+  context.fill();
+
+  context.fillStyle = "#f0e4be";
+  for (let seed = 0; seed < 12; seed += 1) {
+    const sx = -118 + (seed % 6) * 46 + (seed % 2) * 8;
+    const sy = -84 + Math.floor(seed / 6) * 34;
+    context.beginPath();
+    context.ellipse(sx, sy, 8, 3, -0.4, 0, TAU);
+    context.fill();
+  }
+
+  context.fillStyle = "#68a64c";
+  context.beginPath();
+  context.moveTo(-154, -20);
+  context.bezierCurveTo(-105, 12, -65, -42, -16, -10);
+  context.bezierCurveTo(35, 16, 96, -37, 154, -8);
+  context.lineTo(144, 25);
+  context.lineTo(-146, 28);
+  context.closePath();
+  context.fill();
+
+  context.fillStyle = "#e7b941";
+  context.beginPath();
+  context.moveTo(-143, 20);
+  context.lineTo(150, 18);
+  context.lineTo(102, 66);
+  context.lineTo(-122, 62);
+  context.closePath();
+  context.fill();
+  context.fillStyle = "#603321";
+  roundedRect(context, -145, 52, 290, 54, 24);
+  context.fill();
+  context.fillStyle = "#d98f3e";
+  roundedRect(context, -154, 100, 308, 54, 25);
+  context.fill();
+  context.restore();
+}
+
+function drawFriesIllustration(context, x, y, scale = 1) {
+  context.save();
+  context.translate(x, y);
+  context.scale(scale, scale);
+
+  const packet = context.createLinearGradient(-80, 80, 100, 220);
+  packet.addColorStop(0, "#33479d");
+  packet.addColorStop(1, "#121a4b");
+  context.fillStyle = packet;
+  context.beginPath();
+  context.moveTo(-110, 16);
+  context.lineTo(116, 16);
+  context.lineTo(88, 202);
+  context.quadraticCurveTo(0, 234, -88, 202);
+  context.closePath();
+  context.fill();
+
+  const fryPalette = ["#f9d87a", "#edb84e", "#d99332"];
+  for (let fry = 0; fry < 18; fry += 1) {
+    context.save();
+    context.translate(-92 + (fry % 10) * 20, 18 - (fry % 4) * 10);
+    context.rotate(-0.22 + (fry % 5) * 0.11);
+    context.fillStyle = fryPalette[fry % fryPalette.length];
+    roundedRect(context, -6, -110 - (fry % 3) * 18, 14, 140 + (fry % 3) * 18, 5);
+    context.fill();
+    context.restore();
+  }
+
+  context.fillStyle = "#f7f4ec";
+  context.font = "800 36px Arial, Helvetica, sans-serif";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText("CRISP", 0, 134);
+  context.restore();
+}
+
+function drawPlateIllustration(context, x, y, radius, palette) {
+  context.save();
+  context.translate(x, y);
+  context.fillStyle = "rgba(255,255,255,0.13)";
+  context.beginPath();
+  context.arc(8, 12, radius * 1.08, 0, TAU);
+  context.fill();
+  context.fillStyle = "#ece9e1";
+  context.beginPath();
+  context.arc(0, 0, radius, 0, TAU);
+  context.fill();
+  context.fillStyle = "#c7c3bb";
+  context.beginPath();
+  context.arc(0, 0, radius * 0.78, 0, TAU);
+  context.fill();
+  palette.forEach((color, index) => {
+    const angle = (index / palette.length) * TAU - Math.PI / 2;
+    context.fillStyle = color;
+    context.beginPath();
+    context.arc(Math.cos(angle) * radius * 0.38, Math.sin(angle) * radius * 0.35, radius * (0.22 + (index % 2) * 0.04), 0, TAU);
+    context.fill();
+  });
+  context.restore();
+}
+
+function createLobbyBarScreenTextures() {
+  const width = 1280;
+  const height = 720;
+  const definitions = [
+    {
+      id: "island-grill",
+      name: "lobby-bar-screen-slide-01-island-grill",
+      draw(context) {
+        drawMenuScreenHeader(context, "ISLAND GRILL", "BURGERS · BASKETS · SANDWICHES", "#e8cadc");
+        drawMenuRows(context, [
+          { label: "Crisp chicken stack", note: "HOUSE FAVORITE" },
+          { label: "Garden grill burger", note: "CHARRED" },
+          { label: "Teriyaki portobello", note: "PLANT-BASED" },
+          { label: "Turkey club melt", note: "TOASTED" },
+          { label: "Island fish basket", note: "SEA SALT" },
+        ], { width: 770, titleSize: 31, priceSize: 18, rowHeight: 77 });
+        drawScreenPanel(context, 858, 50, 372, 620, "#171421");
+        drawBurgerIllustration(context, 1044, 342, 0.92);
+        context.fillStyle = "#e8cadc";
+        context.font = "800 26px Arial, Helvetica, sans-serif";
+        context.textAlign = "center";
+        context.fillText("BUILT FRESH", 1044, 604);
+      },
+    },
+    {
+      id: "garlic-fries-feature",
+      name: "lobby-bar-screen-slide-02-garlic-fries",
+      draw(context) {
+        drawMenuScreenHeader(context, "FEATURED FRIES", "GARLIC · SCALLION · SEA SALT", "#f2d8e2");
+        drawScreenPanel(context, 56, 205, 760, 453, "#17192a");
+        drawFriesIllustration(context, 430, 377, 1.15);
+        context.fillStyle = "#f5f1ee";
+        context.font = "800 34px Arial, Helvetica, sans-serif";
+        context.textAlign = "center";
+        context.fillText("TOSSED TO ORDER", 430, 608);
+        drawScreenPanel(context, 858, 50, 372, 608, "#15131d");
+        context.fillStyle = "#f2d8e2";
+        context.font = "800 29px Arial, Helvetica, sans-serif";
+        context.textAlign = "left";
+        context.fillText("PAIR IT WITH", 902, 126);
+        context.fillStyle = "#f8f6f2";
+        context.font = "700 34px Arial, Helvetica, sans-serif";
+        ["CILANTRO AIOLI", "TANGY BBQ", "CHILI CREMA", "ROASTED GARLIC"].forEach((label, index) => {
+          context.fillText(label, 902, 226 + index * 85);
+        });
+        context.fillStyle = "#839bdc";
+        context.fillRect(902, 565, 275, 7);
+      },
+    },
+    {
+      id: "fries-and-rings",
+      name: "lobby-bar-screen-slide-03-fries-and-rings",
+      draw(context) {
+        drawMenuScreenHeader(context, "FRIES & RINGS", "CRISP SIDES · SIGNATURE SAUCES", "#e5cbdc");
+        drawMenuRows(context, [
+          { label: "Sea salt fries", note: "CLASSIC" },
+          { label: "Crispy onion rings", note: "GOLDEN" },
+          { label: "Chili lime fries", note: "BRIGHT" },
+          { label: "Green bean crunch", note: "SEASONED" },
+          { label: "Loaded potato fries", note: "SHAREABLE" },
+        ], { width: 785, titleSize: 31, priceSize: 18, rowHeight: 70 });
+        drawScreenPanel(context, 876, 50, 346, 620, "#17131c");
+        drawPlateIllustration(context, 1048, 294, 132, ["#d5a23b", "#91a64f", "#c95d45", "#e8cd77", "#764232"]);
+        context.fillStyle = "#e5cbdc";
+        context.font = "800 26px Arial, Helvetica, sans-serif";
+        context.textAlign = "center";
+        context.fillText("SAUCE FLIGHT", 1048, 532);
+        context.fillStyle = "#d7d8df";
+        context.font = "600 20px Arial, Helvetica, sans-serif";
+        context.fillText("pick three house dips", 1048, 571);
+      },
+    },
+    {
+      id: "previews-and-morning",
+      name: "lobby-bar-screen-slide-04-previews-morning",
+      draw(context) {
+        drawMenuScreenHeader(context, "PREVIEWS", "SNACKS BEFORE THE FEATURE", "#ead0df");
+        drawMenuRows(context, [
+          { label: "Pretzel bites", note: "WARM" },
+          { label: "Loaded nachos", note: "SHAREABLE" },
+          { label: "Classic hot dog", note: "GRILLED" },
+          { label: "Mochi crunch mix", note: "LOCAL" },
+        ], { width: 665, titleSize: 31, priceSize: 18, rowHeight: 73 });
+        drawScreenPanel(context, 752, 50, 470, 620, "#151522");
+        context.fillStyle = "#ead0df";
+        context.fillRect(788, 82, 396, 70);
+        context.fillStyle = "#17131c";
+        context.font = "800 36px Arial, Helvetica, sans-serif";
+        context.textAlign = "center";
+        context.fillText("MORNING FEATURES", 986, 118);
+        drawPlateIllustration(context, 986, 338, 130, ["#e9b744", "#bb6843", "#f2d58b", "#7ca253", "#dd8a54"]);
+        context.fillStyle = "#f7f4ed";
+        context.font = "700 28px Arial, Helvetica, sans-serif";
+        context.fillText("WAFFLES · FRUIT · BREAKFAST", 986, 548);
+        context.fillStyle = "#b9bdd2";
+        context.font = "600 20px Arial, Helvetica, sans-serif";
+        context.fillText("available during early shows", 986, 589);
+      },
+    },
+  ];
+
+  return definitions.map((definition, index) => {
+    const canvas = createCanvas(width, height);
+    const context = context2d(canvas);
+    definition.draw(context);
+    const texture = canvasTexture(canvas, { name: definition.name, clamp: true, anisotropy: 4 });
+    texture.userData.slideId = definition.id;
+    texture.userData.sequenceIndex = index;
+    texture.userData.holdSeconds = 10;
+    texture.userData.credit = "Original procedural lobby bar menu artwork";
+    return texture;
+  });
+}
+
+function createOppositeLobbyMuralTexture() {
+  // This is intentionally a second, independent lobby artwork. It faces the
+  // stair/kiosk side of the room: dense foliage grows in from the left while
+  // a warm portrait emerges into a cool blue field on the right. It does not
+  // mirror or reuse the concession-side mural's composition.
+  const width = 1152;
+  const height = 432;
+  const canvas = createCanvas(width, height);
+  const context = context2d(canvas);
+  const random = seededRandom("opposite-lobby-warm-face-mural-v15");
+
+  const sky = context.createLinearGradient(0, 0, width, height);
+  sky.addColorStop(0, "#203d38");
+  sky.addColorStop(0.4, "#182f31");
+  sky.addColorStop(0.67, "#254f71");
+  sky.addColorStop(1, "#6f7f94");
+  context.fillStyle = sky;
+  context.fillRect(0, 0, width, height);
+
+  // Layered blue brush bands keep the right side airy and distinct from the
+  // dark concession mural's framed central field.
+  context.globalAlpha = 0.28;
+  for (let band = 0; band < 34; band += 1) {
+    const x = 610 + random() * 570;
+    context.strokeStyle = band % 3 === 0 ? "#b6d4df" : band % 3 === 1 ? "#37688e" : "#839bb0";
+    context.lineWidth = 4 + random() * 14;
+    context.beginPath();
+    context.moveTo(x, -20);
+    context.bezierCurveTo(x - 45 + random() * 90, 130, x - 35 + random() * 70, 302, x + (random() - 0.5) * 42, 452);
+    context.stroke();
+  }
+  context.globalAlpha = 1;
+
+  // A warm, angular face is placed right of center. Its silhouette and eye
+  // placement deliberately differ from the concession artwork.
+  const face = context.createLinearGradient(570, 20, 940, 420);
+  face.addColorStop(0, "#d7aa75");
+  face.addColorStop(0.42, "#b8734f");
+  face.addColorStop(0.76, "#7b4a3f");
+  face.addColorStop(1, "#273b55");
+  context.fillStyle = face;
+  context.beginPath();
+  context.moveTo(650, -18);
+  context.bezierCurveTo(760, 10, 918, 96, 945, 205);
+  context.bezierCurveTo(927, 307, 849, 396, 730, 450);
+  context.bezierCurveTo(652, 383, 622, 280, 635, 179);
+  context.bezierCurveTo(642, 102, 628, 49, 650, -18);
+  context.closePath();
+  context.fill();
+
+  context.globalAlpha = 0.3;
+  for (let stroke = 0; stroke < 30; stroke += 1) {
+    const x = 650 + random() * 285;
+    context.strokeStyle = stroke % 2 === 0 ? "#f1c59a" : "#3a5e78";
+    context.lineWidth = 2 + random() * 6;
+    context.beginPath();
+    context.moveTo(x, -8);
+    context.bezierCurveTo(x + (random() - 0.5) * 44, 145, x - 35 + random() * 70, 285, x + (random() - 0.5) * 38, 445);
+    context.stroke();
+  }
+  context.globalAlpha = 1;
+
+  // Eye looking across the lobby toward the concession-side artwork.
+  context.fillStyle = "#ede7d8";
+  context.beginPath();
+  context.moveTo(716, 137);
+  context.quadraticCurveTo(780, 94, 855, 135);
+  context.quadraticCurveTo(785, 172, 716, 137);
+  context.fill();
+  const iris = context.createRadialGradient(790, 135, 4, 790, 135, 29);
+  iris.addColorStop(0, "#0d1012");
+  iris.addColorStop(0.35, "#49798b");
+  iris.addColorStop(0.72, "#9db8b6");
+  iris.addColorStop(1, "#263e42");
+  context.fillStyle = iris;
+  context.beginPath();
+  context.arc(790, 135, 28, 0, TAU);
+  context.fill();
+  context.fillStyle = "#111416";
+  context.beginPath();
+  context.arc(790, 135, 10, 0, TAU);
+  context.fill();
+  context.fillStyle = "#ffffff";
+  context.beginPath();
+  context.arc(800, 124, 4.5, 0, TAU);
+  context.fill();
+  context.strokeStyle = "#352b29";
+  context.lineWidth = 10;
+  context.beginPath();
+  context.moveTo(702, 128);
+  context.quadraticCurveTo(782, 72, 873, 124);
+  context.stroke();
+
+  context.strokeStyle = "#edc8a4";
+  context.globalAlpha = 0.58;
+  context.lineWidth = 5;
+  context.beginPath();
+  context.moveTo(851, 158);
+  context.bezierCurveTo(873, 224, 867, 271, 821, 308);
+  context.quadraticCurveTo(858, 325, 889, 301);
+  context.stroke();
+  context.globalAlpha = 1;
+
+  // A separate left-originating branch structure creates the leafy half of
+  // the composition, with more fern-like tiers than the concession mural.
+  context.strokeStyle = "#112e29";
+  context.lineWidth = 12;
+  context.beginPath();
+  context.moveTo(-30, 374);
+  context.bezierCurveTo(178, 315, 272, 150, 538, 95);
+  context.bezierCurveTo(610, 80, 666, 51, 727, 8);
+  context.stroke();
+
+  const leafPalette = ["#163e33", "#245d43", "#3c7c51", "#65995f", "#91ae70", "#b5c183"];
+  for (let index = 0; index < 88; index += 1) {
+    const progress = index / 87;
+    const x = -12 + progress * 676 + (random() - 0.5) * 48;
+    const y = 314 - Math.sin(progress * Math.PI * 1.32) * 205 + (random() - 0.5) * 72;
+    const direction = index % 2 === 0 ? -1 : 1;
+    drawLeaf(
+      context,
+      x,
+      y,
+      30 + random() * 45,
+      8 + random() * 12,
+      direction * (0.58 + random() * 0.78),
+      leafPalette[Math.floor(random() * leafPalette.length)],
+      "#102f29",
+    );
+  }
+
+  drawHalfBlossom(context, 166, 116, 30, -0.42, "#f0e8d7");
+  drawHalfBlossom(context, 328, 276, 34, 0.58, "#e7d7c2");
+  drawHalfBlossom(context, 512, 72, 27, 2.46, "#d9a968");
+
+  context.globalAlpha = 0.24;
+  for (let fleck = 0; fleck < 240; fleck += 1) {
+    context.fillStyle = fleck % 4 === 0 ? "#d2a55e" : "#8fb9bb";
+    context.beginPath();
+    context.arc(random() * width, random() * height, 0.5 + random() * 1.7, 0, TAU);
+    context.fill();
+  }
+  context.globalAlpha = 1;
+
+  const texture = canvasTexture(canvas, { name: "original-opposite-lobby-botanical-mural-v15", clamp: true, anisotropy: 4 });
+  texture.userData.credit = "Original procedural foliage-and-warm-portrait composition";
+  texture.userData.muralSide = "stair-kiosk-lobby-wall";
+  texture.userData.distinctArtwork = true;
+  return texture;
+}
+
+export {
+  createMaterialLibrary,
+  createSignTexture,
+  createBotanicalMuralTexture,
+  createLobbyBarScreenTextures,
+  createOppositeLobbyMuralTexture,
+};

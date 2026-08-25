@@ -6,7 +6,13 @@ A first-person, browser-based layout prototype for a multiplayer movie-theater s
 
 This is a spatial prototype—not an official measured architectural plan. It is unaffiliated with Consolidated Theatres.
 
-## What is in v0.14
+## What is in v0.15
+
+- A wall-mounted `7.3 × 4.3 m` digital menu screen above the bar, with four original food-and-menu slides rotating every 10 seconds
+- A real 2.4-meter-wide lobby stair replacing the oversized construction placeholder: a short privacy wall gives way to an open railing, and the flight reaches an elevated top doorway
+- A second original lobby mural on the stair/kiosk side, visually distinct from the concession botanical mural on the opposite side; the V14 concession surround, soffit, kitchen footprint, and service geometry remain untouched
+- The Men's Restroom's existing nine-stall bank recessed into its south wall without changing the fixture count, ordering, or room layout
+- The complete Theater 1/2 pair translated rigidly one meter in plan X toward the ticket podium, preserving both auditoriums, their shared boundary, cubbies, doors, seating, and internal routes
 
 - A corrected diagonal mural surround running from the kitchen-door side to the isolated back-bar start, retaining the existing artwork scale while using substantial gray panels only at its left and right ends
 - The previous kitchen footprint and two-thirds counter-parallel service wall restored, with only the small floor wedge sealed and the kitchen-storage connector nook preserved
@@ -89,7 +95,7 @@ npm test
 npm run build
 ```
 
-`npm test` protects the 14-theater grouping, exact 1,093-seat total, compact courtyard order, paired cubby handedness and clearance, top/bottom entry models, half-step side stairs, lower-storage and route roofs, exact restroom fixture banks and face finishes, mirrored coordinate transform, room IDs, rigid lobby translation, high/low ceiling zones, the enclosed rotated concession soffit and extended surround, sealed kitchen dead space, `2 · candy · 2 · candy · 2` service sequence, equipment anchors, compact box-office/stair clearances, lectern, kiosks, and shifted fountain-island clearance. It constructs the complete Three.js world headlessly and checks rendered-floor continuity, ceiling coverage, room reachability, containment, wall sliding, no-teleport movement, low-roof jumping, and manual recovery. GitHub Actions runs the same checks and deploys the built `dist` directory after changes reach `main` once the repository's Pages source is set to **GitHub Actions**.
+`npm test` protects the 14-theater grouping, exact 1,093-seat total, compact courtyard order, paired cubby handedness and clearance, the rigid Theater 1/2 translation, top/bottom entry models, half-step side stairs, lower-storage and route roofs, exact restroom fixture banks and recessed Men's stall bank, mirrored coordinate transform, room IDs, rigid lobby translation, high/low ceiling zones, the enclosed rotated concession soffit and extended surround, two distinct lobby murals, sealed kitchen dead space, `2 · candy · 2 · candy · 2` service sequence, equipment anchors, rotating bar-screen timing, narrow stair geometry, lectern, kiosks, and shifted fountain-island clearance. It constructs the complete Three.js world headlessly and checks rendered-floor continuity, ceiling coverage, room reachability, containment, wall sliding, no-teleport movement, low-roof jumping, and manual recovery. GitHub Actions runs the same checks and deploys the built `dist` directory after changes reach `main` once the repository's Pages source is set to **GitHub Actions**.
 
 ## Layout decisions and current limits
 
