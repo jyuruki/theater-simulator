@@ -14,8 +14,12 @@ const rect = (xMin, xMax, zMin, zMax) => ({ xMin, xMax, zMin, zMax });
 // floor mismatch to its genuinely tiny triangular wedge, and fixes the mural
 // to the literal door-left-to-back-bar line with a continuous low roof and a
 // dense exposed-mechanical field overhead.
+// V15 keeps that concession/mural geometry fixed while adding the opposite
+// lobby artwork, a rotating bar display, a real narrow lobby stair, recessed
+// men's stalls, and one rigid ticket-ward translation of Theaters 1 and 2.
 export const FRONT_SHIFT_Z = -2.5;
 export const LOBBY_SHIFT_X = 8.3;
+export const T12_TICKET_SHIFT_X = 1;
 const shiftedZ = (value) => value + FRONT_SHIFT_Z;
 const shiftedRect = (xMin, xMax, zMin, zMax) => rect(xMin, xMax, shiftedZ(zMin), shiftedZ(zMax));
 const shiftedLobbyX = (value) => value + LOBBY_SHIFT_X;
@@ -33,9 +37,16 @@ const FRONT_WALK_EAST_X = LOBBY_EAST_X + 6;
 const TICKET_APPROACH_EAST_X = 12.1;
 const STAIR_APPROACH_REVEAL = 0.61;
 const STAIR_WEST_X = TICKET_APPROACH_EAST_X + STAIR_APPROACH_REVEAL;
-const STAIR_EAST_X = STAIR_WEST_X + 6.1;
+const STAIR_CLEAR_WIDTH = 2.4;
+const STAIR_EAST_X = STAIR_WEST_X + STAIR_CLEAR_WIDTH;
 const STAIR_SOUTH_Z = 5.1;
 const LOBBY_BACK_Z = shiftedZ(24);
+const STAIR_BOTTOM_Y = 0;
+const STAIR_TOP_Y = 4.6;
+const STAIR_BOTTOM_LANDING_Z_MAX = STAIR_SOUTH_Z + 1;
+const STAIR_TOP_LANDING_Z_MIN = LOBBY_BACK_Z - 1.5;
+const STAIR_TREAD_COUNT = 26;
+const STAIR_SOLID_WALL_END_Z = 11.4;
 const BOX_OFFICE_RETURN_LENGTH = (shiftedLobbyX(15.5) - shiftedLobbyX(9.2)) / 2;
 const BOX_OFFICE_RETURN_DEPTH = 0.7;
 const BOX_OFFICE_RETURN_X_MAX = STAIR_WEST_X;
@@ -199,20 +210,20 @@ export const TICKET_APPROACH_PLAN = Object.freeze({
 // an entering guest without mirroring text or mouse input.
 export const AUDITORIUMS = Object.freeze([
   {
-    number: 1, id: "theater-1", preset: "compact38", bounds: shiftedRect(-25.5, -16, 45, 58),
+    number: 1, id: "theater-1", preset: "compact38", bounds: shiftedRect(-25.5 + T12_TICKET_SHIFT_X, -16 + T12_TICKET_SHIFT_X, 45, 58),
     screenSide: "south", seats: 38, rows: [8, 10, 10, 10], stadium: compactTopEntryStadium,
     entry: {
-      type: "trash-cubby", center: -23.9, turnSide: "east",
-      cubbyBounds: shiftedRect(-25.5, -22.3, 54.4, 58), innerDoorCenter: shiftedZ(55.6),
+      type: "trash-cubby", center: -23.9 + T12_TICKET_SHIFT_X, turnSide: "east",
+      cubbyBounds: shiftedRect(-25.5 + T12_TICKET_SHIFT_X, -22.3 + T12_TICKET_SHIFT_X, 54.4, 58), innerDoorCenter: shiftedZ(55.6),
       sharedBoundarySide: "west", sharedPair: "theaters-1-2",
     },
   },
   {
-    number: 2, id: "theater-2", preset: "compact38", bounds: shiftedRect(-35, -25.5, 45, 58),
+    number: 2, id: "theater-2", preset: "compact38", bounds: shiftedRect(-35 + T12_TICKET_SHIFT_X, -25.5 + T12_TICKET_SHIFT_X, 45, 58),
     screenSide: "south", seats: 38, rows: [8, 10, 10, 10], stadium: compactTopEntryStadium,
     entry: {
-      type: "trash-cubby", center: -27.1, turnSide: "west",
-      cubbyBounds: shiftedRect(-28.7, -25.5, 54.4, 58), innerDoorCenter: shiftedZ(55.6),
+      type: "trash-cubby", center: -27.1 + T12_TICKET_SHIFT_X, turnSide: "west",
+      cubbyBounds: shiftedRect(-28.7 + T12_TICKET_SHIFT_X, -25.5 + T12_TICKET_SHIFT_X, 54.4, 58), innerDoorCenter: shiftedZ(55.6),
       sharedBoundarySide: "east", sharedPair: "theaters-1-2", sharedWallOwner: true,
     },
   },
@@ -369,7 +380,15 @@ export const SERVICE_ROOMS = Object.freeze([
     entry: { side: "west", coordinate: -9.47, center: 63.45, width: 1.9 },
     privacyTurn: "west", pathTurns: Object.freeze(["left", "left"]),
     fixtures: Object.freeze({
-      stalls: Object.freeze([{ side: "south", count: 9, start: -21.17, end: -11.87, depth: 1.15 }]),
+      stalls: Object.freeze([Object.freeze({
+        side: "south",
+        count: 9,
+        start: -21.17,
+        end: -11.87,
+        depth: 1.15,
+        recessedIntoWall: true,
+        recessBounds: Object.freeze(rect(-21.17, -11.87, 63.55, 64.7)),
+      })]),
       urinals: Object.freeze([{ side: "north", count: 6, start: -20.87, end: -15.97 }]),
       sinks: Object.freeze([{ side: "north", count: 1, start: -14.82, end: -7.77, trough: true }]),
     }),
@@ -473,6 +492,18 @@ const MURAL_ARTWORK_WIDTH = concessionRunLength - MURAL_FASCIA_DEPTH;
 const MURAL_ARTWORK_HEIGHT = 4.3;
 const MURAL_BOTTOM_Y = LOBBY_CEILING_PLAN.baseHeight;
 const MURAL_TOP_Y = MURAL_BOTTOM_Y + MURAL_ARTWORK_HEIGHT;
+// The ticket opening clips the final 0.2 m of the physical bar run. The
+// digital display is therefore tied to the actual solid north-wall support,
+// never to the slightly longer countertop below it.
+const BAR_SCREEN_X_MIN = BACK_BAR_BOUNDS.xMin;
+const BAR_SCREEN_X_MAX = TICKET_APPROACH_PLAN.bounds.xMin;
+const BAR_SCREEN_BOTTOM_Y = MURAL_BOTTOM_Y;
+const BAR_SCREEN_TOP_Y = BAR_SCREEN_BOTTOM_Y + MURAL_ARTWORK_HEIGHT;
+// IMG_7955 looks back across the opposite side of the lobby: the second,
+// distinct mural belongs above the stair run, while the kiosk bay stays a
+// plain gray field. Its plan break therefore follows the stair footprint.
+const OPPOSITE_MURAL_Z_MIN = STAIR_SOUTH_Z;
+const OPPOSITE_MURAL_Z_MAX = LOBBY_BACK_Z;
 // The pink plan line is literal: the facade begins immediately below / to the
 // plan-left of the kitchen service door (partition p7) and terminates at the
 // southwest start of the isolated back-bar table.
@@ -629,6 +660,24 @@ export const LOBBY_PLAN = Object.freeze({
   customerCounterSections: CUSTOMER_COUNTER_SECTIONS,
   concessionRun: CONCESSION_RUN,
   backBar: BACK_BAR_BOUNDS,
+  barScreen: Object.freeze({
+    id: "lanai-bar-digital-screen",
+    wallSide: "north",
+    wallZ: LOBBY_BACK_Z,
+    xMin: BAR_SCREEN_X_MIN,
+    xMax: BAR_SCREEN_X_MAX,
+    width: BAR_SCREEN_X_MAX - BAR_SCREEN_X_MIN,
+    height: MURAL_ARTWORK_HEIGHT,
+    bottomY: BAR_SCREEN_BOTTOM_Y,
+    topY: BAR_SCREEN_TOP_Y,
+    intervalSeconds: 10,
+    slideIds: Object.freeze([
+      "island-grill",
+      "garlic-fries-feature",
+      "fries-and-rings",
+      "previews-and-morning",
+    ]),
+  }),
   hotLine: shiftedLobbyRect(-28.8, -17.8, 23.05, 24),
   kitchenPartition: KITCHEN_PARTITION,
   concessionBackWall: Object.freeze({
@@ -731,14 +780,63 @@ export const LOBBY_PLAN = Object.freeze({
     }),
   }),
   futureStairs: rect(STAIR_WEST_X, STAIR_EAST_X, STAIR_SOUTH_Z, LOBBY_BACK_Z),
+  lobbyStair: Object.freeze({
+    id: "lobby-stair",
+    bounds: rect(STAIR_WEST_X, STAIR_EAST_X, STAIR_SOUTH_Z, LOBBY_BACK_Z),
+    clearWidth: STAIR_CLEAR_WIDTH,
+    bottomY: STAIR_BOTTOM_Y,
+    topY: STAIR_TOP_Y,
+    treadCount: STAIR_TREAD_COUNT,
+    stepRise: (STAIR_TOP_Y - STAIR_BOTTOM_Y) / STAIR_TREAD_COUNT,
+    treadDepth: (STAIR_TOP_LANDING_Z_MIN - STAIR_BOTTOM_LANDING_Z_MAX) / STAIR_TREAD_COUNT,
+    bottomLanding: rect(STAIR_WEST_X, STAIR_EAST_X, STAIR_SOUTH_Z, STAIR_BOTTOM_LANDING_Z_MAX),
+    flightBounds: rect(STAIR_WEST_X, STAIR_EAST_X, STAIR_BOTTOM_LANDING_Z_MAX, STAIR_TOP_LANDING_Z_MIN),
+    topLanding: rect(STAIR_WEST_X, STAIR_EAST_X, STAIR_TOP_LANDING_Z_MIN, LOBBY_BACK_Z),
+    solidLobbyWall: Object.freeze({
+      side: "west",
+      x: STAIR_WEST_X,
+      zMin: STAIR_SOUTH_Z,
+      zMax: STAIR_SOLID_WALL_END_Z,
+      height: LOBBY_CEILING_PLAN.baseHeight,
+    }),
+    exposedRailing: Object.freeze({
+      side: "west",
+      x: STAIR_WEST_X,
+      zMin: STAIR_SOLID_WALL_END_Z,
+      zMax: LOBBY_BACK_Z,
+      height: 1.05,
+      postSpacing: 1.35,
+    }),
+    upperDoor: Object.freeze({
+      side: "north",
+      z: LOBBY_BACK_Z,
+      center: (STAIR_WEST_X + STAIR_EAST_X) / 2,
+      width: 1.8,
+      baseY: STAIR_TOP_Y,
+      height: 2.48,
+    }),
+  }),
   futureStairWall: Object.freeze({
     id: "future-stair-wall-white",
     side: "west",
     start: Object.freeze({ x: STAIR_WEST_X, z: STAIR_SOUTH_Z }),
-    end: Object.freeze({ x: STAIR_WEST_X, z: LOBBY_BACK_Z }),
+    end: Object.freeze({ x: STAIR_WEST_X, z: STAIR_SOLID_WALL_END_Z }),
     finish: "white",
     materialKey: "wall",
     approachReveal: STAIR_APPROACH_REVEAL,
+  }),
+  oppositeLobbyMural: Object.freeze({
+    id: "stair-kiosk-botanical-mural",
+    wallSide: "east",
+    wallX: LOBBY_EAST_X,
+    zMin: OPPOSITE_MURAL_Z_MIN,
+    zMax: OPPOSITE_MURAL_Z_MAX,
+    width: OPPOSITE_MURAL_Z_MAX - OPPOSITE_MURAL_Z_MIN,
+    height: MURAL_ARTWORK_HEIGHT,
+    bottomY: MURAL_BOTTOM_Y,
+    topY: MURAL_TOP_Y,
+    distinctFrom: "concession-botanical-mural",
+    composition: "foliage-left-warm-portrait-right",
   }),
   boxOfficeVertical: rect(
     BOX_OFFICE_VERTICAL_X_MIN,
@@ -1028,6 +1126,21 @@ export function validateLayoutData() {
 
   const auditoriumById = new Map(AUDITORIUMS.map((room) => [room.id, room]));
   const serviceRoomById = new Map(SERVICE_ROOMS.map((room) => [room.id, room]));
+  const theater1 = auditoriumById.get("theater-1");
+  const theater2 = auditoriumById.get("theater-2");
+  const sameRect = (bounds, expected) => Boolean(bounds)
+    && Math.abs(bounds.xMin - expected.xMin) <= 1e-9
+    && Math.abs(bounds.xMax - expected.xMax) <= 1e-9
+    && Math.abs(bounds.zMin - expected.zMin) <= 1e-9
+    && Math.abs(bounds.zMax - expected.zMax) <= 1e-9;
+  if (!sameRect(theater1?.bounds, rect(-24.5, -15, 42.5, 55.5))
+    || !sameRect(theater2?.bounds, rect(-34, -24.5, 42.5, 55.5))
+    || theater1?.entry?.center !== -22.9
+    || theater2?.entry?.center !== -26.1
+    || !sameRect(theater1?.entry?.cubbyBounds, rect(-24.5, -21.3, 51.9, 55.5))
+    || !sameRect(theater2?.entry?.cubbyBounds, rect(-27.7, -24.5, 51.9, 55.5))) {
+    errors.push("V15 must translate the complete Theater 1/2 pair exactly +1.0 m toward ticket check without resizing or changing Z.");
+  }
   const courtyardDoorCenters = COURTYARD_PLAN.doors.map(({ center }) => center);
   if (COURTYARD_PLAN.floorFinish !== "dark-gray-tile") errors.push("The fountain / T3–5 courtyard must use dark-gray tile.");
   if (COURTYARD_PLAN.doors.map(({ targetId }) => targetId).join(",") !== "theater-3,future-task-room,theater-4,theater-5") {
@@ -1049,6 +1162,17 @@ export function validateLayoutData() {
   if (serviceRoomById.has("usher-stock")) errors.push("The bogus T4/T5 below-tier stock room must not exist.");
   const boys = serviceRoomById.get("boys-restroom");
   if (boys?.pathTurns?.join(",") !== "left,left") errors.push("The boys restroom vestibule must turn left, then left.");
+  const boysStallBank = boys?.fixtures?.stalls?.[0];
+  const boysStallRecess = boysStallBank?.recessBounds;
+  if (!boysStallBank?.recessedIntoWall
+    || boysStallBank.count !== 9
+    || !boysStallRecess
+    || boysStallRecess.xMin !== boysStallBank.start
+    || boysStallRecess.xMax !== boysStallBank.end
+    || boysStallRecess.zMax !== boys?.footprintRects?.[0]?.zMin
+    || Math.abs((boysStallRecess.zMax - boysStallRecess.zMin) - boysStallBank.depth) > 1e-9) {
+    errors.push("V15 must recess all nine men's stalls into one south-wall pocket without changing their bank layout.");
+  }
   const trash = serviceRoomById.get("trash-room");
   if (trash?.doorPlacement !== "right" || trash?.opensToward !== "west") errors.push("The trash room door must be on the right and open into a room extending left.");
   const boysFootprints = boys?.footprintRects ?? (boys ? [boys.bounds] : []);
@@ -1149,7 +1273,6 @@ export function validateLayoutData() {
   }
   const boxOfficeReturnLength = LOBBY_PLAN.boxOfficeReturn.xMax - LOBBY_PLAN.boxOfficeReturn.xMin;
   const boxOfficeReturnDepth = LOBBY_PLAN.boxOfficeReturn.zMax - LOBBY_PLAN.boxOfficeReturn.zMin;
-  const stairEastGap = LOBBY_PLAN.envelope.xMax - LOBBY_PLAN.futureStairs.xMax;
   const kioskEastGap = LOBBY_PLAN.envelope.xMax - LOBBY_PLAN.kiosks[0].position[0];
   const sightline = LOBBY_PLAN.boxOfficeSightline;
   if (!nearlyEqual(LOBBY_PLAN.futureStairs.xMin - TICKET_APPROACH_PLAN.bounds.xMax, STAIR_APPROACH_REVEAL)
@@ -1157,13 +1280,50 @@ export function validateLayoutData() {
     || !nearlyEqual(LOBBY_PLAN.boxOfficeReturn.zMax, LOBBY_PLAN.futureStairs.zMin)
     || !nearlyEqual(boxOfficeReturnLength, 3.15)
     || !nearlyEqual(boxOfficeReturnDepth, BOX_OFFICE_RETURN_DEPTH)
-    || !nearlyEqual(stairEastGap, 1)
     || !nearlyEqual(kioskEastGap, 1.6)
     || LOBBY_PLAN.futureStairWall?.finish !== "white"
     || sightline?.bounds.xMin < TICKET_APPROACH_PLAN.bounds.xMin
     || sightline?.bounds.xMax > TICKET_APPROACH_PLAN.bounds.xMax
     || !nearlyEqual(sightline?.bounds.zMax, TICKET_APPROACH_PLAN.bounds.zMax)) {
-    errors.push("V13 must use a two-foot stair reveal, a half-length narrow box-office return, a white stair wall, and a clear ticket-hall sightline.");
+    errors.push("The box office must retain its two-foot reveal, compact return, white stair wall, and clear ticket-hall sightline.");
+  }
+  const stair = LOBBY_PLAN.lobbyStair;
+  if (stair?.id !== "lobby-stair"
+    || !nearlyEqual(stair?.clearWidth, 2.4)
+    || !nearlyEqual(stair?.bounds?.xMin, LOBBY_PLAN.futureStairs.xMin)
+    || !nearlyEqual(stair?.bounds?.xMax, LOBBY_PLAN.futureStairs.xMax)
+    || !nearlyEqual(stair?.bounds?.zMin, LOBBY_PLAN.futureStairs.zMin)
+    || !nearlyEqual(stair?.bounds?.zMax, LOBBY_PLAN.futureStairs.zMax)
+    || stair?.treadCount !== 26
+    || stair?.stepRise > 0.22
+    || !nearlyEqual(stair?.bottomLanding?.zMax, stair?.flightBounds?.zMin)
+    || !nearlyEqual(stair?.flightBounds?.zMax, stair?.topLanding?.zMin)
+    || !nearlyEqual(stair?.solidLobbyWall?.zMax, stair?.exposedRailing?.zMin)
+    || !nearlyEqual(stair?.exposedRailing?.zMax, stair?.bounds?.zMax)
+    || !nearlyEqual(stair?.upperDoor?.baseY, stair?.topY)
+    || !nearlyEqual(LOBBY_PLAN.futureStairWall?.end?.z, stair?.solidLobbyWall?.zMax)) {
+    errors.push("V15 lobby stair must be a narrow, continuous 2.4 m flight with safe rise, a short wall, open railing, and raised top doorway.");
+  }
+  const barScreen = LOBBY_PLAN.barScreen;
+  if (barScreen?.id !== "lanai-bar-digital-screen"
+    || !nearlyEqual(barScreen?.xMin, LOBBY_PLAN.backBar.xMin)
+    || !nearlyEqual(barScreen?.xMax, TICKET_APPROACH_PLAN.bounds.xMin)
+    || !nearlyEqual(barScreen?.width, 7.3)
+    || !nearlyEqual(barScreen?.height, MURAL_ARTWORK_HEIGHT)
+    || !nearlyEqual(barScreen?.topY - barScreen?.bottomY, barScreen?.height)
+    || barScreen?.intervalSeconds !== 10
+    || barScreen?.slideIds?.join(",") !== "island-grill,garlic-fries-feature,fries-and-rings,previews-and-morning") {
+    errors.push("V15 bar display must fill the supported bar wall and rotate its four authored slides every ten seconds.");
+  }
+  const oppositeMural = LOBBY_PLAN.oppositeLobbyMural;
+  if (oppositeMural?.id !== "stair-kiosk-botanical-mural"
+    || oppositeMural?.distinctFrom !== "concession-botanical-mural"
+    || !nearlyEqual(oppositeMural?.wallX, LOBBY_PLAN.envelope.xMax)
+    || !nearlyEqual(oppositeMural?.zMin, stair?.bounds?.zMin)
+    || !nearlyEqual(oppositeMural?.zMax, stair?.bounds?.zMax)
+    || !nearlyEqual(oppositeMural?.height, MURAL_ARTWORK_HEIGHT)
+    || oppositeMural?.composition !== "foliage-left-warm-portrait-right") {
+    errors.push("V15 opposite-lobby mural must remain a distinct stair-side artwork, never a reuse of the concession mural.");
   }
   const [westPillar, eastPillar] = FOUNTAIN_PLAN.pillars ?? [];
   const westPillarHalfWidth = (westPillar?.footprint?.[0] ?? 0) / 2;
