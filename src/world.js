@@ -62,7 +62,7 @@ const publicById = (id) => PUBLIC_SPACES.find((space) => space.id === id);
 
 export function createTheaterWorld({ scene, materials }) {
   const root = new THREE.Group();
-  root.name = "Mililani 14 layout prototype v15";
+  root.name = "Mililani 14 layout prototype v16";
   scene.add(root);
 
   const colliders = [];
@@ -128,7 +128,7 @@ export function createTheaterWorld({ scene, materials }) {
     wallFaceMaterials({ positiveZ: planNorth, negativeZ: planSouth })
   );
 
-  const addColliderWorld = (id, x, y, z, width, height, depth) => {
+  const addColliderWorld = (id, x, y, z, width, height, depth, metadata = null) => {
     colliders.push({
       id,
       minX: x - width / 2,
@@ -137,10 +137,11 @@ export function createTheaterWorld({ scene, materials }) {
       maxY: y + height / 2,
       minZ: z - depth / 2,
       maxZ: z + depth / 2,
+      ...(metadata ?? {}),
     });
   };
 
-  const addPlanCollider = (id, planX, y, z, width, height, depth, rotationY = 0) => {
+  const addPlanCollider = (id, planX, y, z, width, height, depth, rotationY = 0, metadata = null) => {
     const cosine = Math.abs(Math.cos(rotationY));
     const sine = Math.abs(Math.sin(rotationY));
     addColliderWorld(
@@ -151,6 +152,7 @@ export function createTheaterWorld({ scene, materials }) {
       width * cosine + depth * sine,
       height,
       width * sine + depth * cosine,
+      metadata,
     );
   };
 
@@ -169,6 +171,7 @@ export function createTheaterWorld({ scene, materials }) {
     receiveShadow = true,
     rotationY = 0,
     space = "plan",
+    collisionMetadata = null,
   }) => {
     const mesh = new THREE.Mesh(unitBoxGeometry, material);
     mesh.name = id;
@@ -181,7 +184,7 @@ export function createTheaterWorld({ scene, materials }) {
     sourceMeshCount += 1;
     if (collide) {
       if (space !== "plan") throw new Error(`Colliding local box ${id} must be authored in plan space.`);
-      addPlanCollider(id, x, y, z, width, height, depth, rotationY);
+      addPlanCollider(id, x, y, z, width, height, depth, rotationY, collisionMetadata);
     }
     return mesh;
   };
@@ -1622,7 +1625,7 @@ export function createTheaterWorld({ scene, materials }) {
   addFloor(`${hall.id}-wide`, hallWide, materials.corridorCarpet, 0, root, 2.4);
   addCeiling(lobby.id, LOBBY_PLAN.envelope, LOBBY_PUBLIC_HEIGHT, root, materials.darkWall);
   // Only the explicitly authored back-of-house volumes retain the original
-  // 4.6 m roof. The public stone lobby remains clear all the way to 13.8 m.
+  // 4.6 m roof. The public stone lobby rises to the lower V16 mechanical roof.
   for (const roomId of LOBBY_CEILING_PLAN.lowServiceRoomIds) {
     const serviceRoom = roomById(roomId);
     // The kitchen is a traced polygon in V14 rather than its old rectangular
@@ -1638,17 +1641,136 @@ export function createTheaterWorld({ scene, materials }) {
   addCeiling(`${hall.id}-narrow`, hallNarrow);
   addCeiling(`${hall.id}-wide`, hallWide);
 
+  const frontEntrance = LOBBY_PLAN.frontEntrance;
+  const frontDoorOpenings = frontEntrance.banks.map((bank) => ({
+    center: bank.center,
+    width: frontEntrance.doorWidth,
+    height: frontEntrance.doorHeight,
+  }));
+  const frontDoorFacadeOpenings = frontEntrance.banks.map((bank) => ({
+    center: bank.center,
+    width: frontEntrance.doorWidth,
+    height: frontEntrance.transomTopY,
+  }));
+  const frontPillarOpening = {
+    center: (frontEntrance.boundaryPillar.xMin + frontEntrance.boundaryPillar.xMax) / 2,
+    width: frontEntrance.boundaryPillar.xMax - frontEntrance.boundaryPillar.xMin,
+    height: LOBBY_SERVICE_HEIGHT,
+  };
+  const frontWindowOpenings = frontEntrance.windows.map((window) => ({
+    center: (window.xMin + window.xMax) / 2,
+    width: window.xMax - window.xMin,
+    height: frontEntrance.windowTopY - frontEntrance.windowSillY,
+    baseY: frontEntrance.windowSillY,
+  }));
   addWallX("lobby-front-service", LOBBY_PLAN.envelope.xMin, lobby.bounds.xMin, lobbyFrontZ, { height: LOBBY_PUBLIC_HEIGHT, material: materials.wall });
-  addWallXWithOpenings("lobby-front-public", lobby.bounds.xMin, LOBBY_PLAN.envelope.xMax, lobbyFrontZ, LOBBY_PLAN.frontDoorCenters.map((center) => ({ center, width: 2.8 })), { material: materials.glass });
+  addWallXWithOpenings(
+    "lobby-front-public",
+    lobby.bounds.xMin,
+    LOBBY_PLAN.envelope.xMax,
+    frontEntrance.outerZ,
+    [...frontDoorFacadeOpenings, frontPillarOpening, ...frontWindowOpenings],
+    { material: materials.wall },
+  );
   addWallX("lobby-front-public-upper", lobby.bounds.xMin, LOBBY_PLAN.envelope.xMax, lobbyFrontZ, {
     baseY: LOBBY_SERVICE_HEIGHT,
     height: LOBBY_PUBLIC_HEIGHT - LOBBY_SERVICE_HEIGHT,
     material: materials.wall,
   });
-  for (const center of LOBBY_PLAN.frontDoorCenters) {
-    addDoorTrim(`lobby-front-${center}`, "south", lobbyFrontZ - 0.03, center, { width: 2.8 });
-    addBox({ id: `lobby-front-${center}-leaf-left`, x: center - 1.05, y: 1.15, z: lobbyFrontZ - 0.1, width: 1.15, height: 2.3, depth: 0.05, material: materials.glass, rotationY: 1.18 });
-    addBox({ id: `lobby-front-${center}-leaf-right`, x: center + 1.05, y: 1.15, z: lobbyFrontZ - 0.1, width: 1.15, height: 2.3, depth: 0.05, material: materials.glass, rotationY: -1.18 });
+  // Matching inner doors make each of the three photographed bays a real
+  // vestibule rather than a single row of floating leaves.
+  addWallXWithOpenings(
+    "lobby-front-vestibule-inner",
+    frontEntrance.bankSpan.xMin,
+    frontEntrance.bankSpan.xMax,
+    frontEntrance.innerZ,
+    frontDoorOpenings,
+    { material: materials.glass },
+  );
+  addWallZ(
+    "lobby-front-vestibule-low-x-return",
+    frontEntrance.bankSpan.xMin,
+    frontEntrance.outerZ,
+    frontEntrance.innerZ,
+    { material: materials.glass },
+  );
+  addWallZ(
+    "lobby-front-vestibule-high-x-return",
+    frontEntrance.bankSpan.xMax,
+    frontEntrance.outerZ,
+    frontEntrance.innerZ,
+    { material: materials.glass },
+  );
+  addCeiling(
+    "lobby-front-vestibule",
+    {
+      xMin: frontEntrance.bankSpan.xMin,
+      xMax: frontEntrance.bankSpan.xMax,
+      zMin: frontEntrance.outerZ,
+      zMax: frontEntrance.innerZ,
+    },
+    LOBBY_SERVICE_HEIGHT,
+  );
+  addBox({
+    id: frontEntrance.boundaryPillar.id,
+    x: (frontEntrance.boundaryPillar.xMin + frontEntrance.boundaryPillar.xMax) / 2,
+    y: LOBBY_SERVICE_HEIGHT / 2,
+    z: (frontEntrance.outerZ + frontEntrance.innerZ) / 2,
+    width: frontEntrance.boundaryPillar.xMax - frontEntrance.boundaryPillar.xMin,
+    height: LOBBY_SERVICE_HEIGHT,
+    depth: frontEntrance.depth + WALL_THICKNESS,
+    material: materials.concrete,
+    collide: true,
+  });
+  for (const window of frontEntrance.windows) {
+    const center = (window.xMin + window.xMax) / 2;
+    const width = window.xMax - window.xMin;
+    const height = frontEntrance.windowTopY - frontEntrance.windowSillY;
+    addBox({
+      id: `${window.id}-glass`,
+      x: center,
+      y: frontEntrance.windowSillY + height / 2,
+      z: frontEntrance.outerZ,
+      width,
+      height,
+      depth: 0.055,
+      material: materials.glass,
+      collide: true,
+    });
+    addBox({
+      id: `${window.id}-sill-wall`,
+      x: center,
+      y: frontEntrance.windowSillY / 2,
+      z: frontEntrance.outerZ,
+      width,
+      height: frontEntrance.windowSillY,
+      depth: WALL_THICKNESS,
+      material: materials.wall,
+      collide: true,
+    });
+    addBox({ id: `${window.id}-mid-rail`, x: center, y: 1.72, z: frontEntrance.outerZ - 0.04, width, height: 0.07, depth: 0.1, material: materials.black });
+    addBox({ id: `${window.id}-left-frame`, x: window.xMin, y: frontEntrance.windowSillY + height / 2, z: frontEntrance.outerZ - 0.04, width: 0.08, height, depth: 0.1, material: materials.black });
+    addBox({ id: `${window.id}-right-frame`, x: window.xMax, y: frontEntrance.windowSillY + height / 2, z: frontEntrance.outerZ - 0.04, width: 0.08, height, depth: 0.1, material: materials.black });
+  }
+  for (const bank of frontEntrance.banks) {
+    for (const plane of frontEntrance.planes) {
+      const z = plane === "outer" ? frontEntrance.outerZ - 0.03 : frontEntrance.innerZ + 0.03;
+      const swing = plane === "outer" ? 1 : -1;
+      const id = `lobby-front-${bank.id}-${plane}`;
+      addDoorTrim(id, "south", z, bank.center, { width: frontEntrance.doorWidth, height: frontEntrance.doorHeight });
+      addBox({
+        id: `${id}-fixed-transom`,
+        x: bank.center,
+        y: frontEntrance.doorHeight + (frontEntrance.transomTopY - frontEntrance.doorHeight) / 2,
+        z,
+        width: frontEntrance.doorWidth - 0.12,
+        height: frontEntrance.transomTopY - frontEntrance.doorHeight,
+        depth: 0.05,
+        material: materials.glass,
+      });
+      addBox({ id: `${id}-leaf-left`, x: bank.center - 1.05, y: frontEntrance.doorHeight / 2, z, width: 1.15, height: frontEntrance.doorHeight - 0.12, depth: 0.05, material: materials.glass, rotationY: swing * 1.18 });
+      addBox({ id: `${id}-leaf-right`, x: bank.center + 1.05, y: frontEntrance.doorHeight / 2, z, width: 1.15, height: frontEntrance.doorHeight - 0.12, depth: 0.05, material: materials.glass, rotationY: swing * -1.18 });
+    }
   }
   addWallZ("lobby-west", LOBBY_PLAN.envelope.xMin, lobbyFrontZ, lobbyBackZ, { height: LOBBY_PUBLIC_HEIGHT });
   addWallZ("lobby-east", LOBBY_PLAN.envelope.xMax, lobbyFrontZ, lobbyBackZ, { height: LOBBY_PUBLIC_HEIGHT });
@@ -1682,13 +1804,6 @@ export function createTheaterWorld({ scene, materials }) {
       material: materials.wall,
     },
   );
-  addWallX(
-    "lobby-back-east-of-stair",
-    lobbyStair.bounds.xMax,
-    LOBBY_PLAN.envelope.xMax,
-    lobbyBackZ,
-    { height: LOBBY_PUBLIC_HEIGHT, material: materials.wall },
-  );
   addWallX("lobby-back-approach-upper", approach.bounds.xMin, approach.bounds.xMax, lobbyBackZ, {
     baseY: LOBBY_SERVICE_HEIGHT,
     height: LOBBY_PUBLIC_HEIGHT - LOBBY_SERVICE_HEIGHT,
@@ -1700,9 +1815,13 @@ export function createTheaterWorld({ scene, materials }) {
   addWallX("empty-alcove-south", emptyAlcove.bounds.xMin, emptyAlcove.bounds.xMax, emptyAlcove.bounds.zMin, { material: materials.darkWall });
   addWallZ("empty-alcove-east", emptyAlcove.bounds.xMax, emptyAlcove.bounds.zMin, emptyAlcove.bounds.zMax, { material: materials.darkWall });
 
-  addBox({ id: "front-canopy", x: lobbyX(1.5), y: 3.55, z: frontZ(-1.8), width: 28, height: 0.28, depth: 4.1, material: materials.black });
-  addBox({ id: "front-red-band", x: lobbyX(1.5), y: 3.04, z: frontZ(-0.18), width: 30, height: 0.42, depth: 0.24, material: materials.red });
-  addLabel({ id: "facade-title", text: "CONSOLIDATED THEATRES  ·  MILILANI", position: [lobbyX(1.5), 3.62, frontZ(-4)], rotationY: Math.PI, width: 11.5, height: 0.74 });
+  const entranceFacadeXMin = lobby.bounds.xMin;
+  const entranceFacadeXMax = frontEntrance.windows.at(-1).xMax;
+  const entranceFacadeCenterX = (entranceFacadeXMin + entranceFacadeXMax) / 2;
+  const entranceFacadeWidth = entranceFacadeXMax - entranceFacadeXMin;
+  addBox({ id: "front-canopy", x: entranceFacadeCenterX, y: 3.55, z: frontZ(-1.8), width: entranceFacadeWidth + 0.8, height: 0.28, depth: 4.1, material: materials.black });
+  addBox({ id: "front-red-band", x: entranceFacadeCenterX, y: 3.04, z: frontZ(-0.18), width: entranceFacadeWidth + 0.5, height: 0.42, depth: 0.24, material: materials.red });
+  addLabel({ id: "facade-title", text: "CONSOLIDATED THEATRES  ·  MILILANI", position: [entranceFacadeCenterX, 3.62, frontZ(-4)], rotationY: Math.PI, width: 11.5, height: 0.74 });
   addBox({ id: "front-west-planter", x: frontWalk.bounds.xMin, y: 0.45, z: frontWalkCenterZ, width: 0.35, height: 0.9, depth: frontWalkDepth, material: materials.concrete, collide: true });
   addBox({ id: "front-east-planter", x: frontWalk.bounds.xMax, y: 0.45, z: frontWalkCenterZ, width: 0.35, height: 0.9, depth: frontWalkDepth, material: materials.concrete, collide: true });
   addBox({ id: "front-south-planter", x: centerOf(frontWalk.bounds).x, y: 0.45, z: frontWalk.bounds.zMin, width: frontWalk.bounds.xMax - frontWalk.bounds.xMin, height: 0.9, depth: 0.35, material: materials.concrete, collide: true });
@@ -1901,16 +2020,24 @@ export function createTheaterWorld({ scene, materials }) {
     return lobbyStair.bottomY + treadNumber * lobbyStair.stepRise;
   };
 
-  // V15 replaces the oversized sealed future-stair box with the photographed
-  // couple-person-width stair: a short privacy wall, then an open railing all
-  // the way to a raised doorway. Adjacent tread solids meet edge-to-edge and
-  // groundHeight owns locomotion, avoiding invisible riser blockers.
+  // The V16 stair starts directly behind the box-office return and climbs on
+  // thin open-underneath treads. A low white wall follows the complete flight
+  // and turns under the square landing, leaving the photographed side-access
+  // nook instead of a floor-filled support mass.
+  const stairNookWall = lobbyStair.lowNookWall;
   addWallZ(
-    "lobby-stair-privacy-wall",
-    lobbyStair.solidLobbyWall.x,
-    lobbyStair.solidLobbyWall.zMin,
-    lobbyStair.solidLobbyWall.zMax,
-    { height: lobbyStair.solidLobbyWall.height, material: materials.wall },
+    "lobby-stair-low-wall-long",
+    stairNookWall.longLeg.x,
+    stairNookWall.longLeg.zMin,
+    stairNookWall.longLeg.zMax,
+    { height: stairNookWall.height, material: materials[stairNookWall.materialKey] ?? materials.wall },
+  );
+  addWallX(
+    "lobby-stair-low-wall-return",
+    stairNookWall.returnLeg.xMin,
+    stairNookWall.returnLeg.xMax,
+    stairNookWall.returnLeg.z,
+    { height: stairNookWall.height, material: materials[stairNookWall.materialKey] ?? materials.wall },
   );
   for (let index = 0; index < lobbyStair.treadCount; index += 1) {
     const zMin = lobbyStair.flightBounds.zMin + index * lobbyStair.treadDepth;
@@ -1921,13 +2048,18 @@ export function createTheaterWorld({ scene, materials }) {
     addBox({
       id: `lobby-stair-tread-${index + 1}`,
       x: (lobbyStair.bounds.xMin + lobbyStair.bounds.xMax) / 2,
-      y: elevation / 2,
+      y: elevation - lobbyStair.treadThickness / 2,
       z: (zMin + zMax) / 2,
       width: lobbyStair.clearWidth,
-      height: elevation,
+      height: lobbyStair.treadThickness,
       depth: zMax - zMin + 0.004,
       material: materials.floorDark,
-      collide: false,
+      collide: true,
+      // The capsule radius reaches slightly into the following tread before
+      // the ground sampler applies the current rise, so collision clearance
+      // spans two risers; the ground sampler still enforces the true 0.34 m
+      // maximum step height.
+      collisionMetadata: { walkableTop: true, maxStepUp: 0.5 },
     });
   }
   addFloor(
@@ -1997,12 +2129,28 @@ export function createTheaterWorld({ scene, materials }) {
     lobbyStair.exposedRailing.zMin,
     lobbyStair.exposedRailing.zMax,
   );
-  addStairRail(
-    "east",
-    lobbyStair.bounds.xMax,
-    lobbyStair.bottomLanding.zMin,
-    lobbyStair.topLanding.zMax,
-  );
+  // The moved lobby perimeter is the east guard; retain only a slim
+  // wall-mounted handrail there so no duplicate rail colliders fight it.
+  const wallHandrail = lobbyStair.wallHandrail;
+  addPlanPipeSegment({
+    id: "lobby-stair-east-wall-handrail",
+    start: {
+      x: wallHandrail.x,
+      y: stairHeightAtPlanZ(wallHandrail.zMin + EPSILON) + wallHandrail.height,
+      z: wallHandrail.zMin,
+    },
+    end: {
+      x: wallHandrail.x,
+      y: stairHeightAtPlanZ(wallHandrail.zMax - EPSILON) + wallHandrail.height,
+      z: wallHandrail.zMax,
+    },
+    radius: 0.035,
+    material: materials.black,
+  });
+
+  // The flight occupies the landing's complete south edge, so no cross-rail
+  // belongs at that seam. The continuous west rail and east/north walls guard
+  // the genuinely exposed landing edges without blocking the final step.
   addClosedDoor(
     "lobby-stair-upper-door-closed",
     lobbyStair.upperDoor.side,
@@ -2058,6 +2206,31 @@ export function createTheaterWorld({ scene, materials }) {
   sourceMeshCount += 1;
 
   const oppositeMural = LOBBY_PLAN.oppositeLobbyMural;
+  const oppositeMuralFaceX = oppositeMural.wallX - WALL_THICKNESS / 2 - 0.026;
+  addBox({
+    id: oppositeMural.surround.id,
+    x: oppositeMuralFaceX,
+    y: (oppositeMural.bottomY + oppositeMural.topY) / 2,
+    z: (oppositeMural.surround.zMin + oppositeMural.surround.zMax) / 2,
+    width: 0.025,
+    height: oppositeMural.surround.height,
+    depth: oppositeMural.surround.width,
+    material: materials.concrete,
+    collide: false,
+  });
+  for (const grayFill of oppositeMural.grayFills) {
+    addBox({
+      id: grayFill.id,
+      x: oppositeMuralFaceX - 0.018,
+      y: (oppositeMural.bottomY + oppositeMural.topY) / 2,
+      z: (grayFill.zMin + grayFill.zMax) / 2,
+      width: 0.025,
+      height: grayFill.height,
+      depth: grayFill.width,
+      material: materials.concrete,
+      collide: false,
+    });
+  }
   const oppositeMuralTexture = createOppositeLobbyMuralTexture();
   disposableTextures.add(oppositeMuralTexture);
   const oppositeMuralMaterial = new THREE.MeshBasicMaterial({
@@ -2070,13 +2243,14 @@ export function createTheaterWorld({ scene, materials }) {
   const oppositeMuralMesh = new THREE.Mesh(unitPlaneGeometry, oppositeMuralMaterial);
   oppositeMuralMesh.name = "stair-kiosk-mural-face";
   oppositeMuralMesh.position.set(
-    planToWorldX(oppositeMural.wallX - WALL_THICKNESS / 2 - 0.018),
+    planToWorldX(oppositeMuralFaceX - 0.034),
     (oppositeMural.bottomY + oppositeMural.topY) / 2,
-    (oppositeMural.zMin + oppositeMural.zMax) / 2,
+    (oppositeMural.artwork.zMin + oppositeMural.artwork.zMax) / 2,
   );
   oppositeMuralMesh.rotation.y = planToWorldYaw(-Math.PI / 2);
-  oppositeMuralMesh.scale.set(oppositeMural.width, oppositeMural.height, 1);
-  oppositeMuralMesh.userData.artworkId = oppositeMural.id;
+  oppositeMuralMesh.scale.set(oppositeMural.artwork.width, oppositeMural.artwork.height, 1);
+  oppositeMuralMesh.userData.artworkId = oppositeMural.artwork.id;
+  oppositeMuralMesh.userData.surroundId = oppositeMural.surround.id;
   oppositeMuralMesh.userData.distinctFrom = oppositeMural.distinctFrom;
   root.add(oppositeMuralMesh);
   sourceMeshCount += 1;
@@ -2329,19 +2503,18 @@ export function createTheaterWorld({ scene, materials }) {
   for (let x = hallWide.xMin + 3.62; x <= hallWide.xMax - 2; x += 12) {
     addLightPanel(`hall-wide-light-${x}`, x, wideHallCenterZ, 2.65, 0.3);
   }
-  for (const [x, z] of [[-18, 5], [-7, 5], [4, 5], [15, 5], [-15, 14], [-4, 14], [8, 14]]) {
-    const shiftedX = lobbyX(x);
-    addLightPanel(`lobby-light-${shiftedX}-${frontZ(z)}`, shiftedX, frontZ(z), 2.2, 0.44, LOBBY_PUBLIC_HEIGHT - 0.18);
+  for (const [planX, z] of [[-14, 2.5], [-5, 2.5], [4, 2.5], [13, 2.5], [-11, 11.5], [0, 11.5], [11, 11.5]]) {
+    addLightPanel(`lobby-light-${planX}-${z}`, planX, z, 2.2, 0.44, LOBBY_PUBLIC_HEIGHT - 0.18);
   }
   for (const z of [29, 39, 49]) addLightPanel(`approach-light-${frontZ(z)}`, approachCenterX, frontZ(z), 2.2, 0.44);
   addLightPanel("north-light-fountain-court", 5.8, 65, 2.2, 0.44, LOBBY_SERVICE_HEIGHT - 0.18);
   for (const [x, z] of [[13.7, 70], [16.8, 70]]) addLightPanel(`north-light-${x}-${z}`, x, z, 2.2, 0.44);
 
   const warmLobbyLightA = new THREE.PointLight(0xffd7ae, 72, 40, 2);
-  warmLobbyLightA.position.set(planToWorldX(lobbyX(-7)), LOBBY_PUBLIC_HEIGHT * 0.68, frontZ(10));
+  warmLobbyLightA.position.set(planToWorldX(-10), LOBBY_PUBLIC_HEIGHT * 0.68, 8);
   root.add(warmLobbyLightA);
   const warmLobbyLightB = new THREE.PointLight(0xffd7ae, 72, 40, 2);
-  warmLobbyLightB.position.set(planToWorldX(lobbyX(10)), LOBBY_PUBLIC_HEIGHT * 0.68, frontZ(10));
+  warmLobbyLightB.position.set(planToWorldX(9), LOBBY_PUBLIC_HEIGHT * 0.68, 8);
   root.add(warmLobbyLightB);
   const approachLight = new THREE.PointLight(0xffdfc7, 48, 34, 2);
   approachLight.position.set(planToWorldX(approachCenterX), 3.7, frontZ(40));
@@ -2369,8 +2542,12 @@ export function createTheaterWorld({ scene, materials }) {
   const groundHeight = (worldX, z, feetY = 0) => {
     const planX = worldToPlanX(worldX);
     const candidates = [];
-    const insideLobbyStair = pointInRect(planX, z, lobbyStair.bounds);
-    if (insideLobbyStair) {
+    const insideLobbyStairFlight = pointInRect(planX, z, lobbyStair.flightBounds);
+    const insideLobbyStairLanding = pointInRect(planX, z, lobbyStair.topLanding);
+    const lobbyStairSurfaceHeight = (insideLobbyStairFlight || insideLobbyStairLanding)
+      ? stairHeightAtPlanZ(z)
+      : null;
+    if (insideLobbyStairFlight || insideLobbyStairLanding) {
       candidates.push({
         id: "lobby-stair-walkable-surface",
         kind: "stair-floor",
@@ -2395,8 +2572,20 @@ export function createTheaterWorld({ scene, materials }) {
         candidates.push({ id: `${storage.id}-lower-floor`, kind: "storage-floor", level: "lower-storage", height: 0, priority: 100, walkable: true });
       }
     }
-    if (!insideLobbyStair && !insideTopEntryBowl && !hasAuditoriumSurface && !hasLowerStorageSurface) {
+    // The main floor remains a valid stacked surface below the thin upper
+    // landing. Selecting by feet height lets the player walk inside the nook
+    // at y=0 without snapping upward through the landing at y=8.
+    if (!insideTopEntryBowl && !hasAuditoriumSurface && !hasLowerStorageSurface) {
       candidates.push({ id: "main-floor", kind: "main-floor", level: "main", height: 0, priority: 1, walkable: true });
+    }
+    // Prefer the next stair surface whenever it is a legal step from the
+    // current feet height. This keeps the stacked ground floor available
+    // beneath the open flight/landing without making it win over the first
+    // tread merely because zero is numerically closer.
+    if (lobbyStairSurfaceHeight !== null
+      && lobbyStairSurfaceHeight <= feetY + 0.34 + EPSILON
+      && lobbyStairSurfaceHeight >= feetY - lobbyStair.stepRise - EPSILON) {
+      return lobbyStairSurfaceHeight;
     }
     return selectGroundCandidate(candidates, feetY, { maxStepUp: 0.34 })?.height ?? 0;
   };
@@ -2406,6 +2595,19 @@ export function createTheaterWorld({ scene, materials }) {
     const containing = lowCeilingRegions
       .filter((region) => pointInRect(planX, z, region.bounds) && region.underside > feetY + 0.05)
       .map((region) => region.underside);
+    if (pointInRect(planX, z, lobbyStair.topLanding) && feetY < lobbyStair.topY - 0.2) {
+      containing.push(lobbyStair.topY - 0.11);
+    }
+    if (pointInRect(planX, z, lobbyStair.flightBounds)) {
+      const treadUnderside = stairHeightAtPlanZ(z) - lobbyStair.treadThickness;
+      if (treadUnderside > feetY + 0.05) containing.push(treadUnderside);
+    }
+    if (pointInRect(planX, z, lobbyStair.topLanding) && feetY >= lobbyStair.topY - 0.2) {
+      containing.push(lobbyStair.landingMechanicalUnderside);
+    }
+    if (pointInRect(planX, z, LOBBY_PLAN.envelope) && LOBBY_PUBLIC_HEIGHT > feetY + 0.05) {
+      containing.push(LOBBY_PUBLIC_HEIGHT - 0.05);
+    }
     return containing.length ? Math.min(...containing) : null;
   };
 
@@ -2481,7 +2683,7 @@ export function createTheaterWorld({ scene, materials }) {
       sourceMeshCount,
       colliderCount: colliders.length,
       lightCount: hallLights.length + 3,
-      layoutVersion: "mililani-sketch-v15",
+      layoutVersion: "mililani-sketch-v16",
     }),
   };
 }
