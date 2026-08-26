@@ -217,7 +217,7 @@ const auditoriumByNumber = new Map(AUDITORIUMS.map((auditorium) => [auditorium.n
 assert.equal(world.stats.auditoriumCount, 14);
 assert.equal(world.stats.seatCount, 1093);
 assert.equal(world.stats.equipmentAnchors, 13);
-assert.equal(world.stats.layoutVersion, "mililani-sketch-v16");
+assert.equal(world.stats.layoutVersion, "mililani-sketch-v17");
 assert.ok(world.stats.meshCount > 0);
 assert.ok(world.stats.colliderCount > 0);
 assert.equal(world.auditoriumGroups.size, 14);
@@ -252,53 +252,75 @@ const shiftedRuntimeBoxes = [
 ];
 for (const [id, bounds] of shiftedRuntimeBoxes) assertBoxMatchesBounds(id, bounds, `${id} rigid shift`);
 assert.equal(LOBBY_SHIFT_X, 8.3, "V14 retains the authoritative concession/office X translation.");
-assert.equal(LOBBY_PLAN.kiosks.length, 3, "V14 must preserve exactly three ticket kiosks.");
+assert.equal(LOBBY_PLAN.kiosks.length, 4, "V17 must provide four flush ticket kiosks.");
 for (const kiosk of LOBBY_PLAN.kiosks) {
   const body = boxById(`${kiosk.id}-body`);
   assertNear(body.x, planToWorldX(kiosk.position[0]), `${kiosk.id} runtime X`);
   assertNear(body.z, kiosk.position[2], `${kiosk.id} runtime Z`);
   assert.equal(colliderIdsMatching(world, new RegExp(`^${kiosk.id}-body$`)).length, 1, `${kiosk.id} needs one body collider.`);
+  const physicalHalfX = Math.abs(Math.cos(body.rotationY)) * body.width / 2
+    + Math.abs(Math.sin(body.rotationY)) * body.depth / 2;
+  assertNear(Math.abs(body.x - planToWorldX(LOBBY_PLAN.envelope.xMax)) - physicalHalfX, 0.05, `${kiosk.id} flush wall gap`);
 }
 const lastKioskBody = boxById(`${LOBBY_PLAN.kiosks.at(-1).id}-body`);
 assert.ok(
   lastKioskBody.z + lastKioskBody.depth / 2 < LOBBY_PLAN.futureStairs.zMin,
-  "The third kiosk must not collide with the compact stair south cap.",
+  "The fourth kiosk must not collide with the compact stair south cap.",
 );
+assert.equal(LOBBY_PLAN.kioskShowtimeScreens.length, 3, "Three compact showtime screens must hang above the kiosks.");
+for (const screen of LOBBY_PLAN.kioskShowtimeScreens) {
+  const runtimeScreen = boxById(screen.id);
+  assertNear(runtimeScreen.x, planToWorldX(screen.wallX), `${screen.id} wall X`, 0.12);
+  assertNear(runtimeScreen.y, screen.centerY, `${screen.id} center Y`);
+  assertNear(runtimeScreen.z, screen.centerZ, `${screen.id} center Z`);
+  assertNear(runtimeScreen.depth, screen.width, `${screen.id} compact width`);
+  assertNear(runtimeScreen.height, screen.height, `${screen.id} height`);
+  assert.ok(screen.width >= 0.76 && screen.width <= 1.5, `${screen.id} must remain roughly one kiosk wide.`);
+}
 assertNear(boxById("lobby-east").x, planToWorldX(15.11), "V16 narrowed east lobby wall");
 const entrance = LOBBY_PLAN.frontEntrance;
-for (const bank of entrance.banks) {
-  for (const plane of entrance.planes) {
-    const prefix = `lobby-front-${bank.id}-${plane}`;
-    const expectedZ = plane === "outer" ? entrance.outerZ - 0.03 : entrance.innerZ + 0.03;
-    for (const side of ["left", "right"]) {
-      const leaf = boxById(`${prefix}-leaf-${side}`);
-      assertNear(leaf.z, expectedZ, `${prefix} ${side} leaf plane`);
-      assertNear(leaf.y + leaf.height / 2, entrance.doorHeight - 0.06, `${prefix} ${side} leaf height`);
-    }
-    const transom = boxById(`${prefix}-fixed-transom`);
-    assertNear(transom.y - transom.height / 2, entrance.doorHeight, `${prefix} transom bottom`);
-    assertNear(transom.y + transom.height / 2, entrance.transomTopY, `${prefix} transom top`);
+for (const door of entrance.doors) {
+  const prefix = `lobby-front-${door.id}`;
+  for (const side of ["left", "right"]) {
+    const leaf = boxById(`${prefix}-leaf-${side}`);
+    assertNear(leaf.z, entrance.facadeZ, `${prefix} ${side} single facade plane`, 0.06);
+    assertNear(leaf.y + leaf.height / 2, entrance.doorHeight - 0.06, `${prefix} ${side} leaf height`);
   }
+  const transom = boxById(`${prefix}-fixed-transom`);
+  assertNear(transom.y - transom.height / 2, entrance.doorHeight, `${prefix} transom bottom`);
+  assertNear(transom.y + transom.height / 2, entrance.transomTopY, `${prefix} transom top`);
 }
-assert.equal(authoredBoxes.filter(({ id }) => /^lobby-front-entrance-bank-\d-(?:outer|inner)-leaf-(?:left|right)$/.test(id)).length, 12,
-  "Three banks × two planes × two leaves must render.");
-assert.equal(authoredBoxes.filter(({ id }) => /^lobby-front-entrance-bank-\d-(?:outer|inner)-fixed-transom$/.test(id)).length, 6,
-  "Each outer and inner double-door plane needs fixed glass above its leaves.");
+assert.equal(authoredBoxes.filter(({ id }) => /^lobby-front-entrance-door-[1-6]-leaf-(?:left|right)$/.test(id)).length, 12,
+  "Six double-door assemblies must render exactly twelve leaves on one plane.");
+assert.equal(authoredBoxes.filter(({ id }) => /^lobby-front-entrance-door-[1-6]-fixed-transom$/.test(id)).length, 6,
+  "Each double-door assembly needs one fixed-glass transom.");
+assert.deepEqual(authoredBoxes.filter(({ id }) => id.startsWith("lobby-front-vestibule")).map(({ id }) => id), [],
+  "No obsolete inner row, returns, or vestibule ceiling may survive.");
+assert.deepEqual(world.colliders.filter(({ id }) => id.startsWith("lobby-front-vestibule")).map(({ id }) => id), [],
+  "No invisible vestibule collision may survive.");
 const divider = boxById(entrance.boundaryPillar.id);
 assertNear(divider.x, planToWorldX((entrance.boundaryPillar.xMin + entrance.boundaryPillar.xMax) / 2), "Entrance/window divider pillar X");
-assertNear(divider.depth, entrance.depth + 0.18, "Entrance/window divider spans vestibule depth");
-assertNear(divider.width, 0.9, "Photographed entrance/window divider width");
-assertBoxMatchesBounds("lobby-front-vestibule-ceiling", {
-  xMin: entrance.bankSpan.xMin,
-  xMax: entrance.bankSpan.xMax,
-  zMin: entrance.outerZ,
-  zMax: entrance.innerZ,
-}, "enclosed paired-door vestibule");
+assertNear(divider.z, entrance.facadeZ, "Entrance/window divider single facade plane");
+assert.ok(divider.depth <= 0.25, "Boundary pillar must not recreate a vestibule-depth obstruction.");
 for (const windowPlan of entrance.windows) {
   const glass = boxById(`${windowPlan.id}-glass`);
   assertNear(glass.x, planToWorldX((windowPlan.xMin + windowPlan.xMax) / 2), `${windowPlan.id} X`);
   assertNear(glass.width, windowPlan.xMax - windowPlan.xMin, `${windowPlan.id} width`);
+  assertNear(glass.y - glass.height / 2, entrance.windowSillY, `${windowPlan.id} waist sill`);
+  assertNear(glass.y + glass.height / 2, entrance.windowTopY, `${windowPlan.id} head`);
   assert.equal(colliderIdsMatching(world, new RegExp(`^${windowPlan.id}-glass$`)).length, 1, `${windowPlan.id} must block traversal.`);
+}
+for (let index = 1; index < entrance.doors.length; index += 1) {
+  const previous = entrance.doors[index - 1];
+  const current = entrance.doors[index];
+  if (previous.group === current.group) continue;
+  const gapCenter = (previous.center + entrance.doorWidth / 2 + current.center - entrance.doorWidth / 2) / 2;
+  const worldGapX = planToWorldX(gapCenter);
+  assert.ok(authoredBoxes.some((box) => box.materialNames.some((name) => /glass/i.test(name))
+    && Math.abs(box.z - entrance.facadeZ) <= 0.12
+    && box.y - box.height / 2 <= 1.5 && box.y + box.height / 2 >= 1.5
+    && worldGapX >= box.x - box.width / 2 - 0.03 && worldGapX <= box.x + box.width / 2 + 0.03),
+  `The ${entrance.groupGap}m gap between door groups ${previous.group}/${current.group} needs continuous fixed glazing.`);
 }
 for (const station of LOBBY_PLAN.customerCounter) {
   assert.ok(station.z <= LOBBY_PLAN.envelope.zMax, "Translated counter must remain inside the shifted lobby.");
@@ -1376,5 +1398,5 @@ assert.equal(oppositeMuralTextureDisposed, true, "World disposal must release th
 materials.dispose();
 
 console.log(
-  `World smoke valid: V16 · ${world.stats.meshCount} runtime meshes · ${world.stats.instancedMeshCount} instanced · ${world.stats.colliderCount} colliders · paired front vestibule + lowered full mechanical ceiling + steep open stair/landing nook + distinct trimmed mural.`,
+  `World smoke valid: V17 · ${world.stats.meshCount} runtime meshes · ${world.stats.instancedMeshCount} instanced · ${world.stats.colliderCount} colliders · single-plane six-assembly glass frontage + four flush kiosks/three showtime screens · V16 lobby/stair retained.`,
 );

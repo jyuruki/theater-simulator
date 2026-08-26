@@ -31,6 +31,7 @@ import {
 } from "./coordinates.js";
 import {
   createBotanicalMuralTexture,
+  createKioskShowtimeScreenTextures,
   createLobbyBarScreenTextures,
   createOppositeLobbyMuralTexture,
   createSignTexture,
@@ -62,7 +63,7 @@ const publicById = (id) => PUBLIC_SPACES.find((space) => space.id === id);
 
 export function createTheaterWorld({ scene, materials }) {
   const root = new THREE.Group();
-  root.name = "Mililani 14 layout prototype v16";
+  root.name = "Mililani 14 layout prototype v17";
   scene.add(root);
 
   const colliders = [];
@@ -1385,6 +1386,37 @@ export function createTheaterWorld({ scene, materials }) {
       addBox({ id: `${kiosk.id}-screen`, x: x - 0.42, y: 1.15, z, width: 0.05, height: 0.7, depth: 0.55, material: materials.display, rotationY: 0 });
       addLabel({ id: `${kiosk.id}-label`, text: "TICKETS", position: [x - 0.48, 1.68, z], rotationY: -Math.PI / 2, width: 0.75, height: 0.25, small: true, accent: "#68a3d8" });
     }
+    const kioskShowtimeTextures = createKioskShowtimeScreenTextures();
+    kioskShowtimeTextures.forEach((texture) => disposableTextures.add(texture));
+    for (const [index, screen] of LOBBY_PLAN.kioskShowtimeScreens.entries()) {
+      addBox({
+        id: screen.id,
+        x: screen.wallX,
+        y: screen.centerY,
+        z: screen.centerZ,
+        width: 0.08,
+        height: screen.height,
+        depth: screen.width,
+        material: materials.black,
+        collide: false,
+      });
+      const screenMaterial = new THREE.MeshBasicMaterial({
+        map: kioskShowtimeTextures[index],
+        side: THREE.DoubleSide,
+        toneMapped: false,
+      });
+      screenMaterial.name = `${screen.id}-material`;
+      disposableDecorMaterials.push(screenMaterial);
+      const face = new THREE.Mesh(unitPlaneGeometry, screenMaterial);
+      face.name = `${screen.id}-face`;
+      face.position.set(planToWorldX(screen.wallX - 0.052), screen.centerY, screen.centerZ);
+      face.rotation.y = planToWorldYaw(-Math.PI / 2);
+      face.scale.set(screen.width - 0.08, screen.height - 0.06, 1);
+      face.userData.screenId = screen.id;
+      face.userData.source = kioskShowtimeTextures[index]?.userData?.credit;
+      root.add(face);
+      sourceMeshCount += 1;
+    }
   };
 
   const addTicketLectern = () => {
@@ -1642,86 +1674,59 @@ export function createTheaterWorld({ scene, materials }) {
   addCeiling(`${hall.id}-wide`, hallWide);
 
   const frontEntrance = LOBBY_PLAN.frontEntrance;
-  const frontDoorOpenings = frontEntrance.banks.map((bank) => ({
-    center: bank.center,
-    width: frontEntrance.doorWidth,
-    height: frontEntrance.doorHeight,
-  }));
-  const frontDoorFacadeOpenings = frontEntrance.banks.map((bank) => ({
-    center: bank.center,
+  const frontDoorFacadeOpenings = frontEntrance.doors.map((door) => ({
+    center: door.center,
     width: frontEntrance.doorWidth,
     height: frontEntrance.transomTopY,
   }));
-  const frontPillarOpening = {
-    center: (frontEntrance.boundaryPillar.xMin + frontEntrance.boundaryPillar.xMax) / 2,
-    width: frontEntrance.boundaryPillar.xMax - frontEntrance.boundaryPillar.xMin,
-    height: LOBBY_SERVICE_HEIGHT,
-  };
-  const frontWindowOpenings = frontEntrance.windows.map((window) => ({
-    center: (window.xMin + window.xMax) / 2,
-    width: window.xMax - window.xMin,
-    height: frontEntrance.windowTopY - frontEntrance.windowSillY,
-    baseY: frontEntrance.windowSillY,
-  }));
   addWallX("lobby-front-service", LOBBY_PLAN.envelope.xMin, lobby.bounds.xMin, lobbyFrontZ, { height: LOBBY_PUBLIC_HEIGHT, material: materials.wall });
+  // V17 is one literal storefront plane. Fixed glazing occupies every span
+  // around the six door assemblies; there is no inferred inner row or deep
+  // vestibule. The opaque public wall starts only above the common glass head.
   addWallXWithOpenings(
-    "lobby-front-public",
-    lobby.bounds.xMin,
+    "lobby-front-door-zone-fixed-glass",
+    frontEntrance.boundaryPillar.xMax,
     LOBBY_PLAN.envelope.xMax,
-    frontEntrance.outerZ,
-    [...frontDoorFacadeOpenings, frontPillarOpening, ...frontWindowOpenings],
-    { material: materials.wall },
+    frontEntrance.facadeZ,
+    frontDoorFacadeOpenings,
+    {
+      height: frontEntrance.transomTopY,
+      material: materials.glass,
+      thickness: 0.055,
+    },
   );
-  addWallX("lobby-front-public-upper", lobby.bounds.xMin, LOBBY_PLAN.envelope.xMax, lobbyFrontZ, {
-    baseY: LOBBY_SERVICE_HEIGHT,
-    height: LOBBY_PUBLIC_HEIGHT - LOBBY_SERVICE_HEIGHT,
+  addWallX("lobby-front-public-header-window-side", lobby.bounds.xMin, frontEntrance.boundaryPillar.xMin, frontEntrance.facadeZ, {
+    baseY: frontEntrance.windowTopY,
+    height: LOBBY_PUBLIC_HEIGHT - frontEntrance.windowTopY,
     material: materials.wall,
   });
-  // Matching inner doors make each of the three photographed bays a real
-  // vestibule rather than a single row of floating leaves.
-  addWallXWithOpenings(
-    "lobby-front-vestibule-inner",
-    frontEntrance.bankSpan.xMin,
-    frontEntrance.bankSpan.xMax,
-    frontEntrance.innerZ,
-    frontDoorOpenings,
-    { material: materials.glass },
-  );
-  addWallZ(
-    "lobby-front-vestibule-low-x-return",
-    frontEntrance.bankSpan.xMin,
-    frontEntrance.outerZ,
-    frontEntrance.innerZ,
-    { material: materials.glass },
-  );
-  addWallZ(
-    "lobby-front-vestibule-high-x-return",
-    frontEntrance.bankSpan.xMax,
-    frontEntrance.outerZ,
-    frontEntrance.innerZ,
-    { material: materials.glass },
-  );
-  addCeiling(
-    "lobby-front-vestibule",
-    {
-      xMin: frontEntrance.bankSpan.xMin,
-      xMax: frontEntrance.bankSpan.xMax,
-      zMin: frontEntrance.outerZ,
-      zMax: frontEntrance.innerZ,
-    },
-    LOBBY_SERVICE_HEIGHT,
-  );
+  addWallX("lobby-front-public-header-door-side", frontEntrance.boundaryPillar.xMax, LOBBY_PLAN.envelope.xMax, frontEntrance.facadeZ, {
+    baseY: frontEntrance.windowTopY,
+    height: LOBBY_PUBLIC_HEIGHT - frontEntrance.windowTopY,
+    material: materials.wall,
+  });
   addBox({
     id: frontEntrance.boundaryPillar.id,
     x: (frontEntrance.boundaryPillar.xMin + frontEntrance.boundaryPillar.xMax) / 2,
     y: LOBBY_SERVICE_HEIGHT / 2,
-    z: (frontEntrance.outerZ + frontEntrance.innerZ) / 2,
+    z: frontEntrance.facadeZ,
     width: frontEntrance.boundaryPillar.xMax - frontEntrance.boundaryPillar.xMin,
     height: LOBBY_SERVICE_HEIGHT,
-    depth: frontEntrance.depth + WALL_THICKNESS,
+    depth: WALL_THICKNESS,
     material: materials.concrete,
     collide: true,
   });
+  addWallX(
+    "lobby-front-public-header-over-pillar",
+    frontEntrance.boundaryPillar.xMin,
+    frontEntrance.boundaryPillar.xMax,
+    frontEntrance.facadeZ,
+    {
+      baseY: LOBBY_SERVICE_HEIGHT,
+      height: LOBBY_PUBLIC_HEIGHT - LOBBY_SERVICE_HEIGHT,
+      material: materials.wall,
+    },
+  );
   for (const window of frontEntrance.windows) {
     const center = (window.xMin + window.xMax) / 2;
     const width = window.xMax - window.xMin;
@@ -1730,7 +1735,7 @@ export function createTheaterWorld({ scene, materials }) {
       id: `${window.id}-glass`,
       x: center,
       y: frontEntrance.windowSillY + height / 2,
-      z: frontEntrance.outerZ,
+      z: frontEntrance.facadeZ,
       width,
       height,
       depth: 0.055,
@@ -1741,36 +1746,37 @@ export function createTheaterWorld({ scene, materials }) {
       id: `${window.id}-sill-wall`,
       x: center,
       y: frontEntrance.windowSillY / 2,
-      z: frontEntrance.outerZ,
+      z: frontEntrance.facadeZ,
       width,
       height: frontEntrance.windowSillY,
       depth: WALL_THICKNESS,
       material: materials.wall,
       collide: true,
     });
-    addBox({ id: `${window.id}-mid-rail`, x: center, y: 1.72, z: frontEntrance.outerZ - 0.04, width, height: 0.07, depth: 0.1, material: materials.black });
-    addBox({ id: `${window.id}-left-frame`, x: window.xMin, y: frontEntrance.windowSillY + height / 2, z: frontEntrance.outerZ - 0.04, width: 0.08, height, depth: 0.1, material: materials.black });
-    addBox({ id: `${window.id}-right-frame`, x: window.xMax, y: frontEntrance.windowSillY + height / 2, z: frontEntrance.outerZ - 0.04, width: 0.08, height, depth: 0.1, material: materials.black });
-  }
-  for (const bank of frontEntrance.banks) {
-    for (const plane of frontEntrance.planes) {
-      const z = plane === "outer" ? frontEntrance.outerZ - 0.03 : frontEntrance.innerZ + 0.03;
-      const swing = plane === "outer" ? 1 : -1;
-      const id = `lobby-front-${bank.id}-${plane}`;
-      addDoorTrim(id, "south", z, bank.center, { width: frontEntrance.doorWidth, height: frontEntrance.doorHeight });
-      addBox({
-        id: `${id}-fixed-transom`,
-        x: bank.center,
-        y: frontEntrance.doorHeight + (frontEntrance.transomTopY - frontEntrance.doorHeight) / 2,
-        z,
-        width: frontEntrance.doorWidth - 0.12,
-        height: frontEntrance.transomTopY - frontEntrance.doorHeight,
-        depth: 0.05,
-        material: materials.glass,
-      });
-      addBox({ id: `${id}-leaf-left`, x: bank.center - 1.05, y: frontEntrance.doorHeight / 2, z, width: 1.15, height: frontEntrance.doorHeight - 0.12, depth: 0.05, material: materials.glass, rotationY: swing * 1.18 });
-      addBox({ id: `${id}-leaf-right`, x: bank.center + 1.05, y: frontEntrance.doorHeight / 2, z, width: 1.15, height: frontEntrance.doorHeight - 0.12, depth: 0.05, material: materials.glass, rotationY: swing * -1.18 });
+    addBox({ id: `${window.id}-mid-rail`, x: center, y: frontEntrance.windowSillY + height / 2, z: frontEntrance.facadeZ - 0.04, width, height: 0.07, depth: 0.1, material: materials.black });
+    addBox({ id: `${window.id}-left-frame`, x: window.xMin, y: frontEntrance.windowSillY + height / 2, z: frontEntrance.facadeZ - 0.04, width: 0.08, height, depth: 0.1, material: materials.black });
+    if (window === frontEntrance.windows.at(-1)) {
+      addBox({ id: `${window.id}-right-frame`, x: window.xMax, y: frontEntrance.windowSillY + height / 2, z: frontEntrance.facadeZ - 0.04, width: 0.08, height, depth: 0.1, material: materials.black });
     }
+  }
+  for (const door of frontEntrance.doors) {
+    const z = frontEntrance.facadeZ;
+    const id = `lobby-front-${door.id}`;
+    const leafWidth = (frontEntrance.doorWidth - 0.18) / 2;
+    const leafOffset = (frontEntrance.doorWidth - leafWidth) / 2;
+    addDoorTrim(id, "south", z, door.center, { width: frontEntrance.doorWidth, height: frontEntrance.doorHeight });
+    addBox({
+      id: `${id}-fixed-transom`,
+      x: door.center,
+      y: frontEntrance.doorHeight + (frontEntrance.transomTopY - frontEntrance.doorHeight) / 2,
+      z,
+      width: frontEntrance.doorWidth - 0.12,
+      height: frontEntrance.transomTopY - frontEntrance.doorHeight,
+      depth: 0.05,
+      material: materials.glass,
+    });
+    addBox({ id: `${id}-leaf-left`, x: door.center - leafOffset, y: frontEntrance.doorHeight / 2, z, width: leafWidth, height: frontEntrance.doorHeight - 0.12, depth: 0.05, material: materials.glass, rotationY: 1.18 });
+    addBox({ id: `${id}-leaf-right`, x: door.center + leafOffset, y: frontEntrance.doorHeight / 2, z, width: leafWidth, height: frontEntrance.doorHeight - 0.12, depth: 0.05, material: materials.glass, rotationY: -1.18 });
   }
   addWallZ("lobby-west", LOBBY_PLAN.envelope.xMin, lobbyFrontZ, lobbyBackZ, { height: LOBBY_PUBLIC_HEIGHT });
   addWallZ("lobby-east", LOBBY_PLAN.envelope.xMax, lobbyFrontZ, lobbyBackZ, { height: LOBBY_PUBLIC_HEIGHT });
@@ -1816,7 +1822,7 @@ export function createTheaterWorld({ scene, materials }) {
   addWallZ("empty-alcove-east", emptyAlcove.bounds.xMax, emptyAlcove.bounds.zMin, emptyAlcove.bounds.zMax, { material: materials.darkWall });
 
   const entranceFacadeXMin = lobby.bounds.xMin;
-  const entranceFacadeXMax = frontEntrance.windows.at(-1).xMax;
+  const entranceFacadeXMax = LOBBY_PLAN.envelope.xMax;
   const entranceFacadeCenterX = (entranceFacadeXMin + entranceFacadeXMax) / 2;
   const entranceFacadeWidth = entranceFacadeXMax - entranceFacadeXMin;
   addBox({ id: "front-canopy", x: entranceFacadeCenterX, y: 3.55, z: frontZ(-1.8), width: entranceFacadeWidth + 0.8, height: 0.28, depth: 4.1, material: materials.black });
@@ -2683,7 +2689,7 @@ export function createTheaterWorld({ scene, materials }) {
       sourceMeshCount,
       colliderCount: colliders.length,
       lightCount: hallLights.length + 3,
-      layoutVersion: "mililani-sketch-v16",
+      layoutVersion: "mililani-sketch-v17",
     }),
   };
 }

@@ -626,28 +626,57 @@ assert.equal(POS_STATIONS.length, 6, "The diagonal concession face needs six POS
 assert.ok(POS_STATIONS.every((station) => station.counterSegment === "diagonal-pos-run"));
 assert.equal(EQUIPMENT_ANCHORS.filter(({ type }) => type === "popper").length, 2, "The lobby sketch specifies two poppers.");
 assert.equal(EQUIPMENT_ANCHORS.filter(({ type }) => type === "fryer").length, 2, "The hot line needs two fryer placeholders.");
-assert.equal(LOBBY_PLAN.kiosks.length, 3, "V11 requires three customer ticket kiosks.");
+assert.equal(LOBBY_PLAN.kiosks.length, 4, "V17 requires four flush-mounted ticket kiosks.");
 assertUnique(LOBBY_PLAN.kiosks.map(({ id }) => id), "Lobby kiosk IDs");
-assert.equal(LOBBY_PLAN.frontDoorCenters.length, 3, "The lobby front needs three double-door banks.");
-assert.deepEqual(LOBBY_PLAN.frontEntrance.planes, ["outer", "inner"]);
-assert.deepEqual(LOBBY_PLAN.frontEntrance.banks, [
-  { id: "entrance-bank-1", center: -14.35 },
-  { id: "entrance-bank-2", center: -11.2 },
-  { id: "entrance-bank-3", center: -8.05 },
-], "The entrance must retain three paired outer/inner door banks.");
-assertNear(LOBBY_PLAN.frontEntrance.outerZ, -2.5, "Outer entrance plane");
-assertNear(LOBBY_PLAN.frontEntrance.innerZ, -0.7, "Inner entrance plane");
-assertNear(LOBBY_PLAN.frontEntrance.depth, 1.8, "Vestibule depth");
-assert.deepEqual(LOBBY_PLAN.frontEntrance.bankSpan, { xMin: -15.75, xMax: -6.65 });
-assert.deepEqual(LOBBY_PLAN.frontEntrance.boundaryPillar, {
-  id: "front-entrance-window-divider-pillar", xMin: -6.55, xMax: -5.65,
-});
-assert.deepEqual(LOBBY_PLAN.frontEntrance.windows, [
-  { id: "front-window-1", xMin: -5.45, xMax: 0.15 },
-  { id: "front-window-2", xMin: 0.55, xMax: 6.15 },
+const frontEntrance = LOBBY_PLAN.frontEntrance;
+assert.equal(frontEntrance.id, "six-assembly-glass-frontage");
+assertNear(frontEntrance.facadeZ, LOBBY_PLAN.envelope.zMin, "Single entrance facade plane");
+assertNear(frontEntrance.doorWidth, 2.65, "Double-door assembly width");
+assertNear(frontEntrance.doorHeight, 2.6, "Entrance leaf height");
+assert.equal(frontEntrance.doors.length, 6, "The facade needs six double-door assemblies.");
+assert.deepEqual(frontEntrance.doors.map(({ id, group }) => ({ id, group })), [
+  { id: "entrance-door-1", group: 1 }, { id: "entrance-door-2", group: 1 },
+  { id: "entrance-door-3", group: 2 }, { id: "entrance-door-4", group: 2 },
+  { id: "entrance-door-5", group: 3 }, { id: "entrance-door-6", group: 3 },
 ]);
-assertNear(LOBBY_PLAN.frontEntrance.windowSillY, 0.08, "Storefront glass sill");
-assertNear(LOBBY_PLAN.frontEntrance.transomTopY, 3.25, "Door transom top");
+assertUnique(frontEntrance.doors.map(({ id }) => id), "Entrance assembly IDs");
+assertNear(frontEntrance.doorSpan.xMin, frontEntrance.doors[0].center - frontEntrance.doorWidth / 2, "Door-span start");
+assertNear(frontEntrance.doorSpan.xMax, frontEntrance.doors.at(-1).center + frontEntrance.doorWidth / 2, "Door-span end");
+assertNear(frontEntrance.pairGap, 0.1, "Within-pair mullion gap");
+assertNear(frontEntrance.groupGap, 0.61, "Fixed-glass gap between pairs");
+for (let index = 1; index < frontEntrance.doors.length; index += 1) {
+  const previous = frontEntrance.doors[index - 1];
+  const current = frontEntrance.doors[index];
+  const clearGap = current.center - previous.center - frontEntrance.doorWidth;
+  assertNear(clearGap, current.group === previous.group ? frontEntrance.pairGap : frontEntrance.groupGap,
+    `Door assembly ${index}/${index + 1} frontage gap`);
+}
+assert.equal(frontEntrance.windows.length, 2, "The physical-left facade needs two windows.");
+assertNear(frontEntrance.windowSillY, 1.05, "Waist-height window sill");
+assertNear(frontEntrance.windowTopY, 3.25, "Window head");
+assertNear(frontEntrance.transomTopY, 3.25, "Door transom top");
+assert.ok(frontEntrance.boundaryPillar.xMax <= frontEntrance.doorSpan.xMin,
+  "The structural pillar must begin the door frontage on its physical-left side.");
+assert.ok(frontEntrance.windows.at(-1).xMax <= frontEntrance.boundaryPillar.xMin,
+  "The physical-left window run must terminate at the boundary pillar.");
+assert.ok(frontEntrance.windows.every((window, index) => window.xMax > window.xMin
+  && (index === 0 || window.xMin >= frontEntrance.windows[index - 1].xMax)), "The two windows must be ordered and non-overlapping.");
+assert.ok(frontEntrance.windows.at(-1).xMax < frontEntrance.doorSpan.xMin,
+  "The two windows must occupy the physical-left side of all six door assemblies.");
+for (const obsoleteKey of ["banks", "outerZ", "innerZ", "depth", "planes", "bankSpan"]) {
+  assert.equal(obsoleteKey in frontEntrance, false, `Single-plane frontage must not retain ${obsoleteKey}.`);
+}
+assert.deepEqual(LOBBY_PLAN.kioskShowtimeScreens.map(({ id, wallX, centerY, centerZ, width, height }) => (
+  { id, wallX, centerY, centerZ, width, height }
+)), [0, 1.275, 2.55].map((centerZ, index) => ({
+  id: `kiosk-showtime-screen-${index + 1}`,
+  wallX: LOBBY_PLAN.envelope.xMax,
+  centerY: 3.05,
+  centerZ,
+  width: 1.15,
+  height: 0.55,
+})));
+assertUnique(LOBBY_PLAN.kioskShowtimeScreens.map(({ id }) => id), "Kiosk showtime-screen IDs");
 assert.equal(LOBBY_PLAN.kitchenStorageDoor.wall, "diagonal", "Kitchen storage must connect through the diagonal wall.");
 assert.equal(LOBBY_PLAN.kitchenStorageDoor.partitionSegment, 1);
 assert.ok(LOBBY_PLAN.kitchenStorageDoor.width >= 1.5);
@@ -761,15 +790,16 @@ assertNear(LOBBY_PLAN.kitchenStorageDoor.z, 18.45 + FRONT_SHIFT_Z, "Kitchen-stor
 assert.deepEqual(
   LOBBY_PLAN.kiosks.map(({ id, position, rotation }) => ({ id, position, rotation })),
   [
-    { id: "ticket-kiosk-1", position: [LOBBY_PLAN.envelope.xMax - 1.6, 0, -0.9], rotation: Math.PI / 2 },
-    { id: "ticket-kiosk-2", position: [LOBBY_PLAN.envelope.xMax - 1.6, 0, 1.1], rotation: Math.PI / 2 },
-    { id: "ticket-kiosk-3", position: [LOBBY_PLAN.envelope.xMax - 1.6, 0, 3.1], rotation: Math.PI / 2 },
+    { id: "ticket-kiosk-1", position: [LOBBY_PLAN.envelope.xMax - 0.5, 0, -0.9], rotation: Math.PI / 2 },
+    { id: "ticket-kiosk-2", position: [LOBBY_PLAN.envelope.xMax - 0.5, 0, 0.55], rotation: Math.PI / 2 },
+    { id: "ticket-kiosk-3", position: [LOBBY_PLAN.envelope.xMax - 0.5, 0, 2], rotation: Math.PI / 2 },
+    { id: "ticket-kiosk-4", position: [LOBBY_PLAN.envelope.xMax - 0.5, 0, 3.45], rotation: Math.PI / 2 },
   ],
-  "All three lobby kiosks must stay 1.6m inside the tightened east wall and clear the stair foot.",
+  "All four lobby kiosks must sit flush along the tightened east wall.",
 );
 assert.ok(
   LOBBY_PLAN.kiosks.at(-1).position[2] + 0.9 / 2 < LOBBY_PLAN.futureStairs.zMin,
-  "Kiosk 3 must retain a physical gap before the stair foot.",
+  "Kiosk 4 must retain a physical gap before the stair foot.",
 );
 
 assert.equal(LOBBY_PLAN.barScreen.id, "lanai-bar-digital-screen");
@@ -1412,8 +1442,8 @@ assert.equal(t6Storage.bounds.xMax, theater6.entry.longRouteBounds.xMin);
 
 for (const sample of [-40, -20, 1.5, 42, 113]) assert.equal(worldToPlanX(planToWorldX(sample)), sample);
 assert.deepEqual(MAP_BOUNDS, { xMin: -41, xMax: 114, zMin: -12.5, zMax: 99 }, "Map bounds must tightly enclose the compressed V10 hall.");
-assert.deepEqual(PLAYER_SPAWN_PLAN, { x: -11.2, y: 0, z: -9.3 }, "Player spawn must align with the middle entrance bank.");
-assertNear(planToWorldX(PLAYER_SPAWN_PLAN.x), 14.2, "Translated player-spawn world X");
+assert.deepEqual(PLAYER_SPAWN_PLAN, { x: frontEntrance.doors[2].center, y: 0, z: -9.3 }, "Player spawn must align with the first assembly of the middle pair.");
+assertNear(planToWorldX(PLAYER_SPAWN_PLAN.x), -1.335, "Translated player-spawn world X");
 assert.ok(planToWorldX(-20 + LOBBY_SHIFT_X) > planToWorldX(PLAYER_SPAWN_PLAN.x), "Sketch-left concession must remain physical player-left.");
 assert.equal(worldToPlanDirection({ x: -1, z: 0 }).x, 1);
 assert.equal(planToWorldDirection({ x: 1, z: 0 }).x, -1);
@@ -1422,7 +1452,7 @@ assert.ok(worldBounds.xMin < worldBounds.xMax);
 assert.equal(worldBounds.xMax - worldBounds.xMin, MAP_BOUNDS.xMax - MAP_BOUNDS.xMin);
 
 console.log(
-  `Layout valid: v16 · paired vestibule doors + left windows · lowered full mechanical ceiling · steep open stair + landing nook · distinct trimmed murals · 153m hall · 14 theaters · 1,093 seats.`,
+  `Layout valid: v17 · six single-plane double-door assemblies + physical-left windows · four flush kiosks + three showtime screens · V16 lobby/stair retained · 153m hall · 14 theaters · 1,093 seats.`,
 );
 
 function publicById(id) {
