@@ -121,6 +121,63 @@ function createController({
   assert.equal(world.isOverlapping(position, 0.34), false);
 }
 
+// A thin walkable stair slab is solid from below, while a player whose feet
+// are within one legal step of its top can cross the riser and be lifted by
+// the ground sampler. This is the one-way collision contract used by V16's
+// visually open lobby stair.
+{
+  const lowStepWorld = new AABBCollisionWorld();
+  lowStepWorld.addBox({
+    id: "reachable-stair-tread",
+    minX: -1,
+    maxX: 1,
+    minY: 0.09,
+    maxY: 0.21,
+    minZ: 0,
+    maxZ: 0.4,
+    walkableTop: true,
+    maxStepUp: 0.34,
+  });
+  const ascending = new THREE.Vector3(0, 0, -0.5);
+  const lowCollision = lowStepWorld.moveCircle(ascending, 0, 1, 0.34, 0, 1.78);
+  assert.equal(lowCollision.collidedZ, false, "reachable tread must not block a legal stair step");
+  assert.ok(ascending.z > 0.4, "reachable tread must permit forward ascent movement");
+
+  const highUndersideWorld = new AABBCollisionWorld();
+  highUndersideWorld.addBox({
+    id: "overhead-stair-tread",
+    minX: -1,
+    maxX: 1,
+    minY: 1.88,
+    maxY: 2,
+    minZ: 0,
+    maxZ: 0.4,
+    walkableTop: true,
+    maxStepUp: 0.34,
+  });
+  const underneath = new THREE.Vector3(0, 0, -0.5);
+  const undersideCollision = highUndersideWorld.moveCircle(underneath, 0, 1, 0.34, 0, 1.78);
+  assert.equal(undersideCollision.collidedZ, false, "a tread above standing headroom must leave the open underside traversable");
+  assert.ok(underneath.z > 0.4, "open-underneath stair must remain visibly and physically open where headroom permits");
+
+  const blockedUndersideWorld = new AABBCollisionWorld();
+  blockedUndersideWorld.addBox({
+    id: "low-overhead-stair-tread",
+    minX: -1,
+    maxX: 1,
+    minY: 1.5,
+    maxY: 1.62,
+    minZ: 0,
+    maxZ: 0.4,
+    walkableTop: true,
+    maxStepUp: 0.34,
+  });
+  const tooLow = new THREE.Vector3(0, 0, -0.5);
+  const blockedCollision = blockedUndersideWorld.moveCircle(tooLow, 0, 1, 0.34, 0, 1.78);
+  assert.equal(blockedCollision.collidedZ, true, "low tread underside must block body clipping");
+  assertNear(tooLow.z, -0.34, "low tread underside capsule stop");
+}
+
 // Diagonal input retains its tangential component and slides along the wall.
 {
   const world = new AABBCollisionWorld();

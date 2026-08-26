@@ -120,6 +120,13 @@ export class AABBCollisionWorld {
   }
 
   _overlapsVertically(collider, feetY, height) {
+    // Thin stair slabs are solid from below but may be stepped onto from a
+    // reachable feet height. Treating them as ordinary boxes would stop the
+    // capsule at every riser before the ground sampler could lift it.
+    if (collider.source?.walkableTop === true) {
+      const maxStepUp = collider.source.maxStepUp ?? 0.34;
+      if (feetY >= collider.maxY - maxStepUp - EPSILON) return false;
+    }
     return feetY + height > collider.minY + EPSILON && feetY < collider.maxY - EPSILON;
   }
 

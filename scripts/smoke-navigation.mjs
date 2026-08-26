@@ -103,6 +103,7 @@ THREE.Object3D.prototype.add = function captureStructuralMeshes(...objects) {
 const { createMaterialLibrary } = await import("../src/materials.js");
 const { createTheaterWorld } = await import("../src/world.js");
 const { planToWorldX, worldToPlanX } = await import("../src/coordinates.js");
+const { AABBCollisionWorld } = await import("../src/player.js");
 const {
   AUDITORIUMS,
   CONCESSION_SERVICE_SEQUENCE,
@@ -998,18 +999,42 @@ for (const [id, x] of [["west", westSqueezeCenterX], ["east", eastSqueezeCenterX
 }
 
 assert.equal(LOBBY_SHIFT_X, 8.3, "V13 retains the authoritative lobby X translation.");
-assertNear(LOBBY_CEILING_PLAN.highHeight, LOBBY_CEILING_PLAN.baseHeight * 3, "triple-height stone-floor lobby ceiling");
-assert.deepEqual(LOBBY_CEILING_PLAN.highPublicSpaceIds, ["lobby"], "Only the stone-floor lobby may retain the triple-height roof.");
+assertNear(LOBBY_CEILING_PLAN.highHeight, 10.8, "lowered V16 stone-floor lobby ceiling");
+assert.deepEqual(LOBBY_CEILING_PLAN.highPublicSpaceIds, ["lobby"], "Only the stone-floor lobby may retain the high roof.");
+assertNear(LOBBY_PLAN.envelope.xMax, 15.11, "east lobby wall moved flush to the stair");
+const entrance = LOBBY_PLAN.frontEntrance;
+assert.equal(entrance.banks.length, 3);
+assert.deepEqual(entrance.planes, ["outer", "inner"]);
+for (const bank of entrance.banks) {
+  for (const [suffix, z] of [
+    ["outside", entrance.outerZ - 0.8],
+    ["vestibule", (entrance.outerZ + entrance.innerZ) / 2],
+    ["inside", entrance.innerZ + 0.8],
+  ]) {
+    assertOpenPlanPoint(`${bank.id}-${suffix}`, bank.center, z);
+    if (suffix === "outside") {
+      assert.equal(isReachable(bank.center, z), true, `${bank.id} exterior approach must connect to the spawn walk.`);
+    } else {
+      navigationTargets.push({ id: `${bank.id}-${suffix}`, x: bank.center, z });
+    }
+  }
+}
+for (const window of entrance.windows) {
+  assert.equal(isBlocked((window.xMin + window.xMax) / 2, entrance.outerZ), true, `${window.id} glass must block traversal.`);
+}
+assert.equal(isBlocked((entrance.boundaryPillar.xMin + entrance.boundaryPillar.xMax) / 2, (entrance.outerZ + entrance.innerZ) / 2), true,
+  "The pillar must separate the three door banks from the two left-side windows.");
+assert.equal(isReachable(LOBBY_PLAN.envelope.xMax + 0.8, 12), false, "The narrowed east wall must contain the lobby.");
 assert.equal(FOUNTAIN_PLAN.pillars.every(({ height }) => height === LOBBY_CEILING_PLAN.baseHeight), true, "Fountain pillars must terminate at the low court roof.");
 assert.equal(LOBBY_PLAN.kiosks.length, 3, "V13 circulation smoke expects exactly three kiosks.");
 assert.deepEqual(
   LOBBY_PLAN.kiosks.map(({ position }) => position[2]),
-  [0.5, 2.5, 4.5],
+  [-0.9, 1.1, 3.1],
   "The three kiosks must retain their two-metre cadence while clearing the stair foot.",
 );
 assertNear(
   LOBBY_PLAN.futureStairs.zMin - (LOBBY_PLAN.kiosks.at(-1).position[2] + 0.9 / 2),
-  0.15,
+  1.55,
   "third-kiosk/stair-foot clearance",
 );
 for (const kiosk of LOBBY_PLAN.kiosks) {
@@ -1026,13 +1051,13 @@ navigationTargets.push({
 });
 assert.deepEqual(
   LOBBY_PLAN.boxOfficeVertical,
-  { xMin: 9.559999999999999, xMax: 10.659999999999998, zMin: 4.4, zMax: 11.9 },
-  "V13 must keep the narrow box-office long leg.",
+  { xMin: 9.959999999999999, xMax: 11.059999999999999, zMin: 4.4, zMax: 11.9 },
+  "V16 must keep the narrow box-office long leg aligned to the stair.",
 );
 assert.deepEqual(
   LOBBY_PLAN.boxOfficeReturn,
-  { xMin: 9.559999999999999, xMax: 12.709999999999999, zMin: 4.4, zMax: 5.1000000000000005 },
-  "V13 must keep the compact half-length box-office return.",
+  { xMin: 9.959999999999999, xMax: 13.11, zMin: 4.4, zMax: 5.1000000000000005 },
+  "V16 must keep the compact half-length box-office return aligned to the stair.",
 );
 assertNear(LOBBY_PLAN.boxOfficeReturn.xMax, LOBBY_PLAN.futureStairs.xMin, "box-office return flush to stair wall");
 assertNear(LOBBY_PLAN.boxOfficeReturn.xMax - LOBBY_PLAN.boxOfficeReturn.xMin, 3.15, "half-length box-office return");
@@ -1042,20 +1067,26 @@ assertNear(
   LOBBY_PLAN.futureStairWall.approachReveal,
   "ticket-approach/stair short reveal",
 );
-assertNear(LOBBY_PLAN.futureStairWall.approachReveal, 0.61, "two-foot ticket-approach/stair reveal");
+assertNear(LOBBY_PLAN.futureStairWall.approachReveal, 1.01, "compact ticket-approach/stair reveal");
 assert.equal(LOBBY_PLAN.futureStairWall.finish, "white", "The exposed future-stair wall must use the white hallway finish.");
 assert.equal(LOBBY_PLAN.futureStairWall.materialKey, "wall", "The white stair wall must use the standard hallway wall material.");
-for (const [key, expected] of Object.entries({ xMin: 12.71, xMax: 15.11, zMin: 5.1, zMax: 21.5 })) {
-  assertNear(LOBBY_PLAN.futureStairs[key], expected, `V15 narrow stair ${key}`);
+for (const [key, expected] of Object.entries({ xMin: 13.11, xMax: 15.11, zMin: 5.1, zMax: 21.5 })) {
+  assertNear(LOBBY_PLAN.futureStairs[key], expected, `V16 narrow stair ${key}`);
 }
 const lobbyStair = LOBBY_PLAN.lobbyStair;
 assert.deepEqual(lobbyStair.bounds, LOBBY_PLAN.futureStairs);
-assertNear(lobbyStair.clearWidth, 2.4, "lobby stair clear width");
-assert.equal(lobbyStair.treadCount, 26);
+assertNear(lobbyStair.clearWidth, 2, "lobby stair clear width");
+assert.equal(lobbyStair.treadCount, 38);
 assert.ok(lobbyStair.stepRise <= 0.22, "Lobby stair risers must remain walkable.");
+assertNear(lobbyStair.treadThickness, 0.12, "thin open treads");
+assert.equal(lobbyStair.openUnderside, true);
 assert.equal(lobbyStair.bottomLanding.zMax, lobbyStair.flightBounds.zMin, "Stair bottom landing/flight seam");
 assert.equal(lobbyStair.flightBounds.zMax, lobbyStair.topLanding.zMin, "Stair flight/top landing seam");
-assert.equal(lobbyStair.solidLobbyWall.zMax, lobbyStair.exposedRailing.zMin, "The short privacy wall must hand off directly to the open railing.");
+assertNear(lobbyStair.topLanding.xMax - lobbyStair.topLanding.xMin, 2, "square landing width");
+assertNear(lobbyStair.topLanding.zMax - lobbyStair.topLanding.zMin, 2, "square landing depth");
+assertNear(lobbyStair.lowNookWall.height, 4.2, "low nook wall");
+assertNear(lobbyStair.lowNookWall.longLeg.zMax, lobbyStair.topLanding.zMin, "low wall reaches landing return");
+assertNear(lobbyStair.lowNookWall.returnLeg.xMax, LOBBY_PLAN.envelope.xMax, "L return reaches east wall");
 assert.equal(lobbyStair.exposedRailing.zMax, lobbyStair.bounds.zMax, "The open railing must continue to the upstairs doorway.");
 const lobbyStairCenterX = (lobbyStair.bounds.xMin + lobbyStair.bounds.xMax) / 2;
 assertNear(
@@ -1067,7 +1098,7 @@ let previousStairHeight = lobbyStair.bottomY;
 for (let index = 0; index < lobbyStair.treadCount; index += 1) {
   const z = lobbyStair.flightBounds.zMin + (index + 0.5) * lobbyStair.treadDepth;
   const expectedHeight = (index + 1) * lobbyStair.stepRise;
-  const actualHeight = world.groundHeight(planToWorldX(lobbyStairCenterX), z, expectedHeight);
+  const actualHeight = world.groundHeight(planToWorldX(lobbyStairCenterX), z, previousStairHeight);
   assertNear(actualHeight, expectedHeight, `lobby stair tread ${index + 1} sampler`);
   assert.ok(actualHeight > previousStairHeight, `lobby stair tread ${index + 1} must rise monotonically.`);
   previousStairHeight = actualHeight;
@@ -1077,15 +1108,65 @@ assertNear(
   lobbyStair.topY,
   "lobby stair top landing sampler",
 );
+const stairCollisionWorld = new AABBCollisionWorld({ bounds: world.worldBounds });
+stairCollisionWorld.addBoxes(world.colliders);
+const stairWalker = new THREE.Vector3(planToWorldX(lobbyStairCenterX), 0, lobbyStair.bounds.zMin - 0.5);
+const stairWalkTargetZ = (lobbyStair.topLanding.zMin + lobbyStair.topLanding.zMax) / 2;
+let stairWalkIterations = 0;
+while (stairWalker.z < stairWalkTargetZ && stairWalkIterations < 1000) {
+  const oldZ = stairWalker.z;
+  const collision = stairCollisionWorld.moveCircle(
+    stairWalker,
+    0,
+    0.04,
+    PLAYER_RADIUS,
+    stairWalker.y,
+    PLAYER_HEIGHT,
+  );
+  const blockingIds = collision.collidedZ
+    ? stairCollisionWorld.colliders.filter((collider) => (
+      stairWalker.y + PLAYER_HEIGHT > collider.minY + GEOMETRY_EPSILON
+      && stairWalker.y < collider.maxY - GEOMETRY_EPSILON
+      && stairWalker.x >= collider.minX - PLAYER_RADIUS
+      && stairWalker.x <= collider.maxX + PLAYER_RADIUS
+      && stairWalker.z >= collider.minZ - PLAYER_RADIUS
+      && stairWalker.z <= collider.maxZ + PLAYER_RADIUS
+    )).map(({ id }) => id)
+    : [];
+  assert.equal(collision.collidedZ, false, `stair ascent blocked at z=${oldZ.toFixed(3)} by ${blockingIds.join(", ")}`);
+  assert.ok(stairWalker.z > oldZ, `stair ascent must advance at z=${oldZ.toFixed(3)}`);
+  const sampledHeight = world.groundHeight(stairWalker.x, stairWalker.z, stairWalker.y);
+  assert.ok(sampledHeight <= stairWalker.y + 0.34 + GEOMETRY_EPSILON, "stair ascent may not exceed the player's step height");
+  stairWalker.y = sampledHeight;
+  stairWalkIterations += 1;
+}
+assert.ok(stairWalkIterations < 1000, "stair ascent must reach the landing without stalling");
+assert.ok(stairWalker.z >= stairWalkTargetZ, "stair ascent must enter the square top landing");
+assertNear(stairWalker.y, lobbyStair.topY, "stair ascent must finish at the landing elevation");
+const landingCenterZ = (lobbyStair.topLanding.zMin + lobbyStair.topLanding.zMax) / 2;
+assertNear(world.groundHeight(planToWorldX(lobbyStairCenterX), landingCenterZ, 0), 0, "main floor remains selectable under landing");
+assertNear(world.groundHeight(planToWorldX(lobbyStairCenterX), landingCenterZ, 8), 8, "upper landing remains selectable at landing height");
+assertNear(world.ceilingHeight(planToWorldX(lobbyStairCenterX), landingCenterZ, 0), 7.89, "landing underside caps the lower nook");
+assertNear(world.ceilingHeight(planToWorldX(lobbyStairCenterX), landingCenterZ, 8), lobbyStair.landingMechanicalUnderside, "upper landing samples its raised mechanical underside");
+const underFlightIndex = 12;
+const underFlightZ = lobbyStair.flightBounds.zMin + (underFlightIndex + 0.5) * lobbyStair.treadDepth;
+assertNear(world.groundHeight(planToWorldX(lobbyStairCenterX), underFlightZ, 0), 0, "main floor remains selectable beneath the open flight");
+assertNear(
+  world.ceilingHeight(planToWorldX(lobbyStairCenterX), underFlightZ, 0),
+  (underFlightIndex + 1) * lobbyStair.stepRise - lobbyStair.treadThickness,
+  "thin tread underside caps the stacked under-flight volume",
+);
 assert.deepEqual(
   world.colliders.filter(({ id }) => id === "future-stair-construction-wall" || id.startsWith("future-stair-south-cap-")).map(({ id }) => id),
   [],
   "The former construction wall and full-width south cap must not block the real stair.",
 );
 assert.ok(
-  world.colliders.filter(({ id }) => /^lobby-stair-(?:west|east)-rail-/.test(id)).length >= 2,
-  "Both open stair edges need physical guard rails.",
+  world.colliders.filter(({ id }) => /^lobby-stair-west-rail-guard-/.test(id)).length >= 2,
+  "The west open stair edge needs physical guard rails.",
 );
+assert.equal(world.colliders.filter(({ id }) => /^lobby-stair-east-rail-/.test(id)).length, 0, "The east wall replaces the obsolete east guard.");
+assert.equal(world.colliders.some(({ id }) => id === "lobby-stair-landing-south-rail-guard"), false, "No cross-rail may block the flight/landing seam.");
 const raisedDoorCollider = world.colliders.find(({ id }) => id === "lobby-stair-upper-door-closed-leaf");
 assert.ok(raisedDoorCollider, "The upstairs landing needs its closed door.");
 assertNear(raisedDoorCollider.minY, lobbyStair.upperDoor.baseY, "upstairs door collider sill");
@@ -1097,12 +1178,14 @@ assert.deepEqual(LOBBY_PLAN.barScreen.slideIds, ["island-grill", "garlic-fries-f
 assertNear(LOBBY_PLAN.oppositeLobbyMural.width, 16.4, "opposite lobby mural width");
 assertNear(LOBBY_PLAN.oppositeLobbyMural.height, 4.3, "opposite lobby mural height");
 assert.equal(LOBBY_PLAN.oppositeLobbyMural.distinctFrom, "concession-botanical-mural", "The stair/kiosk mural must remain distinct from the concession mural.");
+assert.equal(LOBBY_PLAN.oppositeLobbyMural.grayFills.length, 2, "The second mural must retain two gray side fills.");
+assertNear(LOBBY_PLAN.oppositeLobbyMural.grayFills[0].width, LOBBY_PLAN.oppositeLobbyMural.grayFills[1].width, "second mural symmetric trim");
 assert.deepEqual(
   LOBBY_PLAN.boxOfficeSightline.bounds,
-  { xMin: 9.559999999999999, xMax: 10.659999999999998, zMin: 11.9, zMax: 55.5 },
+  { xMin: 9.959999999999999, xMax: 11.059999999999999, zMin: 11.9, zMax: 55.5 },
   "The compact cubby must preserve a straight sightline to the ticket hall.",
 );
-assertNear(LOBBY_PLAN.boxOfficeSightline.axisX, 10.11, "box-office/ticket-hall sightline axis");
+assertNear(LOBBY_PLAN.boxOfficeSightline.axisX, 10.51, "box-office/ticket-hall sightline axis");
 for (const z of [12.6, 20.6, 22.3, 38.5, 54.6]) {
   assertOpenPlanPoint(`box-office sightline z=${z}`, LOBBY_PLAN.boxOfficeSightline.axisX, z);
   navigationTargets.push({ id: `box-office-sightline-${z}`, x: LOBBY_PLAN.boxOfficeSightline.axisX, z });
@@ -1334,14 +1417,27 @@ assert.deepEqual(muralFacade.soffit.vertices, [
 ], "The soffit must be the simple clipped gap between the long facade and rear kitchen wall.");
 
 const overhead = LOBBY_PLAN.overheadMechanicals;
-assert.equal(overhead.ducts.length, 6, "Six large ducts must span the exposed mural volume.");
-assert.equal(overhead.pipes.length, 18, "Eighteen substantial pipe runs must span the exposed mural volume.");
+assert.equal(overhead.ducts.length, 10, "Ten large ducts must span the complete lobby ceiling.");
+assert.equal(overhead.pipes.length, 26, "Twenty-six substantial pipe runs must span the complete lobby ceiling.");
+assert.equal(overhead.ducts.filter(({ preservedRoute }) => preservedRoute).length, 6, "Original six duct routes remain.");
+assert.equal(overhead.pipes.filter(({ preservedRoute }) => preservedRoute).length, 18, "Original eighteen pipe routes remain.");
 assert.ok(overhead.minClearanceY > muralFacade.topY, "All exposed mechanicals must remain above the mural.");
 const overheadPoints = [...overhead.ducts, ...overhead.pipes].flatMap(({ start, end }) => [start, end]);
-assertNear(Math.min(...overheadPoints.map(({ x }) => x)), overhead.coverageBounds.xMin, "overhead west extent");
-assertNear(Math.max(...overheadPoints.map(({ x }) => x)), overhead.coverageBounds.xMax, "overhead east extent");
-assertNear(Math.min(...overheadPoints.map(({ z }) => z)), overhead.coverageBounds.zMin, "overhead south extent");
-assertNear(Math.max(...overheadPoints.map(({ z }) => z)), overhead.coverageBounds.zMax, "overhead north extent");
+assert.deepEqual(overhead.coverageBounds, { xMin: -28.7, xMax: 15.11, zMin: -2.5, zMax: 21.5 });
+assert.ok(Math.min(...overheadPoints.map(({ x }) => x)) <= overhead.coverageBounds.xMin + 1.1, "overhead west-edge coverage");
+assert.ok(Math.max(...overheadPoints.map(({ x }) => x)) >= overhead.coverageBounds.xMax - 0.7, "overhead east-edge coverage");
+assert.ok(Math.min(...overheadPoints.map(({ z }) => z)) <= overhead.coverageBounds.zMin + 1.1, "overhead front-edge coverage");
+assert.ok(Math.max(...overheadPoints.map(({ z }) => z)) >= overhead.coverageBounds.zMax - 0.5, "overhead rear-edge coverage");
+const lowestMechanical = Math.min(
+  ...overhead.ducts.map(({ y, height }) => y - height / 2),
+  ...overhead.pipes.map(({ start, end, radius }) => Math.min(start.y, end.y) - radius),
+);
+const highestMechanical = Math.max(
+  ...overhead.ducts.map(({ y, height }) => y + height / 2),
+  ...overhead.pipes.map(({ start, end, radius }) => Math.max(start.y, end.y) + radius),
+);
+assert.ok(lowestMechanical > Math.max(muralFacade.topY, LOBBY_PLAN.barScreen.topY), "physical mechanical clearance over screen/murals");
+assert.ok(highestMechanical < LOBBY_CEILING_PLAN.highHeight - 0.05, "physical mechanical clearance below roof");
 
 const unreachableTargets = navigationTargets.filter(({ x, z }) => !isReachable(x, z));
 assert.deepEqual(
@@ -1425,5 +1521,5 @@ world.dispose();
 materials.dispose();
 
 console.log(
-  `Navigation smoke valid: 14 bowls + ${navigationTargets.length - 14} V15 route targets reachable under rendered floors/ceilings · narrow stair samples rise continuously · recessed men's aisle open · T1/T2 rigid shift preserved · V14 kitchen/mural regressions retained · geometry overlap-free.`,
+  `Navigation smoke valid: 14 bowls + ${navigationTargets.length - 14} V16 route targets reachable under rendered floors/ceilings · paired vestibule + narrowed lobby containment · stacked open stair/landing samples · full lowered mechanical ceiling · geometry overlap-free.`,
 );

@@ -6,7 +6,15 @@ A first-person, browser-based layout prototype for a multiplayer movie-theater s
 
 This is a spatial prototype—not an official measured architectural plan. It is unaffiliated with Consolidated Theatres.
 
-## What is in v0.15
+## What is in v0.16
+
+- A source-matched front entrance with three compact vestibule banks, each using back-to-back outer and inner double doors, followed by a structural divider pillar and two large fixed window bays rather than doors spanning the full lobby
+- The lobby's east wall pulled flush to the stair, eliminating the unused side gap while retaining the compact three-kiosk and box-office arrangement
+- The existing exposed pipe/duct composition preserved in plan and extended across the full lobby, with the roof lowered to `10.8 m` so the lowest mechanicals hover roughly one to two feet above the two `8.9 m` display/mural tops
+- A rebuilt open-underneath 2-meter stair beginning at the box-office return, climbing on thin walkable treads to an 8-meter-high square landing and upper door, with a low white L-shaped wall and accessible nook below the landing
+- Equal gray side fields added to the distinct stair-side mural, with no top/bottom trim and no changes to the concession mural across the lobby
+
+## Preserved from v0.15
 
 - A wall-mounted `7.3 × 4.3 m` digital menu screen above the bar, with four original food-and-menu slides rotating every 10 seconds
 - A real 2.4-meter-wide lobby stair replacing the oversized construction placeholder: a short privacy wall gives way to an open railing, and the flight reaches an elevated top doorway
