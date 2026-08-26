@@ -17,6 +17,10 @@ const rect = (xMin, xMax, zMin, zMax) => ({ xMin, xMax, zMin, zMax });
 // V15 keeps that concession/mural geometry fixed while adding the opposite
 // lobby artwork, a rotating bar display, a real narrow lobby stair, recessed
 // men's stalls, and one rigid ticket-ward translation of Theaters 1 and 2.
+// V16 resolves the photographed three-bank entrance vestibule, closes the
+// east side of the lobby onto the stair, lowers and extends the exposed
+// mechanical ceiling, and rebuilds the stair as an open flight with a square
+// landing and a low L-shaped nook wall.
 export const FRONT_SHIFT_Z = -2.5;
 export const LOBBY_SHIFT_X = 8.3;
 export const T12_TICKET_SHIFT_X = 1;
@@ -31,22 +35,23 @@ const shiftedLobbyRect = (xMin, xMax, zMin, zMax) => rect(
 );
 
 const LOBBY_ENVELOPE_WEST_X = shiftedLobbyX(-37);
-const LOBBY_EAST_X = 19.81;
 const FRONT_WALK_WEST_X = shiftedLobbyX(-27);
-const FRONT_WALK_EAST_X = LOBBY_EAST_X + 6;
 const TICKET_APPROACH_EAST_X = 12.1;
-const STAIR_APPROACH_REVEAL = 0.61;
-const STAIR_WEST_X = TICKET_APPROACH_EAST_X + STAIR_APPROACH_REVEAL;
-const STAIR_CLEAR_WIDTH = 2.4;
-const STAIR_EAST_X = STAIR_WEST_X + STAIR_CLEAR_WIDTH;
+const STAIR_CLEAR_WIDTH = 2;
+const STAIR_EAST_X = 15.11;
+const STAIR_WEST_X = STAIR_EAST_X - STAIR_CLEAR_WIDTH;
+const STAIR_APPROACH_REVEAL = STAIR_WEST_X - TICKET_APPROACH_EAST_X;
+const LOBBY_EAST_X = STAIR_EAST_X;
+const FRONT_WALK_EAST_X = LOBBY_EAST_X + 6;
 const STAIR_SOUTH_Z = 5.1;
 const LOBBY_BACK_Z = shiftedZ(24);
 const STAIR_BOTTOM_Y = 0;
-const STAIR_TOP_Y = 4.6;
-const STAIR_BOTTOM_LANDING_Z_MAX = STAIR_SOUTH_Z + 1;
-const STAIR_TOP_LANDING_Z_MIN = LOBBY_BACK_Z - 1.5;
-const STAIR_TREAD_COUNT = 26;
-const STAIR_SOLID_WALL_END_Z = 11.4;
+const STAIR_TOP_Y = 8;
+const STAIR_BOTTOM_LANDING_Z_MAX = STAIR_SOUTH_Z;
+const STAIR_TOP_LANDING_Z_MIN = LOBBY_BACK_Z - STAIR_CLEAR_WIDTH;
+const STAIR_TREAD_COUNT = 38;
+const STAIR_LOW_WALL_HEIGHT = 4.2;
+const STAIR_LANDING_MECHANICAL_UNDERSIDE = 9.88;
 const BOX_OFFICE_RETURN_LENGTH = (shiftedLobbyX(15.5) - shiftedLobbyX(9.2)) / 2;
 const BOX_OFFICE_RETURN_DEPTH = 0.7;
 const BOX_OFFICE_RETURN_X_MAX = STAIR_WEST_X;
@@ -64,8 +69,8 @@ const FOUNTAIN_ISLAND_HALF_DEPTH = (64.31 - 62.89) / 2;
 
 export const LOBBY_CEILING_PLAN = Object.freeze({
   baseHeight: 4.6,
-  multiplier: 3,
-  highHeight: 13.8,
+  multiplier: 10.8 / 4.6,
+  highHeight: 10.8,
   // Only the stone-floor front lobby rises into the exposed-volume ceiling.
   // The ticket approach, main hall, and fountain / T3-5 court all share the
   // retained 4.6 m ceiling datum.
@@ -504,6 +509,41 @@ const BAR_SCREEN_TOP_Y = BAR_SCREEN_BOTTOM_Y + MURAL_ARTWORK_HEIGHT;
 // plain gray field. Its plan break therefore follows the stair footprint.
 const OPPOSITE_MURAL_Z_MIN = STAIR_SOUTH_Z;
 const OPPOSITE_MURAL_Z_MAX = LOBBY_BACK_Z;
+const OPPOSITE_MURAL_SURROUND_WIDTH = OPPOSITE_MURAL_Z_MAX - OPPOSITE_MURAL_Z_MIN;
+// Match the side-field width already established around the concession mural.
+const OPPOSITE_MURAL_GRAY_FIELD_WIDTH = 4.263456541711799;
+const OPPOSITE_MURAL_ARTWORK_WIDTH = OPPOSITE_MURAL_SURROUND_WIDTH
+  - OPPOSITE_MURAL_GRAY_FIELD_WIDTH * 2;
+const OPPOSITE_MURAL_GRAY_FILL_WIDTH = (
+  OPPOSITE_MURAL_SURROUND_WIDTH - OPPOSITE_MURAL_ARTWORK_WIDTH
+) / 2;
+const OPPOSITE_MURAL_ARTWORK_Z_MIN = OPPOSITE_MURAL_Z_MIN + OPPOSITE_MURAL_GRAY_FILL_WIDTH;
+const OPPOSITE_MURAL_ARTWORK_Z_MAX = OPPOSITE_MURAL_Z_MAX - OPPOSITE_MURAL_GRAY_FILL_WIDTH;
+
+// The photographed frontage is three compact vestibule bays anchored to the
+// physical-right end of the public lobby. Plan X is reflected at render time,
+// so that physical-right anchor is the low-X edge here. Each bank has a
+// matching outer and inner double-door plane; a structural pillar ends the
+// door group and two large fixed windows continue toward physical-left.
+const FRONT_ENTRANCE_OUTER_Z = shiftedZ(0);
+const FRONT_ENTRANCE_INNER_Z = FRONT_ENTRANCE_OUTER_Z + 1.8;
+const FRONT_ENTRANCE_DOOR_WIDTH = 2.8;
+const FRONT_ENTRANCE_BANKS = Object.freeze([
+  Object.freeze({ id: "entrance-bank-1", center: -14.35 }),
+  Object.freeze({ id: "entrance-bank-2", center: -11.2 }),
+  Object.freeze({ id: "entrance-bank-3", center: -8.05 }),
+]);
+const FRONT_ENTRANCE_BANK_X_MIN = FRONT_ENTRANCE_BANKS[0].center - FRONT_ENTRANCE_DOOR_WIDTH / 2;
+const FRONT_ENTRANCE_BANK_X_MAX = FRONT_ENTRANCE_BANKS.at(-1).center + FRONT_ENTRANCE_DOOR_WIDTH / 2;
+const FRONT_ENTRANCE_PILLAR = Object.freeze({
+  id: "front-entrance-window-divider-pillar",
+  xMin: -6.55,
+  xMax: -5.65,
+});
+const FRONT_ENTRANCE_WINDOWS = Object.freeze([
+  Object.freeze({ id: "front-window-1", xMin: -5.45, xMax: 0.15 }),
+  Object.freeze({ id: "front-window-2", xMin: 0.55, xMax: 6.15 }),
+]);
 // The pink plan line is literal: the facade begins immediately below / to the
 // plan-left of the kitchen service door (partition p7) and terminates at the
 // southwest start of the isolated back-bar table.
@@ -625,37 +665,68 @@ const OFFICE_DOOR_WALL_END = Object.freeze({
 const mechanicalPoint = (x, y, z) => Object.freeze({ x, y, z });
 const mechanicalPlanPoint = (x, z) => Object.freeze({ x, z });
 const OVERHEAD_DUCTS = Object.freeze([
-  Object.freeze({ id: "lobby-overhead-duct-main-diagonal", start: mechanicalPlanPoint(-25.5, 6), end: mechanicalPlanPoint(1.5, 18), y: 12.4, width: 1.05, height: 0.8, materialKey: "hvacDuct" }),
-  Object.freeze({ id: "lobby-overhead-duct-rear-header", start: mechanicalPlanPoint(-24, 20.4), end: mechanicalPlanPoint(5, 20.4), y: 11.7, width: 0.9, height: 0.7, materialKey: "hvacDuct" }),
-  Object.freeze({ id: "lobby-overhead-duct-west-cross", start: mechanicalPlanPoint(-22, 1.2), end: mechanicalPlanPoint(-22, 21), y: 10.9, width: 0.7, height: 0.65, materialKey: "hvacDuct" }),
-  Object.freeze({ id: "lobby-overhead-duct-center-cross", start: mechanicalPlanPoint(-14.5, 0.5), end: mechanicalPlanPoint(-14.5, 21), y: 12.7, width: 0.65, height: 0.55, materialKey: "hvacDuct" }),
-  Object.freeze({ id: "lobby-overhead-duct-mural-diagonal", start: mechanicalPlanPoint(-18.5, 2), end: mechanicalPlanPoint(-6.3, 21), y: 11.25, width: 0.78, height: 0.62, materialKey: "hvacDuct" }),
-  Object.freeze({ id: "lobby-overhead-duct-east-branch", start: mechanicalPlanPoint(-8, -1), end: mechanicalPlanPoint(4, 16), y: 12, width: 0.6, height: 0.5, materialKey: "hvacDuct" }),
+  // Preserve V14/V15's authored XZ routes and finishes; V16 only compresses
+  // their elevations below the lower roof and supplements the uncovered east
+  // bay with matching runs.
+  Object.freeze({ id: "lobby-overhead-duct-main-diagonal", start: mechanicalPlanPoint(-25.5, 6), end: mechanicalPlanPoint(1.5, 18), y: 9.92, width: 1.05, height: 0.8, materialKey: "hvacDuct", preservedRoute: true }),
+  Object.freeze({ id: "lobby-overhead-duct-rear-header", start: mechanicalPlanPoint(-24, 20.4), end: mechanicalPlanPoint(5, 20.4), y: 9.92, width: 0.9, height: 0.7, materialKey: "hvacDuct", preservedRoute: true }),
+  Object.freeze({ id: "lobby-overhead-duct-west-cross", start: mechanicalPlanPoint(-22, 1.2), end: mechanicalPlanPoint(-22, 21), y: 9.8, width: 0.7, height: 0.65, materialKey: "hvacDuct", preservedRoute: true }),
+  Object.freeze({ id: "lobby-overhead-duct-center-cross", start: mechanicalPlanPoint(-14.5, 0.5), end: mechanicalPlanPoint(-14.5, 21), y: 10.05, width: 0.65, height: 0.55, materialKey: "hvacDuct", preservedRoute: true }),
+  Object.freeze({ id: "lobby-overhead-duct-mural-diagonal", start: mechanicalPlanPoint(-18.5, 2), end: mechanicalPlanPoint(-6.3, 21), y: 9.78, width: 0.78, height: 0.62, materialKey: "hvacDuct", preservedRoute: true }),
+  Object.freeze({ id: "lobby-overhead-duct-east-branch", start: mechanicalPlanPoint(-8, -1), end: mechanicalPlanPoint(4, 16), y: 9.95, width: 0.6, height: 0.5, materialKey: "hvacDuct", preservedRoute: true }),
+  Object.freeze({ id: "lobby-overhead-duct-full-front-header", start: mechanicalPlanPoint(-27.7, 0), end: mechanicalPlanPoint(14.25, 0), y: 9.88, width: 0.72, height: 0.62, materialKey: "hvacDuct" }),
+  Object.freeze({ id: "lobby-overhead-duct-east-longitudinal", start: mechanicalPlanPoint(8.9, -1.4), end: mechanicalPlanPoint(8.9, 20.8), y: 10.02, width: 0.68, height: 0.56, materialKey: "hvacDuct" }),
+  Object.freeze({ id: "lobby-overhead-duct-far-east-longitudinal", start: mechanicalPlanPoint(13.65, -0.8), end: mechanicalPlanPoint(13.65, 20.6), y: 10.15, width: 0.62, height: 0.54, materialKey: "hvacDuct" }),
+  Object.freeze({ id: "lobby-overhead-duct-east-diagonal", start: mechanicalPlanPoint(1.5, -1), end: mechanicalPlanPoint(13.2, 18.8), y: 9.94, width: 0.58, height: 0.48, materialKey: "hvacDuct" }),
 ]);
 const OVERHEAD_PIPES = Object.freeze([
-  Object.freeze({ id: "lobby-overhead-pipe-diagonal-1", start: mechanicalPoint(-27, 12.9, 3), end: mechanicalPoint(-5, 12.9, 21), radius: 0.14, materialKey: "utilityPipe" }),
-  Object.freeze({ id: "lobby-overhead-pipe-diagonal-2", start: mechanicalPoint(-24, 11.8, 2), end: mechanicalPoint(-2, 11.8, 20), radius: 0.12, materialKey: "black" }),
-  Object.freeze({ id: "lobby-overhead-pipe-diagonal-3", start: mechanicalPoint(-20, 10.4, 0), end: mechanicalPoint(1, 10.4, 17.5), radius: 0.1, materialKey: "utilityPipe" }),
-  Object.freeze({ id: "lobby-overhead-pipe-diagonal-4", start: mechanicalPoint(-17, 13.1, -1), end: mechanicalPoint(4, 13.1, 16), radius: 0.09, materialKey: "black" }),
-  Object.freeze({ id: "lobby-overhead-pipe-header-1", start: mechanicalPoint(-27, 10.2, 6), end: mechanicalPoint(3, 10.2, 6), radius: 0.12, materialKey: "black" }),
-  Object.freeze({ id: "lobby-overhead-pipe-header-2", start: mechanicalPoint(-26, 11.4, 9.2), end: mechanicalPoint(4, 11.4, 9.2), radius: 0.1, materialKey: "utilityPipe" }),
-  Object.freeze({ id: "lobby-overhead-pipe-header-3", start: mechanicalPoint(-25, 12.1, 12.4), end: mechanicalPoint(5, 12.1, 12.4), radius: 0.12, materialKey: "black" }),
-  Object.freeze({ id: "lobby-overhead-pipe-header-4", start: mechanicalPoint(-24, 10.8, 15.6), end: mechanicalPoint(5, 10.8, 15.6), radius: 0.11, materialKey: "utilityPipe" }),
-  Object.freeze({ id: "lobby-overhead-pipe-header-5", start: mechanicalPoint(-22, 12.9, 18.8), end: mechanicalPoint(4, 12.9, 18.8), radius: 0.13, materialKey: "black" }),
-  Object.freeze({ id: "lobby-overhead-pipe-cross-1", start: mechanicalPoint(-24, 13.2, 0.5), end: mechanicalPoint(-24, 13.2, 21), radius: 0.08, materialKey: "utilityPipe" }),
-  Object.freeze({ id: "lobby-overhead-pipe-cross-2", start: mechanicalPoint(-19, 11.1, -1), end: mechanicalPoint(-19, 11.1, 21), radius: 0.1, materialKey: "black" }),
-  Object.freeze({ id: "lobby-overhead-pipe-cross-3", start: mechanicalPoint(-11, 12.55, -1), end: mechanicalPoint(-11, 12.55, 21), radius: 0.09, materialKey: "utilityPipe" }),
-  Object.freeze({ id: "lobby-overhead-pipe-cross-4", start: mechanicalPoint(-4, 10.4, 1), end: mechanicalPoint(-4, 10.4, 20), radius: 0.11, materialKey: "black" }),
-  Object.freeze({ id: "lobby-overhead-pipe-branch-1", start: mechanicalPoint(-16, 9.8, 5), end: mechanicalPoint(-8, 9.8, 5), radius: 0.1, materialKey: "utilityPipe" }),
-  Object.freeze({ id: "lobby-overhead-pipe-branch-2", start: mechanicalPoint(-18, 9.9, 17), end: mechanicalPoint(-8, 9.9, 17), radius: 0.1, materialKey: "black" }),
-  Object.freeze({ id: "lobby-overhead-pipe-branch-3", start: mechanicalPoint(-9, 11, 8), end: mechanicalPoint(2, 11, 8), radius: 0.09, materialKey: "utilityPipe" }),
-  Object.freeze({ id: "lobby-overhead-pipe-riser-west", start: mechanicalPoint(-23, 9.4, 4), end: mechanicalPoint(-23, 12.8, 4), radius: 0.14, materialKey: "black" }),
-  Object.freeze({ id: "lobby-overhead-pipe-riser-east", start: mechanicalPoint(-6, 9.6, 19), end: mechanicalPoint(-6, 12.5, 19), radius: 0.12, materialKey: "utilityPipe" }),
+  Object.freeze({ id: "lobby-overhead-pipe-diagonal-1", start: mechanicalPoint(-27, 10.24, 3), end: mechanicalPoint(-5, 10.24, 21), radius: 0.14, materialKey: "utilityPipe", preservedRoute: true }),
+  Object.freeze({ id: "lobby-overhead-pipe-diagonal-2", start: mechanicalPoint(-24, 9.92, 2), end: mechanicalPoint(-2, 9.92, 20), radius: 0.12, materialKey: "black", preservedRoute: true }),
+  Object.freeze({ id: "lobby-overhead-pipe-diagonal-3", start: mechanicalPoint(-20, 9.55, 0), end: mechanicalPoint(1, 9.55, 17.5), radius: 0.1, materialKey: "utilityPipe", preservedRoute: true }),
+  Object.freeze({ id: "lobby-overhead-pipe-diagonal-4", start: mechanicalPoint(-17, 10.28, -1), end: mechanicalPoint(4, 10.28, 16), radius: 0.09, materialKey: "black", preservedRoute: true }),
+  Object.freeze({ id: "lobby-overhead-pipe-header-1", start: mechanicalPoint(-27, 9.48, 6), end: mechanicalPoint(3, 9.48, 6), radius: 0.12, materialKey: "black", preservedRoute: true }),
+  Object.freeze({ id: "lobby-overhead-pipe-header-2", start: mechanicalPoint(-26, 9.76, 9.2), end: mechanicalPoint(4, 9.76, 9.2), radius: 0.1, materialKey: "utilityPipe", preservedRoute: true }),
+  Object.freeze({ id: "lobby-overhead-pipe-header-3", start: mechanicalPoint(-25, 10.02, 12.4), end: mechanicalPoint(5, 10.02, 12.4), radius: 0.12, materialKey: "black", preservedRoute: true }),
+  Object.freeze({ id: "lobby-overhead-pipe-header-4", start: mechanicalPoint(-24, 9.62, 15.6), end: mechanicalPoint(5, 9.62, 15.6), radius: 0.11, materialKey: "utilityPipe", preservedRoute: true }),
+  Object.freeze({ id: "lobby-overhead-pipe-header-5", start: mechanicalPoint(-22, 10.2, 18.8), end: mechanicalPoint(4, 10.2, 18.8), radius: 0.13, materialKey: "black", preservedRoute: true }),
+  Object.freeze({ id: "lobby-overhead-pipe-cross-1", start: mechanicalPoint(-24, 10.3, 0.5), end: mechanicalPoint(-24, 10.3, 21), radius: 0.08, materialKey: "utilityPipe", preservedRoute: true }),
+  Object.freeze({ id: "lobby-overhead-pipe-cross-2", start: mechanicalPoint(-19, 9.7, -1), end: mechanicalPoint(-19, 9.7, 21), radius: 0.1, materialKey: "black", preservedRoute: true }),
+  Object.freeze({ id: "lobby-overhead-pipe-cross-3", start: mechanicalPoint(-11, 10.12, -1), end: mechanicalPoint(-11, 10.12, 21), radius: 0.09, materialKey: "utilityPipe", preservedRoute: true }),
+  Object.freeze({ id: "lobby-overhead-pipe-cross-4", start: mechanicalPoint(-4, 9.55, 1), end: mechanicalPoint(-4, 9.55, 20), radius: 0.11, materialKey: "black", preservedRoute: true }),
+  Object.freeze({ id: "lobby-overhead-pipe-branch-1", start: mechanicalPoint(-16, 9.45, 5), end: mechanicalPoint(-8, 9.45, 5), radius: 0.1, materialKey: "utilityPipe", preservedRoute: true }),
+  Object.freeze({ id: "lobby-overhead-pipe-branch-2", start: mechanicalPoint(-18, 9.5, 17), end: mechanicalPoint(-8, 9.5, 17), radius: 0.1, materialKey: "black", preservedRoute: true }),
+  Object.freeze({ id: "lobby-overhead-pipe-branch-3", start: mechanicalPoint(-9, 9.68, 8), end: mechanicalPoint(2, 9.68, 8), radius: 0.09, materialKey: "utilityPipe", preservedRoute: true }),
+  Object.freeze({ id: "lobby-overhead-pipe-riser-west", start: mechanicalPoint(-23, 9.35, 4), end: mechanicalPoint(-23, 10.25, 4), radius: 0.14, materialKey: "black", preservedRoute: true }),
+  Object.freeze({ id: "lobby-overhead-pipe-riser-east", start: mechanicalPoint(-6, 9.38, 19), end: mechanicalPoint(-6, 10.22, 19), radius: 0.12, materialKey: "utilityPipe", preservedRoute: true }),
+  Object.freeze({ id: "lobby-overhead-pipe-east-header-front", start: mechanicalPoint(4, 9.52, 3.2), end: mechanicalPoint(14.45, 9.52, 3.2), radius: 0.11, materialKey: "black" }),
+  Object.freeze({ id: "lobby-overhead-pipe-east-header-middle", start: mechanicalPoint(4, 9.82, 9.2), end: mechanicalPoint(14.45, 9.82, 9.2), radius: 0.1, materialKey: "utilityPipe" }),
+  Object.freeze({ id: "lobby-overhead-pipe-east-header-rear", start: mechanicalPoint(5, 10.08, 15.6), end: mechanicalPoint(14.45, 10.08, 15.6), radius: 0.11, materialKey: "black" }),
+  Object.freeze({ id: "lobby-overhead-pipe-east-header-back", start: mechanicalPoint(4, 10.05, 20.2), end: mechanicalPoint(14.45, 10.05, 20.2), radius: 0.1, materialKey: "utilityPipe" }),
+  Object.freeze({ id: "lobby-overhead-pipe-east-cross", start: mechanicalPoint(8, 9.46, -1.4), end: mechanicalPoint(8, 9.46, 21), radius: 0.1, materialKey: "black" }),
+  Object.freeze({ id: "lobby-overhead-pipe-far-east-cross", start: mechanicalPoint(13.3, 10.05, -1), end: mechanicalPoint(13.3, 10.05, 20.8), radius: 0.11, materialKey: "utilityPipe" }),
+  Object.freeze({ id: "lobby-overhead-pipe-east-diagonal", start: mechanicalPoint(1, 10.18, -1), end: mechanicalPoint(14, 10.18, 20.8), radius: 0.09, materialKey: "black" }),
+  Object.freeze({ id: "lobby-overhead-pipe-full-front", start: mechanicalPoint(-27.7, 9.58, -1.2), end: mechanicalPoint(14.45, 9.58, -1.2), radius: 0.1, materialKey: "utilityPipe" }),
 ]);
 
 export const LOBBY_PLAN = Object.freeze({
   envelope: rect(LOBBY_ENVELOPE_WEST_X, LOBBY_EAST_X, shiftedZ(0), LOBBY_BACK_Z),
-  frontDoorCenters: [shiftedLobbyX(-10.8), shiftedLobbyX(-2.2), shiftedLobbyX(8.7)],
+  frontEntrance: Object.freeze({
+    id: "three-bank-front-vestibule",
+    outerZ: FRONT_ENTRANCE_OUTER_Z,
+    innerZ: FRONT_ENTRANCE_INNER_Z,
+    depth: FRONT_ENTRANCE_INNER_Z - FRONT_ENTRANCE_OUTER_Z,
+    doorWidth: FRONT_ENTRANCE_DOOR_WIDTH,
+    doorHeight: 2.6,
+    banks: FRONT_ENTRANCE_BANKS,
+    bankSpan: Object.freeze({ xMin: FRONT_ENTRANCE_BANK_X_MIN, xMax: FRONT_ENTRANCE_BANK_X_MAX }),
+    boundaryPillar: FRONT_ENTRANCE_PILLAR,
+    windows: FRONT_ENTRANCE_WINDOWS,
+    windowSillY: 0.08,
+    windowTopY: 3.25,
+    transomTopY: 3.25,
+    planes: Object.freeze(["outer", "inner"]),
+  }),
+  frontDoorCenters: Object.freeze(FRONT_ENTRANCE_BANKS.map(({ center }) => center)),
   customerCounter: CUSTOMER_COUNTER,
   customerCounterSections: CUSTOMER_COUNTER_SECTIONS,
   concessionRun: CONCESSION_RUN,
@@ -792,20 +863,40 @@ export const LOBBY_PLAN = Object.freeze({
     bottomLanding: rect(STAIR_WEST_X, STAIR_EAST_X, STAIR_SOUTH_Z, STAIR_BOTTOM_LANDING_Z_MAX),
     flightBounds: rect(STAIR_WEST_X, STAIR_EAST_X, STAIR_BOTTOM_LANDING_Z_MAX, STAIR_TOP_LANDING_Z_MIN),
     topLanding: rect(STAIR_WEST_X, STAIR_EAST_X, STAIR_TOP_LANDING_Z_MIN, LOBBY_BACK_Z),
-    solidLobbyWall: Object.freeze({
-      side: "west",
-      x: STAIR_WEST_X,
-      zMin: STAIR_SOUTH_Z,
-      zMax: STAIR_SOLID_WALL_END_Z,
-      height: LOBBY_CEILING_PLAN.baseHeight,
+    treadThickness: 0.12,
+    openUnderside: true,
+    landingMechanicalUnderside: STAIR_LANDING_MECHANICAL_UNDERSIDE,
+    lowNookWall: Object.freeze({
+      height: STAIR_LOW_WALL_HEIGHT,
+      materialKey: "wall",
+      longLeg: Object.freeze({
+        side: "west",
+        x: STAIR_WEST_X,
+        zMin: STAIR_SOUTH_Z,
+        zMax: STAIR_TOP_LANDING_Z_MIN,
+      }),
+      returnLeg: Object.freeze({
+        side: "south",
+        z: STAIR_TOP_LANDING_Z_MIN,
+        xMin: STAIR_WEST_X,
+        xMax: STAIR_EAST_X,
+      }),
+      nookBounds: rect(STAIR_WEST_X, STAIR_EAST_X, STAIR_TOP_LANDING_Z_MIN, LOBBY_BACK_Z),
     }),
     exposedRailing: Object.freeze({
       side: "west",
       x: STAIR_WEST_X,
-      zMin: STAIR_SOLID_WALL_END_Z,
+      zMin: STAIR_SOUTH_Z,
       zMax: LOBBY_BACK_Z,
       height: 1.05,
       postSpacing: 1.35,
+    }),
+    wallHandrail: Object.freeze({
+      side: "east",
+      x: STAIR_EAST_X - 0.11,
+      zMin: STAIR_SOUTH_Z,
+      zMax: STAIR_TOP_LANDING_Z_MIN,
+      height: 0.92,
     }),
     upperDoor: Object.freeze({
       side: "north",
@@ -820,7 +911,9 @@ export const LOBBY_PLAN = Object.freeze({
     id: "future-stair-wall-white",
     side: "west",
     start: Object.freeze({ x: STAIR_WEST_X, z: STAIR_SOUTH_Z }),
-    end: Object.freeze({ x: STAIR_WEST_X, z: STAIR_SOLID_WALL_END_Z }),
+    end: Object.freeze({ x: STAIR_WEST_X, z: STAIR_TOP_LANDING_Z_MIN }),
+    returnEnd: Object.freeze({ x: STAIR_EAST_X, z: STAIR_TOP_LANDING_Z_MIN }),
+    height: STAIR_LOW_WALL_HEIGHT,
     finish: "white",
     materialKey: "wall",
     approachReveal: STAIR_APPROACH_REVEAL,
@@ -831,12 +924,46 @@ export const LOBBY_PLAN = Object.freeze({
     wallX: LOBBY_EAST_X,
     zMin: OPPOSITE_MURAL_Z_MIN,
     zMax: OPPOSITE_MURAL_Z_MAX,
-    width: OPPOSITE_MURAL_Z_MAX - OPPOSITE_MURAL_Z_MIN,
+    width: OPPOSITE_MURAL_SURROUND_WIDTH,
     height: MURAL_ARTWORK_HEIGHT,
     bottomY: MURAL_BOTTOM_Y,
     topY: MURAL_TOP_Y,
     distinctFrom: "concession-botanical-mural",
     composition: "foliage-left-warm-portrait-right",
+    surround: Object.freeze({
+      id: "stair-kiosk-mural-surround",
+      zMin: OPPOSITE_MURAL_Z_MIN,
+      zMax: OPPOSITE_MURAL_Z_MAX,
+      width: OPPOSITE_MURAL_SURROUND_WIDTH,
+      height: MURAL_ARTWORK_HEIGHT,
+      materialKey: "concrete",
+      verticalGrayFill: Object.freeze({ top: 0, bottom: 0 }),
+    }),
+    artwork: Object.freeze({
+      id: "stair-kiosk-botanical-mural",
+      zMin: OPPOSITE_MURAL_ARTWORK_Z_MIN,
+      zMax: OPPOSITE_MURAL_ARTWORK_Z_MAX,
+      width: OPPOSITE_MURAL_ARTWORK_WIDTH,
+      height: MURAL_ARTWORK_HEIGHT,
+    }),
+    grayFills: Object.freeze([
+      Object.freeze({
+        id: "stair-kiosk-mural-gray-fill-south",
+        zMin: OPPOSITE_MURAL_Z_MIN,
+        zMax: OPPOSITE_MURAL_ARTWORK_Z_MIN,
+        width: OPPOSITE_MURAL_GRAY_FILL_WIDTH,
+        height: MURAL_ARTWORK_HEIGHT,
+        materialKey: "concrete",
+      }),
+      Object.freeze({
+        id: "stair-kiosk-mural-gray-fill-north",
+        zMin: OPPOSITE_MURAL_ARTWORK_Z_MAX,
+        zMax: OPPOSITE_MURAL_Z_MAX,
+        width: OPPOSITE_MURAL_GRAY_FILL_WIDTH,
+        height: MURAL_ARTWORK_HEIGHT,
+        materialKey: "concrete",
+      }),
+    ]),
   }),
   boxOfficeVertical: rect(
     BOX_OFFICE_VERTICAL_X_MIN,
@@ -878,9 +1005,9 @@ export const LOBBY_PLAN = Object.freeze({
     counterSegment: "box-office-vertical",
   }),
   kiosks: [
-    { id: "ticket-kiosk-1", position: [LOBBY_EAST_X - 1.6, 0, shiftedZ(3)], rotation: Math.PI / 2 },
-    { id: "ticket-kiosk-2", position: [LOBBY_EAST_X - 1.6, 0, shiftedZ(5)], rotation: Math.PI / 2 },
-    { id: "ticket-kiosk-3", position: [LOBBY_EAST_X - 1.6, 0, shiftedZ(7)], rotation: Math.PI / 2 },
+    { id: "ticket-kiosk-1", position: [LOBBY_EAST_X - 1.6, 0, -0.9], rotation: Math.PI / 2 },
+    { id: "ticket-kiosk-2", position: [LOBBY_EAST_X - 1.6, 0, 1.1], rotation: Math.PI / 2 },
+    { id: "ticket-kiosk-3", position: [LOBBY_EAST_X - 1.6, 0, 3.1], rotation: Math.PI / 2 },
   ],
   ticketPodium: Object.freeze({
     id: "ticket-podium-center",
@@ -966,9 +1093,10 @@ export const LOBBY_PLAN = Object.freeze({
   }),
   overheadMechanicals: Object.freeze({
     id: "lobby-mural-overhead-mechanicals",
-    coverageBounds: rect(-27, 5, -1, 21),
-    minClearanceY: MURAL_TOP_Y + 0.5,
-    maxY: LOBBY_CEILING_PLAN.highHeight - 0.45,
+    coverageBounds: rect(LOBBY_ENVELOPE_WEST_X, LOBBY_EAST_X, FRONT_ENTRANCE_OUTER_Z, LOBBY_BACK_Z),
+    targetLobbyBounds: rect(shiftedLobbyX(-24.5), LOBBY_EAST_X, FRONT_ENTRANCE_OUTER_Z, LOBBY_BACK_Z),
+    minClearanceY: MURAL_TOP_Y + 0.35,
+    maxY: LOBBY_CEILING_PLAN.highHeight - 0.3,
     ducts: OVERHEAD_DUCTS,
     pipes: OVERHEAD_PIPES,
     hangerSpacing: 2.4,
@@ -1061,7 +1189,7 @@ export const ALL_ZONES = Object.freeze([
 ]);
 
 export const MAP_BOUNDS = Object.freeze(rect(-41, 114, shiftedZ(-10), 99));
-export const PLAYER_SPAWN_PLAN = Object.freeze({ x: shiftedLobbyX(1.5), y: 0, z: shiftedZ(-6.8) });
+export const PLAYER_SPAWN_PLAN = Object.freeze({ x: FRONT_ENTRANCE_BANKS[1].center, y: 0, z: shiftedZ(-6.8) });
 
 export const AUDITORIUM_ENTRY_ZONES = Object.freeze([
   { id: "theater-3-entry", name: "Theater 3 Entrance", detail: "Shared courtyard door · horizontal under-tier storage left · straight gentle incline into the bowl", bounds: rect(-21.5, -4.3, COURTYARD_BACK_WALL_Z, 99) },
@@ -1245,19 +1373,43 @@ export function validateLayoutData() {
     || !nearlyEqual(frontWalk?.bounds.xMax, FRONT_WALK_EAST_X)) {
     errors.push("V13 must retain the concession-side lobby while tightening the stair-side envelope and front walk.");
   }
-  if (LOBBY_CEILING_PLAN.multiplier !== 3
-    || !nearlyEqual(LOBBY_CEILING_PLAN.highHeight, LOBBY_CEILING_PLAN.baseHeight * 3)
+  if (!nearlyEqual(LOBBY_CEILING_PLAN.multiplier, LOBBY_CEILING_PLAN.highHeight / LOBBY_CEILING_PLAN.baseHeight)
+    || !nearlyEqual(LOBBY_CEILING_PLAN.highHeight, 10.8)
+    || LOBBY_CEILING_PLAN.highHeight <= MURAL_TOP_Y + 1.5
     || LOBBY_CEILING_PLAN.highPublicSpaceIds.length !== 1
     || LOBBY_CEILING_PLAN.highPublicSpaceIds[0] !== "lobby") {
-    errors.push("Only the open lobby may use the three-times-height ceiling; the fountain court stays at the lower datum.");
+    errors.push("Only the open lobby may use the lowered 10.8 m mechanical ceiling; the fountain court stays at the lower datum.");
   }
   if (LOBBY_PLAN.kiosks.length !== 3
     || LOBBY_PLAN.kiosks.some((kiosk, index) => (
       kiosk.id !== `ticket-kiosk-${index + 1}`
       || !nearlyEqual(kiosk.position[0], LOBBY_EAST_X - 1.6)
-      || !nearlyEqual(kiosk.position[2], 0.5 + index * 2)
+      || !nearlyEqual(kiosk.position[2], -0.9 + index * 2)
     ))) {
     errors.push("The tightened lobby must contain three evenly spaced ticket kiosks along its east wall.");
+  }
+  const frontEntrance = LOBBY_PLAN.frontEntrance;
+  const frontBanks = frontEntrance?.banks ?? [];
+  const frontWindows = frontEntrance?.windows ?? [];
+  if (frontEntrance?.id !== "three-bank-front-vestibule"
+    || frontEntrance?.planes?.join(",") !== "outer,inner"
+    || frontBanks.length !== 3
+    || frontWindows.length !== 2
+    || !nearlyEqual(frontEntrance?.outerZ, LOBBY_PLAN.envelope.zMin)
+    || !nearlyEqual(frontEntrance?.innerZ - frontEntrance?.outerZ, frontEntrance?.depth)
+    || frontEntrance?.depth < 1.5
+    || !nearlyEqual(frontEntrance?.doorWidth, 2.8)
+    || frontBanks.some((bank, index) => bank.id !== `entrance-bank-${index + 1}`
+      || (index > 0 && bank.center <= frontBanks[index - 1].center))
+    || !nearlyEqual(frontEntrance?.bankSpan?.xMin, frontBanks[0]?.center - frontEntrance.doorWidth / 2)
+    || !nearlyEqual(frontEntrance?.bankSpan?.xMax, frontBanks.at(-1)?.center + frontEntrance.doorWidth / 2)
+    || frontEntrance?.boundaryPillar?.xMin <= frontEntrance?.bankSpan?.xMax
+    || frontWindows[0]?.xMin <= frontEntrance?.boundaryPillar?.xMax
+    || frontWindows.some((window, index) => window.xMax <= window.xMin
+      || (index > 0 && window.xMin <= frontWindows[index - 1].xMax))
+    || frontEntrance.bankSpan.xMax - frontEntrance.bankSpan.xMin >= lobby.bounds.xMax - lobby.bounds.xMin
+    || LOBBY_PLAN.frontDoorCenters.some((center, index) => center !== frontBanks[index]?.center)) {
+    errors.push("V16 frontage must provide three compact outer/inner double-door banks, a boundary pillar, and two ordered fixed windows.");
   }
   const boxOffice = serviceRoomById.get("box-office");
   if (LOBBY_PLAN.boxOfficePos?.id !== "box-office-pos"
@@ -1285,24 +1437,40 @@ export function validateLayoutData() {
     || sightline?.bounds.xMin < TICKET_APPROACH_PLAN.bounds.xMin
     || sightline?.bounds.xMax > TICKET_APPROACH_PLAN.bounds.xMax
     || !nearlyEqual(sightline?.bounds.zMax, TICKET_APPROACH_PLAN.bounds.zMax)) {
-    errors.push("The box office must retain its two-foot reveal, compact return, white stair wall, and clear ticket-hall sightline.");
+    errors.push("The box office must retain its compact reveal and return, white stair wall, and clear ticket-hall sightline.");
   }
   const stair = LOBBY_PLAN.lobbyStair;
   if (stair?.id !== "lobby-stair"
-    || !nearlyEqual(stair?.clearWidth, 2.4)
+    || !nearlyEqual(stair?.clearWidth, STAIR_CLEAR_WIDTH)
     || !nearlyEqual(stair?.bounds?.xMin, LOBBY_PLAN.futureStairs.xMin)
     || !nearlyEqual(stair?.bounds?.xMax, LOBBY_PLAN.futureStairs.xMax)
     || !nearlyEqual(stair?.bounds?.zMin, LOBBY_PLAN.futureStairs.zMin)
     || !nearlyEqual(stair?.bounds?.zMax, LOBBY_PLAN.futureStairs.zMax)
-    || stair?.treadCount !== 26
+    || stair?.treadCount !== 38
     || stair?.stepRise > 0.22
+    || stair?.stepRise <= 0
+    || !nearlyEqual(stair?.treadThickness, 0.12)
+    || stair?.openUnderside !== true
+    || stair?.landingMechanicalUnderside < stair?.topY + 1.78
+    || stair?.landingMechanicalUnderside >= LOBBY_CEILING_PLAN.highHeight
     || !nearlyEqual(stair?.bottomLanding?.zMax, stair?.flightBounds?.zMin)
+    || !nearlyEqual(stair?.flightBounds?.zMin, LOBBY_PLAN.boxOfficeReturn.zMax)
     || !nearlyEqual(stair?.flightBounds?.zMax, stair?.topLanding?.zMin)
-    || !nearlyEqual(stair?.solidLobbyWall?.zMax, stair?.exposedRailing?.zMin)
+    || !nearlyEqual(stair?.topLanding?.xMax - stair?.topLanding?.xMin, stair?.clearWidth)
+    || !nearlyEqual(stair?.topLanding?.zMax - stair?.topLanding?.zMin, stair?.clearWidth)
+    || !nearlyEqual(stair?.lowNookWall?.longLeg?.zMin, stair?.bounds?.zMin)
+    || !nearlyEqual(stair?.lowNookWall?.longLeg?.zMax, stair?.topLanding?.zMin)
+    || !nearlyEqual(stair?.lowNookWall?.returnLeg?.xMin, stair?.bounds?.xMin)
+    || !nearlyEqual(stair?.lowNookWall?.returnLeg?.xMax, stair?.bounds?.xMax)
+    || !nearlyEqual(stair?.lowNookWall?.returnLeg?.z, stair?.topLanding?.zMin)
+    || stair?.lowNookWall?.height >= MURAL_BOTTOM_Y
+    || !nearlyEqual(stair?.exposedRailing?.zMin, stair?.bounds?.zMin)
     || !nearlyEqual(stair?.exposedRailing?.zMax, stair?.bounds?.zMax)
     || !nearlyEqual(stair?.upperDoor?.baseY, stair?.topY)
-    || !nearlyEqual(LOBBY_PLAN.futureStairWall?.end?.z, stair?.solidLobbyWall?.zMax)) {
-    errors.push("V15 lobby stair must be a narrow, continuous 2.4 m flight with safe rise, a short wall, open railing, and raised top doorway.");
+    || stair.upperDoor.baseY + stair.upperDoor.height >= LOBBY_CEILING_PLAN.highHeight
+    || !nearlyEqual(LOBBY_PLAN.futureStairWall?.end?.z, stair?.topLanding?.zMin)
+    || !nearlyEqual(LOBBY_PLAN.futureStairWall?.returnEnd?.x, stair?.bounds?.xMax)) {
+    errors.push("V16 lobby stair must begin at the box-office return, use thin unsupported treads, meet a square landing, and sit behind a low L-shaped nook wall.");
   }
   const barScreen = LOBBY_PLAN.barScreen;
   if (barScreen?.id !== "lanai-bar-digital-screen"
@@ -1322,8 +1490,16 @@ export function validateLayoutData() {
     || !nearlyEqual(oppositeMural?.zMin, stair?.bounds?.zMin)
     || !nearlyEqual(oppositeMural?.zMax, stair?.bounds?.zMax)
     || !nearlyEqual(oppositeMural?.height, MURAL_ARTWORK_HEIGHT)
+    || oppositeMural?.surround?.id !== "stair-kiosk-mural-surround"
+    || oppositeMural?.artwork?.id !== oppositeMural.id
+    || oppositeMural?.grayFills?.length !== 2
+    || !nearlyEqual(oppositeMural?.grayFills?.[0]?.width, oppositeMural?.grayFills?.[1]?.width)
+    || !nearlyEqual(oppositeMural?.grayFills?.[0]?.width * 2 + oppositeMural?.artwork?.width, oppositeMural?.surround?.width)
+    || !nearlyEqual(oppositeMural?.artwork?.height, oppositeMural?.height)
+    || !nearlyEqual(oppositeMural?.surround?.verticalGrayFill?.top, 0)
+    || !nearlyEqual(oppositeMural?.surround?.verticalGrayFill?.bottom, 0)
     || oppositeMural?.composition !== "foliage-left-warm-portrait-right") {
-    errors.push("V15 opposite-lobby mural must remain a distinct stair-side artwork, never a reuse of the concession mural.");
+    errors.push("V16 opposite-lobby mural must remain distinct and use equal gray side fields with no top or bottom trim.");
   }
   const [westPillar, eastPillar] = FOUNTAIN_PLAN.pillars ?? [];
   const westPillarHalfWidth = (westPillar?.footprint?.[0] ?? 0) / 2;
@@ -1547,16 +1723,32 @@ export function validateLayoutData() {
   const hasRiserPipe = pipes.some(({ start, end }) => (
     nearlyEqual(start.x, end.x) && nearlyEqual(start.z, end.z) && !nearlyEqual(start.y, end.y)
   ));
+  const lowestMechanicalBottom = Math.min(
+    ...ducts.map((duct) => duct.y - duct.height / 2),
+    ...pipes.flatMap((pipe) => [pipe.start.y - pipe.radius, pipe.end.y - pipe.radius]),
+  );
+  const highestMechanicalTop = Math.max(
+    ...ducts.map((duct) => duct.y + duct.height / 2),
+    ...pipes.flatMap((pipe) => [pipe.start.y + pipe.radius, pipe.end.y + pipe.radius]),
+  );
+  const preservedDucts = ducts.filter(({ preservedRoute }) => preservedRoute);
+  const preservedPipes = pipes.filter(({ preservedRoute }) => preservedRoute);
   if (overheadMechanicals?.id !== "lobby-mural-overhead-mechanicals"
-    || ducts.length !== 6
-    || pipes.length !== 18
+    || ducts.length !== 10
+    || pipes.length !== 26
+    || preservedDucts.length !== 6
+    || preservedPipes.length !== 18
     || new Set(mechanicalIds).size !== mechanicalIds.length
-    || !nearlyEqual(overheadMechanicals?.minClearanceY, muralFacade.topY + 0.5)
-    || !nearlyEqual(overheadMechanicals?.maxY, LOBBY_CEILING_PLAN.highHeight - 0.45)
+    || !nearlyEqual(overheadMechanicals?.minClearanceY, muralFacade.topY + 0.35)
+    || !nearlyEqual(overheadMechanicals?.maxY, LOBBY_CEILING_PLAN.highHeight - 0.3)
     || !nearlyEqual(overheadMechanicals?.hangerSpacing, 2.4)
+    || !sameRect(overheadMechanicals?.targetLobbyBounds, rect(lobby.bounds.xMin, lobby.bounds.xMax, LOBBY_PLAN.envelope.zMin, LOBBY_PLAN.envelope.zMax))
+    || lowestMechanicalBottom - muralFacade.topY < 0.3
+    || lowestMechanicalBottom - muralFacade.topY > 0.61
+    || highestMechanicalTop > LOBBY_CEILING_PLAN.highHeight - 0.2
     || ducts.some((duct) => duct.materialKey !== "hvacDuct"
-      || duct.width < 0.6
-      || duct.height < 0.5
+      || duct.width < 0.55
+      || duct.height < 0.48
       || duct.y < overheadMechanicals.minClearanceY
       || duct.y > overheadMechanicals.maxY
       || !mechanicalPointInCoverage(duct.start)
@@ -1572,13 +1764,13 @@ export function validateLayoutData() {
       || !mechanicalPointInCoverage(pipe.end))
     || Math.max(...ducts.map(({ width }) => width)) < 1
     || Math.max(...pipes.map(({ radius }) => radius)) < 0.14
-    || ductRunLength < 140
-    || pipeRunLength < 370
+    || ductRunLength < 220
+    || pipeRunLength < 450
     || !hasDiagonalPipe
     || !hasHeaderPipe
     || !hasCrossPipe
     || !hasRiserPipe) {
-    errors.push("The V14 high lobby must carry six large HVAC ducts and eighteen distributed overhead pipe runs spanning the full mural zone, including diagonal, header, cross, branch, and riser routes.");
+    errors.push("V16 must preserve the original mechanical routes, extend them across the full lobby, and keep their physical field one-to-two feet above the displays and below the lowered roof.");
   }
 
   const expectedServiceTypes = ["pos", "pos", "candy", "pos", "pos", "candy", "pos", "pos"];
