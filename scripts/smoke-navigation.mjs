@@ -1003,39 +1003,38 @@ assertNear(LOBBY_CEILING_PLAN.highHeight, 10.8, "lowered V16 stone-floor lobby c
 assert.deepEqual(LOBBY_CEILING_PLAN.highPublicSpaceIds, ["lobby"], "Only the stone-floor lobby may retain the high roof.");
 assertNear(LOBBY_PLAN.envelope.xMax, 15.11, "east lobby wall moved flush to the stair");
 const entrance = LOBBY_PLAN.frontEntrance;
-assert.equal(entrance.banks.length, 3);
-assert.deepEqual(entrance.planes, ["outer", "inner"]);
-for (const bank of entrance.banks) {
-  for (const [suffix, z] of [
-    ["outside", entrance.outerZ - 0.8],
-    ["vestibule", (entrance.outerZ + entrance.innerZ) / 2],
-    ["inside", entrance.innerZ + 0.8],
-  ]) {
-    assertOpenPlanPoint(`${bank.id}-${suffix}`, bank.center, z);
-    if (suffix === "outside") {
-      assert.equal(isReachable(bank.center, z), true, `${bank.id} exterior approach must connect to the spawn walk.`);
-    } else {
-      navigationTargets.push({ id: `${bank.id}-${suffix}`, x: bank.center, z });
-    }
-  }
+assert.equal(entrance.doors.length, 6, "Navigation must exercise all six double-door assemblies.");
+assertNear(entrance.facadeZ, LOBBY_PLAN.envelope.zMin, "single frontage plane");
+for (const door of entrance.doors) {
+  const outsideZ = entrance.facadeZ - 0.8;
+  const insideZ = entrance.facadeZ + 0.8;
+  assertOpenPlanPoint(`${door.id}-facade-opening`, door.center, entrance.facadeZ);
+  assertOpenPlanPoint(`${door.id}-outside`, door.center, outsideZ);
+  assertOpenPlanPoint(`${door.id}-inside`, door.center, insideZ);
+  assert.equal(isReachable(door.center, outsideZ), true, `${door.id} exterior approach must connect to the spawn walk.`);
+  navigationTargets.push({ id: `${door.id}-inside`, x: door.center, z: insideZ });
 }
 for (const window of entrance.windows) {
-  assert.equal(isBlocked((window.xMin + window.xMax) / 2, entrance.outerZ), true, `${window.id} glass must block traversal.`);
+  assert.equal(isBlocked((window.xMin + window.xMax) / 2, entrance.facadeZ), true, `${window.id} glass must block traversal.`);
 }
-assert.equal(isBlocked((entrance.boundaryPillar.xMin + entrance.boundaryPillar.xMax) / 2, (entrance.outerZ + entrance.innerZ) / 2), true,
-  "The pillar must separate the three door banks from the two left-side windows.");
+assert.equal(isBlocked((entrance.boundaryPillar.xMin + entrance.boundaryPillar.xMax) / 2, entrance.facadeZ), true,
+  "The pillar must separate the six door assemblies from the two physical-left windows.");
+assert.equal(world.colliders.some(({ id }) => id.startsWith("lobby-front-vestibule")), false,
+  "The removed second row/vestibule must leave no invisible blockers.");
 assert.equal(isReachable(LOBBY_PLAN.envelope.xMax + 0.8, 12), false, "The narrowed east wall must contain the lobby.");
 assert.equal(FOUNTAIN_PLAN.pillars.every(({ height }) => height === LOBBY_CEILING_PLAN.baseHeight), true, "Fountain pillars must terminate at the low court roof.");
-assert.equal(LOBBY_PLAN.kiosks.length, 3, "V13 circulation smoke expects exactly three kiosks.");
+assert.equal(LOBBY_PLAN.kiosks.length, 4, "V17 circulation smoke expects exactly four flush kiosks.");
 assert.deepEqual(
   LOBBY_PLAN.kiosks.map(({ position }) => position[2]),
-  [-0.9, 1.1, 3.1],
-  "The three kiosks must retain their two-metre cadence while clearing the stair foot.",
+  [-0.9, 0.55, 2, 3.45],
+  "The four kiosks must retain their compact cadence while clearing the stair foot.",
 );
+assert.ok(LOBBY_PLAN.kiosks.every(({ position }) => Math.abs(position[0] - (LOBBY_PLAN.envelope.xMax - 0.5)) <= GEOMETRY_EPSILON),
+  "All four kiosks must be flush-mounted along the east wall.");
 assertNear(
   LOBBY_PLAN.futureStairs.zMin - (LOBBY_PLAN.kiosks.at(-1).position[2] + 0.9 / 2),
-  1.55,
-  "third-kiosk/stair-foot clearance",
+  1.2,
+  "fourth-kiosk/stair-foot clearance",
 );
 for (const kiosk of LOBBY_PLAN.kiosks) {
   navigationTargets.push({
@@ -1044,6 +1043,18 @@ for (const kiosk of LOBBY_PLAN.kiosks) {
     z: kiosk.position[2],
   });
 }
+assert.deepEqual(LOBBY_PLAN.kioskShowtimeScreens.map(({ id, wallX, centerY, centerZ, width, height }) => (
+  { id, wallX, centerY, centerZ, width, height }
+)), [0, 1.275, 2.55].map((centerZ, index) => ({
+  id: `kiosk-showtime-screen-${index + 1}`,
+  wallX: LOBBY_PLAN.envelope.xMax,
+  centerY: 3.05,
+  centerZ,
+  width: 1.15,
+  height: 0.55,
+})), "Three compact showtime screens must sit above the flush kiosk bank.");
+assert.equal(world.colliders.some(({ id }) => /^kiosk-showtime-screen-\d$/.test(id)), false,
+  "Wall-mounted showtime screens must not obstruct the kiosk aisle.");
 navigationTargets.push({
   id: "box-office-pos-customer-approach",
   x: LOBBY_PLAN.boxOfficePos.position[0] - 1.45,
@@ -1521,5 +1532,5 @@ world.dispose();
 materials.dispose();
 
 console.log(
-  `Navigation smoke valid: 14 bowls + ${navigationTargets.length - 14} V16 route targets reachable under rendered floors/ceilings · paired vestibule + narrowed lobby containment · stacked open stair/landing samples · full lowered mechanical ceiling · geometry overlap-free.`,
+  `Navigation smoke valid: 14 bowls + ${navigationTargets.length - 14} V17 route targets reachable under rendered floors/ceilings · six direct frontage routes + four-kiosk aisle · stacked open stair/landing samples · geometry overlap-free.`,
 );

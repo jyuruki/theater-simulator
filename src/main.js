@@ -220,7 +220,7 @@ try {
     enumerable: false,
     writable: false,
     value: Object.freeze({
-      layoutVersion: "mililani-sketch-v16",
+      layoutVersion: "mililani-sketch-v17",
       validation: Object.freeze(validation),
       stats: world.stats,
       controller,

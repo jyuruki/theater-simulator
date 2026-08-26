@@ -21,6 +21,10 @@ const rect = (xMin, xMax, zMin, zMax) => ({ xMin, xMax, zMin, zMax });
 // east side of the lobby onto the stair, lowers and extends the exposed
 // mechanical ceiling, and rebuilds the stair as an open flight with a square
 // landing and a low L-shaped nook wall.
+// V17 corrects the mirrored storefront: two waist-sill windows occupy the
+// physical-left side, one structural pillar divides them from six single-plane
+// double-door assemblies on the physical-right, and the kiosk wall gains the
+// photographed fourth terminal plus three compact showtime displays.
 export const FRONT_SHIFT_Z = -2.5;
 export const LOBBY_SHIFT_X = 8.3;
 export const T12_TICKET_SHIFT_X = 1;
@@ -520,29 +524,33 @@ const OPPOSITE_MURAL_GRAY_FILL_WIDTH = (
 const OPPOSITE_MURAL_ARTWORK_Z_MIN = OPPOSITE_MURAL_Z_MIN + OPPOSITE_MURAL_GRAY_FILL_WIDTH;
 const OPPOSITE_MURAL_ARTWORK_Z_MAX = OPPOSITE_MURAL_Z_MAX - OPPOSITE_MURAL_GRAY_FILL_WIDTH;
 
-// The photographed frontage is three compact vestibule bays anchored to the
-// physical-right end of the public lobby. Plan X is reflected at render time,
-// so that physical-right anchor is the low-X edge here. Each bank has a
-// matching outer and inner double-door plane; a structural pillar ends the
-// door group and two large fixed windows continue toward physical-left.
-const FRONT_ENTRANCE_OUTER_Z = shiftedZ(0);
-const FRONT_ENTRANCE_INNER_Z = FRONT_ENTRANCE_OUTER_Z + 1.8;
-const FRONT_ENTRANCE_DOOR_WIDTH = 2.8;
-const FRONT_ENTRANCE_BANKS = Object.freeze([
-  Object.freeze({ id: "entrance-bank-1", center: -14.35 }),
-  Object.freeze({ id: "entrance-bank-2", center: -11.2 }),
-  Object.freeze({ id: "entrance-bank-3", center: -8.05 }),
+// From the exterior, screen-left to screen-right is increasing plan X because
+// plan X is reflected into world space. The literal photographed order is two
+// large windows, the divider pillar, then six double-door assemblies grouped
+// 2 + 2 + 2. There is one facade plane only; V16's inferred second depth row
+// was the source of the doubled-door appearance the user called out.
+const FRONT_ENTRANCE_Z = shiftedZ(0);
+const FRONT_ENTRANCE_DOOR_WIDTH = 2.65;
+const FRONT_ENTRANCE_PAIR_GAP = 0.1;
+const FRONT_ENTRANCE_GROUP_GAP = 0.61;
+const FRONT_ENTRANCE_DOORS = Object.freeze([
+  Object.freeze({ id: "entrance-door-1", center: -1.675, group: 1 }),
+  Object.freeze({ id: "entrance-door-2", center: 1.075, group: 1 }),
+  Object.freeze({ id: "entrance-door-3", center: 4.335, group: 2 }),
+  Object.freeze({ id: "entrance-door-4", center: 7.085, group: 2 }),
+  Object.freeze({ id: "entrance-door-5", center: 10.345, group: 3 }),
+  Object.freeze({ id: "entrance-door-6", center: 13.095, group: 3 }),
 ]);
-const FRONT_ENTRANCE_BANK_X_MIN = FRONT_ENTRANCE_BANKS[0].center - FRONT_ENTRANCE_DOOR_WIDTH / 2;
-const FRONT_ENTRANCE_BANK_X_MAX = FRONT_ENTRANCE_BANKS.at(-1).center + FRONT_ENTRANCE_DOOR_WIDTH / 2;
+const FRONT_ENTRANCE_DOOR_X_MIN = FRONT_ENTRANCE_DOORS[0].center - FRONT_ENTRANCE_DOOR_WIDTH / 2;
+const FRONT_ENTRANCE_DOOR_X_MAX = FRONT_ENTRANCE_DOORS.at(-1).center + FRONT_ENTRANCE_DOOR_WIDTH / 2;
 const FRONT_ENTRANCE_PILLAR = Object.freeze({
   id: "front-entrance-window-divider-pillar",
-  xMin: -6.55,
-  xMax: -5.65,
+  xMin: -4.05,
+  xMax: -3.15,
 });
 const FRONT_ENTRANCE_WINDOWS = Object.freeze([
-  Object.freeze({ id: "front-window-1", xMin: -5.45, xMax: 0.15 }),
-  Object.freeze({ id: "front-window-2", xMin: 0.55, xMax: 6.15 }),
+  Object.freeze({ id: "front-window-1", xMin: -16.2, xMax: -10.125 }),
+  Object.freeze({ id: "front-window-2", xMin: -10.125, xMax: -4.05 }),
 ]);
 // The pink plan line is literal: the facade begins immediately below / to the
 // plan-left of the kitchen service door (partition p7) and terminates at the
@@ -711,22 +719,21 @@ const OVERHEAD_PIPES = Object.freeze([
 export const LOBBY_PLAN = Object.freeze({
   envelope: rect(LOBBY_ENVELOPE_WEST_X, LOBBY_EAST_X, shiftedZ(0), LOBBY_BACK_Z),
   frontEntrance: Object.freeze({
-    id: "three-bank-front-vestibule",
-    outerZ: FRONT_ENTRANCE_OUTER_Z,
-    innerZ: FRONT_ENTRANCE_INNER_Z,
-    depth: FRONT_ENTRANCE_INNER_Z - FRONT_ENTRANCE_OUTER_Z,
+    id: "six-assembly-glass-frontage",
+    facadeZ: FRONT_ENTRANCE_Z,
     doorWidth: FRONT_ENTRANCE_DOOR_WIDTH,
     doorHeight: 2.6,
-    banks: FRONT_ENTRANCE_BANKS,
-    bankSpan: Object.freeze({ xMin: FRONT_ENTRANCE_BANK_X_MIN, xMax: FRONT_ENTRANCE_BANK_X_MAX }),
+    doors: FRONT_ENTRANCE_DOORS,
+    doorSpan: Object.freeze({ xMin: FRONT_ENTRANCE_DOOR_X_MIN, xMax: FRONT_ENTRANCE_DOOR_X_MAX }),
+    pairGap: FRONT_ENTRANCE_PAIR_GAP,
+    groupGap: FRONT_ENTRANCE_GROUP_GAP,
     boundaryPillar: FRONT_ENTRANCE_PILLAR,
     windows: FRONT_ENTRANCE_WINDOWS,
-    windowSillY: 0.08,
+    windowSillY: 1.05,
     windowTopY: 3.25,
     transomTopY: 3.25,
-    planes: Object.freeze(["outer", "inner"]),
   }),
-  frontDoorCenters: Object.freeze(FRONT_ENTRANCE_BANKS.map(({ center }) => center)),
+  frontDoorCenters: Object.freeze(FRONT_ENTRANCE_DOORS.map(({ center }) => center)),
   customerCounter: CUSTOMER_COUNTER,
   customerCounterSections: CUSTOMER_COUNTER_SECTIONS,
   concessionRun: CONCESSION_RUN,
@@ -1004,11 +1011,17 @@ export const LOBBY_PLAN = Object.freeze({
     footprint: Object.freeze([0.72, 0.5]),
     counterSegment: "box-office-vertical",
   }),
-  kiosks: [
-    { id: "ticket-kiosk-1", position: [LOBBY_EAST_X - 1.6, 0, -0.9], rotation: Math.PI / 2 },
-    { id: "ticket-kiosk-2", position: [LOBBY_EAST_X - 1.6, 0, 1.1], rotation: Math.PI / 2 },
-    { id: "ticket-kiosk-3", position: [LOBBY_EAST_X - 1.6, 0, 3.1], rotation: Math.PI / 2 },
-  ],
+  kiosks: Object.freeze([
+    Object.freeze({ id: "ticket-kiosk-1", position: Object.freeze([LOBBY_EAST_X - 0.5, 0, -0.9]), rotation: Math.PI / 2 }),
+    Object.freeze({ id: "ticket-kiosk-2", position: Object.freeze([LOBBY_EAST_X - 0.5, 0, 0.55]), rotation: Math.PI / 2 }),
+    Object.freeze({ id: "ticket-kiosk-3", position: Object.freeze([LOBBY_EAST_X - 0.5, 0, 2]), rotation: Math.PI / 2 }),
+    Object.freeze({ id: "ticket-kiosk-4", position: Object.freeze([LOBBY_EAST_X - 0.5, 0, 3.45]), rotation: Math.PI / 2 }),
+  ]),
+  kioskShowtimeScreens: Object.freeze([
+    Object.freeze({ id: "kiosk-showtime-screen-1", wallX: LOBBY_EAST_X, centerY: 3.05, centerZ: 0, width: 1.15, height: 0.55 }),
+    Object.freeze({ id: "kiosk-showtime-screen-2", wallX: LOBBY_EAST_X, centerY: 3.05, centerZ: 1.275, width: 1.15, height: 0.55 }),
+    Object.freeze({ id: "kiosk-showtime-screen-3", wallX: LOBBY_EAST_X, centerY: 3.05, centerZ: 2.55, width: 1.15, height: 0.55 }),
+  ]),
   ticketPodium: Object.freeze({
     id: "ticket-podium-center",
     position: Object.freeze([5.8, 0, shiftedZ(56.4)]),
@@ -1093,8 +1106,8 @@ export const LOBBY_PLAN = Object.freeze({
   }),
   overheadMechanicals: Object.freeze({
     id: "lobby-mural-overhead-mechanicals",
-    coverageBounds: rect(LOBBY_ENVELOPE_WEST_X, LOBBY_EAST_X, FRONT_ENTRANCE_OUTER_Z, LOBBY_BACK_Z),
-    targetLobbyBounds: rect(shiftedLobbyX(-24.5), LOBBY_EAST_X, FRONT_ENTRANCE_OUTER_Z, LOBBY_BACK_Z),
+    coverageBounds: rect(LOBBY_ENVELOPE_WEST_X, LOBBY_EAST_X, FRONT_ENTRANCE_Z, LOBBY_BACK_Z),
+    targetLobbyBounds: rect(shiftedLobbyX(-24.5), LOBBY_EAST_X, FRONT_ENTRANCE_Z, LOBBY_BACK_Z),
     minClearanceY: MURAL_TOP_Y + 0.35,
     maxY: LOBBY_CEILING_PLAN.highHeight - 0.3,
     ducts: OVERHEAD_DUCTS,
@@ -1189,7 +1202,7 @@ export const ALL_ZONES = Object.freeze([
 ]);
 
 export const MAP_BOUNDS = Object.freeze(rect(-41, 114, shiftedZ(-10), 99));
-export const PLAYER_SPAWN_PLAN = Object.freeze({ x: FRONT_ENTRANCE_BANKS[1].center, y: 0, z: shiftedZ(-6.8) });
+export const PLAYER_SPAWN_PLAN = Object.freeze({ x: FRONT_ENTRANCE_DOORS[2].center, y: 0, z: shiftedZ(-6.8) });
 
 export const AUDITORIUM_ENTRY_ZONES = Object.freeze([
   { id: "theater-3-entry", name: "Theater 3 Entrance", detail: "Shared courtyard door · horizontal under-tier storage left · straight gentle incline into the bowl", bounds: rect(-21.5, -4.3, COURTYARD_BACK_WALL_Z, 99) },
@@ -1380,36 +1393,55 @@ export function validateLayoutData() {
     || LOBBY_CEILING_PLAN.highPublicSpaceIds[0] !== "lobby") {
     errors.push("Only the open lobby may use the lowered 10.8 m mechanical ceiling; the fountain court stays at the lower datum.");
   }
-  if (LOBBY_PLAN.kiosks.length !== 3
+  if (LOBBY_PLAN.kiosks.length !== 4
     || LOBBY_PLAN.kiosks.some((kiosk, index) => (
       kiosk.id !== `ticket-kiosk-${index + 1}`
-      || !nearlyEqual(kiosk.position[0], LOBBY_EAST_X - 1.6)
-      || !nearlyEqual(kiosk.position[2], -0.9 + index * 2)
+      || !nearlyEqual(kiosk.position[0], LOBBY_EAST_X - 0.5)
+      || !nearlyEqual(kiosk.position[2], -0.9 + index * 1.45)
     ))) {
-    errors.push("The tightened lobby must contain three evenly spaced ticket kiosks along its east wall.");
+    errors.push("V17 must place four evenly spaced ticket kiosks flush against the east wall.");
   }
   const frontEntrance = LOBBY_PLAN.frontEntrance;
-  const frontBanks = frontEntrance?.banks ?? [];
+  const frontDoors = frontEntrance?.doors ?? [];
   const frontWindows = frontEntrance?.windows ?? [];
-  if (frontEntrance?.id !== "three-bank-front-vestibule"
-    || frontEntrance?.planes?.join(",") !== "outer,inner"
-    || frontBanks.length !== 3
+  const frontDoorGaps = frontDoors.slice(1).map((door, index) => (
+    door.center - frontDoors[index].center - frontEntrance.doorWidth
+  ));
+  if (frontEntrance?.id !== "six-assembly-glass-frontage"
+    || frontDoors.length !== 6
     || frontWindows.length !== 2
-    || !nearlyEqual(frontEntrance?.outerZ, LOBBY_PLAN.envelope.zMin)
-    || !nearlyEqual(frontEntrance?.innerZ - frontEntrance?.outerZ, frontEntrance?.depth)
-    || frontEntrance?.depth < 1.5
-    || !nearlyEqual(frontEntrance?.doorWidth, 2.8)
-    || frontBanks.some((bank, index) => bank.id !== `entrance-bank-${index + 1}`
-      || (index > 0 && bank.center <= frontBanks[index - 1].center))
-    || !nearlyEqual(frontEntrance?.bankSpan?.xMin, frontBanks[0]?.center - frontEntrance.doorWidth / 2)
-    || !nearlyEqual(frontEntrance?.bankSpan?.xMax, frontBanks.at(-1)?.center + frontEntrance.doorWidth / 2)
-    || frontEntrance?.boundaryPillar?.xMin <= frontEntrance?.bankSpan?.xMax
-    || frontWindows[0]?.xMin <= frontEntrance?.boundaryPillar?.xMax
+    || !nearlyEqual(frontEntrance?.facadeZ, LOBBY_PLAN.envelope.zMin)
+    || !nearlyEqual(frontEntrance?.doorWidth, 2.65)
+    || !nearlyEqual(frontEntrance?.doorHeight, 2.6)
+    || frontDoors.some((door, index) => door.id !== `entrance-door-${index + 1}`
+      || door.group !== Math.floor(index / 2) + 1
+      || (index > 0 && door.center <= frontDoors[index - 1].center))
+    || frontDoorGaps.some((gap, index) => !nearlyEqual(
+      gap,
+      index % 2 === 0 ? frontEntrance.pairGap : frontEntrance.groupGap,
+    ))
+    || !nearlyEqual(frontEntrance?.doorSpan?.xMin, frontDoors[0]?.center - frontEntrance.doorWidth / 2)
+    || !nearlyEqual(frontEntrance?.doorSpan?.xMax, frontDoors.at(-1)?.center + frontEntrance.doorWidth / 2)
+    || frontEntrance?.boundaryPillar?.xMax > frontEntrance?.doorSpan?.xMin
+    || frontWindows.at(-1)?.xMax > frontEntrance?.boundaryPillar?.xMin
     || frontWindows.some((window, index) => window.xMax <= window.xMin
-      || (index > 0 && window.xMin <= frontWindows[index - 1].xMax))
-    || frontEntrance.bankSpan.xMax - frontEntrance.bankSpan.xMin >= lobby.bounds.xMax - lobby.bounds.xMin
-    || LOBBY_PLAN.frontDoorCenters.some((center, index) => center !== frontBanks[index]?.center)) {
-    errors.push("V16 frontage must provide three compact outer/inner double-door banks, a boundary pillar, and two ordered fixed windows.");
+      || (index > 0 && window.xMin < frontWindows[index - 1].xMax))
+    || !nearlyEqual(frontWindows[0]?.xMin, lobby.bounds.xMin)
+    || frontEntrance.doorSpan.xMax > LOBBY_PLAN.envelope.xMax
+    || LOBBY_PLAN.frontDoorCenters.some((center, index) => center !== frontDoors[index]?.center)
+    || ["banks", "planes", "outerZ", "innerZ", "depth"].some((key) => key in frontEntrance)) {
+    errors.push("V17 frontage must provide one glass facade plane with two physical-left windows and six double-door assemblies grouped 2-gap-2-gap-2.");
+  }
+  if (LOBBY_PLAN.kioskShowtimeScreens.length !== 3
+    || LOBBY_PLAN.kioskShowtimeScreens.some((screen, index) => (
+      screen.id !== `kiosk-showtime-screen-${index + 1}`
+      || !nearlyEqual(screen.wallX, LOBBY_EAST_X)
+      || !nearlyEqual(screen.centerY, 3.05)
+      || !nearlyEqual(screen.centerZ, index * 1.275)
+      || !nearlyEqual(screen.width, 1.15)
+      || !nearlyEqual(screen.height, 0.55)
+    ))) {
+    errors.push("V17 must mount three compact kiosk-width showtime screens above the four east-wall kiosks.");
   }
   const boxOffice = serviceRoomById.get("box-office");
   if (LOBBY_PLAN.boxOfficePos?.id !== "box-office-pos"
@@ -1432,7 +1464,7 @@ export function validateLayoutData() {
     || !nearlyEqual(LOBBY_PLAN.boxOfficeReturn.zMax, LOBBY_PLAN.futureStairs.zMin)
     || !nearlyEqual(boxOfficeReturnLength, 3.15)
     || !nearlyEqual(boxOfficeReturnDepth, BOX_OFFICE_RETURN_DEPTH)
-    || !nearlyEqual(kioskEastGap, 1.6)
+    || !nearlyEqual(kioskEastGap, 0.5)
     || LOBBY_PLAN.futureStairWall?.finish !== "white"
     || sightline?.bounds.xMin < TICKET_APPROACH_PLAN.bounds.xMin
     || sightline?.bounds.xMax > TICKET_APPROACH_PLAN.bounds.xMax

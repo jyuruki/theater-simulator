@@ -6,10 +6,12 @@ A first-person, browser-based layout prototype for a multiplayer movie-theater s
 
 This is a spatial prototype—not an official measured architectural plan. It is unaffiliated with Consolidated Theatres.
 
-## What is in v0.16
+## What is in v0.17
 
-- A source-matched front entrance with three compact vestibule banks, each using back-to-back outer and inner double doors, followed by a structural divider pillar and two large fixed window bays rather than doors spanning the full lobby
-- The lobby's east wall pulled flush to the stair, eliminating the unused side gap while retaining the compact three-kiosk and box-office arrangement
+- A single-plane glass frontage with six double-door assemblies arranged `2 · gap · 2 · gap · 2`; the two approximately two-foot group gaps are fixed glazing rather than a second row of doors
+- Two large waist-height-sill windows on the physical-left side of the façade, separated from the physical-right door group by one structural pillar
+- Four compact ticket kiosks mounted flush to the lobby's east wall while preserving clearance to the stair foot and box office
+- Three compact, kiosk-width showtime screens mounted above the kiosk bank
 - The existing exposed pipe/duct composition preserved in plan and extended across the full lobby, with the roof lowered to `10.8 m` so the lowest mechanicals hover roughly one to two feet above the two `8.9 m` display/mural tops
 - A rebuilt open-underneath 2-meter stair beginning at the box-office return, climbing on thin walkable treads to an 8-meter-high square landing and upper door, with a low white L-shaped wall and accessible nook below the landing
 - Equal gray side fields added to the distinct stair-side mural, with no top/bottom trim and no changes to the concession mural across the lobby
@@ -35,7 +37,7 @@ This is a spatial prototype—not an official measured architectural plan. It is
 - A three-times-taller public lobby with an exposed charcoal ceiling, while the red-carpet ticket hall, dark-tile fountain court, office rooms, and kitchen service roofs remain at their established 4.6-meter height
 - A fully enclosed lower concession soffit joining the projecting mural fascia to the angled back wall, using original procedural botanical artwork informed by the supplied lobby reference rather than copying the photographed mural
 - A photo-informed concession service line: white service counter, blue register/candy run, white Expo pickup, six registers grouped `2 · candy · 2 · candy · 2`, and taller paired popcorn machines
-- Three customer ticket kiosks, one POS on the long box-office counter, and one central wooden ticket lectern replacing the former paired checkpoint stands
+- Four customer ticket kiosks, one POS on the long box-office counter, and one central wooden ticket lectern replacing the former paired checkpoint stands
 - Two full-height white pillars bracketing the fountain island, including the deliberately narrow but player-tested passage beside the Theater 3 divider
 - Hallway-charcoal exterior faces and warm white interior faces on the Women's Restroom shell
 
@@ -50,7 +52,7 @@ This is a spatial prototype—not an official measured architectural plan. It is
 - Hallway-dark public finishes around the drinking fountains and MEN entry, while the restroom-facing surfaces retain their lighter interior finish
 
 - A physically corrected left/right plan: concessions are on the guest's left when entering, with the map and first-person heading using the same orientation
-- A much larger gray-stone lobby rebuilt from the detailed lobby sketch: three double-door banks, three ticket kiosks, the corrected L-shaped box office, a reserved future stair footprint, and an overflow-room-to-office sequence
+- A much larger gray-stone lobby rebuilt from the detailed lobby sketch: a single-plane six-assembly glass entrance, four ticket kiosks, the corrected L-shaped box office, a reserved future stair footprint, and an overflow-room-to-office sequence
 - The deliberately bent concession/bar counter, with the grouped six-POS/candy sequence on its diagonal blue face, a separate back bar, the sketched angled kitchen partition, taller poppers, two fryers, grill, and turbo oven
 - A real diagonal doorway connecting kitchen storage to the kitchen, while retaining the separate service doorway shown in the lobby sketch
 - All 14 stadium-style auditoriums with 1,093 procedurally placed brown-leather seats and tray tables

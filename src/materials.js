@@ -1552,6 +1552,104 @@ function createLobbyBarScreenTextures() {
   });
 }
 
+function createKioskShowtimeScreenTextures() {
+  const width = 768;
+  const height = 432;
+  const definitions = [
+    {
+      id: "kiosk-showtime-screen-1",
+      name: "kiosk-showtime-screen-01",
+      zone: "SCREENS 1–5",
+      accent: "#ef4763",
+      listings: [
+        { title: "THE STARLIT CURRENT", screen: "SCREEN 1 · PG", times: "12:10  ·  2:45  ·  5:20" },
+        { title: "LANTERN CITY", screen: "SCREEN 3 · PG-13", times: "1:05  ·  3:50  ·  7:15" },
+        { title: "PACIFIC AFTERGLOW", screen: "SCREEN 5 · PG", times: "4:30  ·  8:05  ·  10:35" },
+      ],
+    },
+    {
+      id: "kiosk-showtime-screen-2",
+      name: "kiosk-showtime-screen-02",
+      zone: "SCREENS 6–10",
+      accent: "#55c6d2",
+      listings: [
+        { title: "NEON REEF", screen: "SCREEN 6 · PG-13", times: "12:40  ·  3:25  ·  6:10" },
+        { title: "ORBITAL TIDE", screen: "SCREEN 8 · PG", times: "1:30  ·  4:15  ·  9:20" },
+        { title: "THE QUIET VOLCANO", screen: "SCREEN 10 · R", times: "2:20  ·  5:45  ·  8:50" },
+      ],
+    },
+    {
+      id: "kiosk-showtime-screen-3",
+      name: "kiosk-showtime-screen-03",
+      zone: "SCREENS 11–14",
+      accent: "#e7ba58",
+      listings: [
+        { title: "LAST TRAIN TO HILO", screen: "SCREEN 11 · PG", times: "12:25  ·  3:05  ·  6:35" },
+        { title: "MANGO MOON", screen: "SCREEN 13 · PG", times: "1:50  ·  4:40  ·  7:30" },
+        { title: "MIDNIGHT ON MAUNA", screen: "SCREEN 14 · PG-13", times: "5:10  ·  8:15  ·  10:45" },
+      ],
+    },
+  ];
+
+  return definitions.map((definition, index) => {
+    const canvas = createCanvas(width, height);
+    const context = context2d(canvas);
+    const background = context.createLinearGradient(0, 0, width, height);
+    background.addColorStop(0, "#070910");
+    background.addColorStop(0.58, "#101524");
+    background.addColorStop(1, "#080a12");
+    context.fillStyle = background;
+    context.fillRect(0, 0, width, height);
+
+    context.fillStyle = definition.accent;
+    context.fillRect(0, 0, 12, height);
+    context.fillRect(30, 89, width - 60, 3);
+
+    context.fillStyle = "#f7f4ef";
+    context.font = "800 34px Arial, Helvetica, sans-serif";
+    context.textAlign = "left";
+    context.textBaseline = "middle";
+    context.fillText("SHOWTIMES", 34, 48);
+    context.fillStyle = "#9ea8ba";
+    context.font = "700 17px Arial, Helvetica, sans-serif";
+    context.textAlign = "right";
+    context.fillText(definition.zone, width - 34, 48);
+
+    definition.listings.forEach((listing, listingIndex) => {
+      const panelY = 108 + listingIndex * 101;
+      drawScreenPanel(context, 28, panelY, width - 56, 84, listingIndex % 2 === 0 ? "#121827" : "#0e1421");
+
+      context.fillStyle = definition.accent;
+      context.fillRect(43, panelY + 15, 5, 54);
+      context.fillStyle = "#f6f4f0";
+      context.font = "800 24px Arial, Helvetica, sans-serif";
+      context.textAlign = "left";
+      context.fillText(listing.title, 64, panelY + 30, 360);
+      context.fillStyle = "#8f9bad";
+      context.font = "700 14px Arial, Helvetica, sans-serif";
+      context.fillText(listing.screen, 64, panelY + 59);
+
+      context.fillStyle = "#ffffff";
+      context.font = "700 19px Arial, Helvetica, sans-serif";
+      context.textAlign = "right";
+      context.fillText(listing.times, width - 48, panelY + 43);
+    });
+
+    context.fillStyle = "#6f7888";
+    context.font = "600 13px Arial, Helvetica, sans-serif";
+    context.textAlign = "left";
+    context.fillText("TIMES SUBJECT TO CHANGE", 34, 416);
+    context.textAlign = "right";
+    context.fillText("MILILANI CINEMA", width - 34, 416);
+
+    const texture = canvasTexture(canvas, { name: definition.name, clamp: true, anisotropy: 4 });
+    texture.userData.screenId = definition.id;
+    texture.userData.sequenceIndex = index;
+    texture.userData.credit = "Original procedural fictional cinema showtime artwork";
+    return texture;
+  });
+}
+
 function createOppositeLobbyMuralTexture() {
   // This is intentionally a second, independent lobby artwork. It faces the
   // stair/kiosk side of the room: dense foliage grows in from the left while
@@ -1708,5 +1806,6 @@ export {
   createSignTexture,
   createBotanicalMuralTexture,
   createLobbyBarScreenTextures,
+  createKioskShowtimeScreenTextures,
   createOppositeLobbyMuralTexture,
 };
