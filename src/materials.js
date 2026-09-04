@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import { createPhotoFinishMaterials } from "./photo-finishes.js";
+import { SHOWS } from "./showtimes.js";
 
 const TAU = Math.PI * 2;
 
@@ -211,141 +213,64 @@ function createCourtyardTileCanvas() {
 }
 
 function createLobbyStoneCanvas() {
-  const size = 512;
-  const slabSize = size / 2;
-  const canvas = createCanvas(size, size);
+  const canvas = makeNoiseCanvas({ size: 512, seed: "mililani-polished-concrete-v18", base: "#b9ac96", spread: 13, density: 0.72 });
   const context = context2d(canvas);
-  const random = seededRandom("mililani-cool-gray-honed-stone-v3");
+  const random = seededRandom("concrete-mottling-v18");
+  for (let i = 0; i < 45; i += 1) {
+    const x = random() * 512, y = random() * 512, radius = 18 + random() * 72;
+    const gradient = context.createRadialGradient(x,y,0,x,y,radius);
+    gradient.addColorStop(0, i % 2 ? "rgba(239,229,207,0.08)" : "rgba(67,61,51,0.06)");
+    gradient.addColorStop(1,"rgba(128,128,128,0)");
+    context.fillStyle = gradient;
+    context.fillRect(x-radius,y-radius,radius*2,radius*2);
+  }
+  context.fillStyle = "rgba(62,58,49,0.18)";
+  context.fillRect(0,0,1,512);
+  context.fillRect(0,0,512,1);
+  return canvas;
+}
 
-  // The undercoat becomes a consistent grout line when the map repeats.
-  context.fillStyle = "#656866";
-  context.fillRect(0, 0, size, size);
-
-  for (let row = 0; row < 2; row += 1) {
-    for (let column = 0; column < 2; column += 1) {
-      const x = column * slabSize + 3;
-      const y = row * slabSize + 3;
-      const width = slabSize - 6;
-      const height = slabSize - 6;
-      const warmth = Math.floor(random() * 5);
-      const shade = 132 + Math.floor(random() * 14);
-      const stoneGradient = context.createLinearGradient(x, y, x + width, y + height);
-      stoneGradient.addColorStop(0, `rgb(${shade + warmth}, ${shade + warmth - 2}, ${shade + warmth - 7})`);
-      stoneGradient.addColorStop(0.52, `rgb(${shade + 7}, ${shade + 5}, ${shade + 1})`);
-      stoneGradient.addColorStop(1, `rgb(${shade + warmth - 3}, ${shade + warmth - 4}, ${shade + warmth - 8})`);
-      context.fillStyle = stoneGradient;
-      context.fillRect(x, y, width, height);
-
-      context.save();
-      context.beginPath();
-      context.rect(x, y, width, height);
-      context.clip();
-      for (let fleck = 0; fleck < 1100; fleck += 1) {
-        context.fillStyle = random() > 0.44 ? "#c5c6c2" : "#565a58";
-        context.globalAlpha = 0.025 + random() * 0.07;
-        context.fillRect(
-          x + random() * width,
-          y + random() * height,
-          0.35 + random() * 1.1,
-          0.35 + random() * 0.8,
-        );
-      }
-
-      for (let vein = 0; vein < 13; vein += 1) {
-        const startY = y + random() * height;
-        context.strokeStyle = random() > 0.48 ? "#5e6260" : "#cfd0ca";
-        context.globalAlpha = 0.04 + random() * 0.09;
-        context.lineWidth = 0.45 + random() * 1.15;
-        context.beginPath();
-        context.moveTo(x - 14, startY);
-        context.bezierCurveTo(
-          x + width * 0.28,
-          startY + (random() - 0.5) * 54,
-          x + width * 0.68,
-          startY + (random() - 0.5) * 48,
-          x + width + 14,
-          startY + (random() - 0.5) * 30,
-        );
-        context.stroke();
-      }
-      context.restore();
+function createRestroomFloorCanvas() {
+  const canvas = createCanvas(512,512), context = context2d(canvas);
+  const random = seededRandom("restroom-square-streaked-tile-v18");
+  context.fillStyle = "#70726f";
+  context.fillRect(0,0,512,512);
+  for(let row=0;row<4;row++) for(let column=0;column<4;column++) {
+    const shade = 142 + Math.floor(random()*15);
+    context.fillStyle = `rgb(${shade+3},${shade+2},${shade-3})`;
+    context.fillRect(column*128+1,row*128+1,126,126);
+    for(let i=0;i<100;i++) {
+      context.fillStyle = i%2 ? "rgba(61,65,64,0.045)" : "rgba(232,229,216,0.09)";
+      context.fillRect(column*128+3+random()*88,row*128+2+random()*123,6+random()*26,0.5+random()*2);
     }
   }
-
-  context.globalAlpha = 0.2;
-  context.strokeStyle = "#b5b7b3";
-  context.lineWidth = 1;
-  context.beginPath();
-  context.moveTo(slabSize + 2, 0);
-  context.lineTo(slabSize + 2, size);
-  context.moveTo(0, slabSize + 2);
-  context.lineTo(size, slabSize + 2);
-  context.stroke();
-  context.globalAlpha = 1;
   return canvas;
 }
 
 function createCorridorCarpetCanvas() {
-  const size = 512;
-  const canvas = createCanvas(size, size);
-  const context = context2d(canvas);
-  const random = seededRandom("mililani-maroon-corridor-carpet-v2");
-  const fiberPalette = ["#2a121a", "#491925", "#692535", "#321822", "#751f34", "#24222b", "#84604d"];
-
-  context.fillStyle = "#4a1826";
-  context.fillRect(0, 0, size, size);
-
-  // Dense, mixed-value fibers deliberately hide tracked-in dirt and small debris.
-  for (let index = 0; index < 22000; index += 1) {
-    const x = random() * size;
-    const y = random() * size;
-    const length = 0.55 + random() * 2.25;
-    context.strokeStyle = fiberPalette[Math.floor(random() * fiberPalette.length)];
-    context.globalAlpha = 0.2 + random() * 0.55;
-    context.lineWidth = 0.32 + random() * 0.65;
-    context.beginPath();
-    context.moveTo(x, y);
-    context.lineTo(x + (random() - 0.5) * 1.6, y + length);
-    context.stroke();
-  }
-
-  // A fixed lattice makes a compact transit/cinema motif with matching tile edges.
-  context.lineCap = "round";
-  for (let row = -1; row <= 8; row += 1) {
-    for (let column = -1; column <= 8; column += 1) {
-      const x = column * 64 + (row % 2 ? 32 : 0);
-      const y = row * 64;
-      const patternRow = ((row % 8) + 8) % 8;
-      const patternColumn = ((column % 8) + 8) % 8;
-      const alternate = (patternRow + patternColumn) % 3 === 0;
-      context.strokeStyle = alternate ? "#9d4b51" : "#263747";
-      context.globalAlpha = alternate ? 0.22 : 0.27;
-      context.lineWidth = alternate ? 2.4 : 1.8;
+  const size = 768;
+  const canvas = createCanvas(size,size), context = context2d(canvas);
+  const random = seededRandom("mililani-overlapping-ripple-carpet-v18");
+  context.fillStyle = "#57213b";
+  context.fillRect(0,0,size,size);
+  // Staggered overlapping circular fans, drawn beyond all four tile edges.
+  for(let row=-2;row<=5;row++) for(let col=-2;col<=5;col++) {
+    const x=col*192 + (Math.abs(row)%2)*96, y=row*192;
+    for(let ring=0;ring<12;ring++) {
+      context.strokeStyle = ["#843953", "#401d34", "#a25360", "#342533"][ring%4];
+      context.globalAlpha=0.72;
+      context.lineWidth=2.3;
       context.beginPath();
-      context.moveTo(x - 17, y);
-      context.quadraticCurveTo(x, y - 13, x + 17, y);
-      context.quadraticCurveTo(x, y + 13, x - 17, y);
-      context.stroke();
-
-      context.strokeStyle = "#b58a68";
-      context.globalAlpha = 0.13;
-      context.beginPath();
-      context.moveTo(x - 8, y + 20);
-      context.lineTo(x + 8, y + 28);
+      context.arc(x,y,25+ring*7.8,0,TAU);
       context.stroke();
     }
   }
-
-  for (let index = 0; index < 760; index += 1) {
-    context.fillStyle = random() > 0.64 ? "#b97868" : "#17161b";
-    context.globalAlpha = 0.08 + random() * 0.2;
-    context.beginPath();
-    context.arc(random() * size, random() * size, 0.35 + random() * 1.45, 0, TAU);
-    context.fill();
+  for(let i=0;i<42000;i++) {
+    context.globalAlpha=0.12+random()*0.2;
+    context.fillStyle=i%2 ? "#c09789" : "#18121e";
+    context.fillRect(random()*size,random()*size,0.65,1.3);
   }
-
-  context.globalAlpha = 1;
-  context.lineCap = "butt";
+  context.globalAlpha=1;
   return canvas;
 }
 
@@ -654,7 +579,15 @@ function createMaterialLibrary(renderer) {
   );
   const ceilingMap = textureFrom(createCeilingCanvas(), { name: "acoustic-ceiling-tile", repeat: [8, 8] });
 
+  const photoFinishes = createPhotoFinishMaterials();
+  Object.values(photoFinishes).forEach(track);
   const library = {
+    ...photoFinishes,
+    restroomFloor: track(new THREE.MeshStandardMaterial({
+      name: "Restroom / gray square floor tile",
+      map: textureFrom(createRestroomFloorCanvas(), { name: "restroom-gray-square-tile", repeat: [4,4] }),
+      roughness: 0.4, bumpMap: microBump, bumpScale: 0.007,
+    })),
     carpet: track(new THREE.MeshStandardMaterial({
       name: "Carpet / patterned cinema",
       color: 0xffffff,
@@ -688,17 +621,15 @@ function createMaterialLibrary(renderer) {
     })),
     lobbyStone: track(new THREE.MeshPhysicalMaterial({
       name: "Stone / warm gray honed lobby slabs",
-      // The texture carries the slab variation; this multiplier keeps the
-      // finished floor in the requested medium warm-gray range under lobby
-      // lighting instead of reading as glossy white porcelain.
-      color: 0xb8b4ad,
+      // Warm polished concrete as seen in the post-renovation lobby photos.
+      color: 0xffffff,
       map: lobbyStoneMap,
       bumpMap: microBump,
-      bumpScale: 0.014,
-      roughness: 0.62,
+      bumpScale: 0.006,
+      roughness: 0.34,
       metalness: 0,
-      clearcoat: 0.025,
-      clearcoatRoughness: 0.72,
+      clearcoat: 0.2,
+      clearcoatRoughness: 0.28,
     })),
     corridorCarpet: track(new THREE.MeshStandardMaterial({
       name: "Carpet / maroon dirt-hiding corridor pattern",
@@ -830,7 +761,8 @@ function createMaterialLibrary(renderer) {
     })),
     concessionBlue: track(new THREE.MeshPhysicalMaterial({
       name: "Counter / deep blue concession",
-      color: 0x243d78,
+      color: 0x162d54,
+      map: textureFrom(makeNoiseCanvas({ size: 256, seed: "navy-flecks-v18", base: "#f3f3f3", spread: 20, density: 0.12 }), { name: "concession-navy-fleck", repeat: [4,2] }),
       roughness: 0.32,
       metalness: 0.02,
       clearcoat: 0.3,
@@ -899,8 +831,9 @@ function createMaterialLibrary(renderer) {
       metalness: 0,
     })),
     stall: track(new THREE.MeshPhysicalMaterial({
-      name: "Restroom / green phenolic partition",
-      color: 0x315e55,
+      name: "Restroom / black flecked partition",
+      color: 0x181b1e,
+      map: textureFrom(makeNoiseCanvas({ size: 256, seed: "stall-fleck-v18", base: "#b8b8b8", spread: 125, density: 0.17 }), { name: "stall-white-fleck", repeat: [2,4] }),
       roughness: 0.42,
       metalness: 0.04,
       clearcoat: 0.16,
@@ -1555,41 +1488,16 @@ function createLobbyBarScreenTextures() {
 function createKioskShowtimeScreenTextures() {
   const width = 768;
   const height = 432;
-  const definitions = [
-    {
-      id: "kiosk-showtime-screen-1",
-      name: "kiosk-showtime-screen-01",
-      zone: "SCREENS 1–5",
-      accent: "#ef4763",
-      listings: [
-        { title: "THE STARLIT CURRENT", screen: "SCREEN 1 · PG", times: "12:10  ·  2:45  ·  5:20" },
-        { title: "LANTERN CITY", screen: "SCREEN 3 · PG-13", times: "1:05  ·  3:50  ·  7:15" },
-        { title: "PACIFIC AFTERGLOW", screen: "SCREEN 5 · PG", times: "4:30  ·  8:05  ·  10:35" },
-      ],
-    },
-    {
-      id: "kiosk-showtime-screen-2",
-      name: "kiosk-showtime-screen-02",
-      zone: "SCREENS 6–10",
-      accent: "#55c6d2",
-      listings: [
-        { title: "NEON REEF", screen: "SCREEN 6 · PG-13", times: "12:40  ·  3:25  ·  6:10" },
-        { title: "ORBITAL TIDE", screen: "SCREEN 8 · PG", times: "1:30  ·  4:15  ·  9:20" },
-        { title: "THE QUIET VOLCANO", screen: "SCREEN 10 · R", times: "2:20  ·  5:45  ·  8:50" },
-      ],
-    },
-    {
-      id: "kiosk-showtime-screen-3",
-      name: "kiosk-showtime-screen-03",
-      zone: "SCREENS 11–14",
-      accent: "#e7ba58",
-      listings: [
-        { title: "LAST TRAIN TO HILO", screen: "SCREEN 11 · PG", times: "12:25  ·  3:05  ·  6:35" },
-        { title: "MANGO MOON", screen: "SCREEN 13 · PG", times: "1:50  ·  4:40  ·  7:30" },
-        { title: "MIDNIGHT ON MAUNA", screen: "SCREEN 14 · PG-13", times: "5:10  ·  8:15  ·  10:45" },
-      ],
-    },
-  ];
+  const definitions = [[1,5],[6,10],[11,14]].map(([first,last],index) => ({
+    id: `kiosk-showtime-screen-${index+1}`,
+    name: `kiosk-showtime-screen-0${index+1}`,
+    zone: `SCREENS ${first}–${last}`,
+    accent: SHOWS[first-1].accent,
+    listings: SHOWS.filter(show => show.auditorium>=first && show.auditorium<=last).map(show => ({
+      title: show.title.toUpperCase(), screen: `SCREEN ${show.auditorium} · ${show.rating}`,
+      times: show.times.join("  ·  "),
+    })),
+  }));
 
   return definitions.map((definition, index) => {
     const canvas = createCanvas(width, height);
@@ -1616,29 +1524,29 @@ function createKioskShowtimeScreenTextures() {
     context.fillText(definition.zone, width - 34, 48);
 
     definition.listings.forEach((listing, listingIndex) => {
-      const panelY = 108 + listingIndex * 101;
-      drawScreenPanel(context, 28, panelY, width - 56, 84, listingIndex % 2 === 0 ? "#121827" : "#0e1421");
+      const panelY = 104 + listingIndex * 59;
+      drawScreenPanel(context, 28, panelY, width - 56, 54, listingIndex % 2 === 0 ? "#121827" : "#0e1421");
 
       context.fillStyle = definition.accent;
-      context.fillRect(43, panelY + 15, 5, 54);
+      context.fillRect(43, panelY + 10, 4, 34);
       context.fillStyle = "#f6f4f0";
-      context.font = "800 24px Arial, Helvetica, sans-serif";
+      context.font = "800 19px Arial, Helvetica, sans-serif";
       context.textAlign = "left";
-      context.fillText(listing.title, 64, panelY + 30, 360);
+      context.fillText(listing.title, 59, panelY + 20, 330);
       context.fillStyle = "#8f9bad";
       context.font = "700 14px Arial, Helvetica, sans-serif";
-      context.fillText(listing.screen, 64, panelY + 59);
+      context.fillText(listing.screen, 59, panelY + 42);
 
       context.fillStyle = "#ffffff";
       context.font = "700 19px Arial, Helvetica, sans-serif";
       context.textAlign = "right";
-      context.fillText(listing.times, width - 48, panelY + 43);
+      context.fillText(listing.times, width - 45, panelY + 28);
     });
 
     context.fillStyle = "#6f7888";
     context.font = "600 13px Arial, Helvetica, sans-serif";
     context.textAlign = "left";
-    context.fillText("TIMES SUBJECT TO CHANGE", 34, 416);
+    context.fillText("SIMULATOR SHOWTIMES", 34, 416);
     context.textAlign = "right";
     context.fillText("MILILANI CINEMA", width - 34, 416);
 
@@ -1648,6 +1556,30 @@ function createKioskShowtimeScreenTextures() {
     texture.userData.credit = "Original procedural fictional cinema showtime artwork";
     return texture;
   });
+}
+
+function createKioskTouchscreenTexture() {
+  const canvas=createCanvas(512,768), context=context2d(canvas);
+  context.fillStyle="#111823"; context.fillRect(0,0,512,768);
+  context.fillStyle="#ee4962"; context.fillRect(0,0,512,8);
+  context.textAlign="left";
+  context.fillStyle="#ffffff"; context.font="800 45px Arial";
+  context.fillText("MILILANI 14",30,74);
+  context.fillStyle="#a7afb9"; context.font="22px Arial";
+  context.fillText("CHOOSE YOUR NEXT STORY",30,113);
+  SHOWS.slice(0,4).forEach((show,i)=>{
+    const y=156+i*118;
+    context.fillStyle=show.accent; context.fillRect(30,y,65,94);
+    context.fillStyle="#f1eee7"; context.font="700 25px Arial";
+    context.fillText(show.title,115,y+31,360);
+    context.fillStyle="#a7b3bf"; context.font="18px Arial";
+    context.fillText(`${show.rating}  ·  ${show.minutes} MIN`,115,y+61);
+    context.fillText(show.times.join("   "),115,y+86);
+  });
+  context.fillStyle="#ed4961"; context.fillRect(30,655,452,63);
+  context.fillStyle="#fff";context.textAlign="center";context.font="700 23px Arial";
+  context.fillText("TOUCH TO FIND SHOWTIMES",256,695);
+  return canvasTexture(canvas,{name:"ticket-kiosk-portrait-ui-v18",clamp:true,anisotropy:4});
 }
 
 function createOppositeLobbyMuralTexture() {
@@ -1807,5 +1739,6 @@ export {
   createBotanicalMuralTexture,
   createLobbyBarScreenTextures,
   createKioskShowtimeScreenTextures,
+  createKioskTouchscreenTexture,
   createOppositeLobbyMuralTexture,
 };

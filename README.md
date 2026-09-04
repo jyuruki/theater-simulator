@@ -1,114 +1,55 @@
 # Mililani 14 Theater Simulator
 
-![First-person prototype preview](docs/preview.png)
+[Play the theater](https://jyuruki.github.io/theater-simulator/)
 
-A first-person, browser-based layout prototype for a multiplayer movie-theater simulator. This build reconstructs the relationship and approximate scale of the Consolidated Theatres Mililani 14 from a hand-drawn employee floor plan, public location details, and visual references.
+A first-person browser recreation of Consolidated Theatres Mililani 14, built from Jacob's employee floor plans, corrections, and location photos. The existing 14 auditoriums, 1,093 seats, stadium elevations, service routes, two original murals, and exposed lobby pipework remain the foundation.
 
-This is a spatial prototype—not an official measured architectural plan. It is unaffiliated with Consolidated Theatres.
+This is an independent recreation with approximate dimensions, not an official architectural survey or ticket service.
 
-## What is in v0.17
+## Version 18
 
-- A single-plane glass frontage with six double-door assemblies arranged `2 · gap · 2 · gap · 2`; the two approximately two-foot group gaps are fixed glazing rather than a second row of doors
-- Two large waist-height-sill windows on the physical-left side of the façade, separated from the physical-right door group by one structural pillar
-- Four compact ticket kiosks mounted flush to the lobby's east wall while preserving clearance to the stair foot and box office
-- Three compact, kiosk-width showtime screens mounted above the kiosk bank
-- The existing exposed pipe/duct composition preserved in plan and extended across the full lobby, with the roof lowered to `10.8 m` so the lowest mechanicals hover roughly one to two feet above the two `8.9 m` display/mural tops
-- A rebuilt open-underneath 2-meter stair beginning at the box-office return, climbing on thin walkable treads to an 8-meter-high square landing and upper door, with a low white L-shaped wall and accessible nook below the landing
-- Equal gray side fields added to the distinct stair-side mural, with no top/bottom trim and no changes to the concession mural across the lobby
+- **Kitchen floor corrected:** the separating wall follows the original straight service-floor edge, closing only the light-floor triangle. The kitchen-storage connector nook remains open. The main kitchen receives its own dark floor polygon, and the kitchen/nook/soffit roofs meet at their existing low ceiling height.
+- **Reference-based finishes:** warmer polished lobby concrete, burgundy ripple carpet, gray hallway walls above charcoal panels, white restroom tile with a red band and diamond accents, dark sinks, taps, dispensers, and flecked stall partitions. Counts and room footprints are retained.
+- **Detailed service fixtures:** silver kiosk cabinets, portrait touchscreens, card readers and receipt slots; white mosaic concession backsplash and stainless counter bases. Counter overhangs and readers have collision.
+- **Working visit:** choose any of 14 fictional shows and a seat from its actual auditorium layout, collect a simulated ticket, check it at the wooden podium, order food, pick it up at Expo, and fill a drink.
+- **Living theater:** three staff, three visitors on checked paths, optional ambient sound and footsteps, movie posters, two-sided hanging show signs, and an original animated auditorium pre-show.
+- **Entrance movement:** the six double-door assemblies keep their V17 positions. Twelve hinged leaves open toward the front walk as you approach, with collision following their motion. They stay open while a player is in the threshold.
 
-## Preserved from v0.15
-
-- A wall-mounted `7.3 × 4.3 m` digital menu screen above the bar, with four original food-and-menu slides rotating every 10 seconds
-- A real 2.4-meter-wide lobby stair replacing the oversized construction placeholder: a short privacy wall gives way to an open railing, and the flight reaches an elevated top doorway
-- A second original lobby mural on the stair/kiosk side, visually distinct from the concession botanical mural on the opposite side; the V14 concession surround, soffit, kitchen footprint, and service geometry remain untouched
-- The Men's Restroom's existing nine-stall bank recessed into its south wall without changing the fixture count, ordering, or room layout
-- The complete Theater 1/2 pair translated rigidly one meter in plan X toward the ticket podium, preserving both auditoriums, their shared boundary, cubbies, doors, seating, and internal routes
-
-- A corrected diagonal mural surround running from the kitchen-door side to the isolated back-bar start, retaining the existing artwork scale while using substantial gray panels only at its left and right ends
-- The previous kitchen footprint and two-thirds counter-parallel service wall restored, with only the small floor wedge sealed and the kitchen-storage connector nook preserved
-- One continuous lower ceiling beneath the mural, complete kitchen roof coverage, and larger exposed mechanical pipes and ducts distributed across the full mural overhead instead of clustered decorative strips
-
-- A deeper, longer diagonal mural surround that begins beside the kitchen door and stops before the back bar; the original procedural mural artwork retains its V12 dimensions while new gray end panels fill the wider fascia
-- A restored kitchen boundary that seals the triangular V12 floor remnant as inaccessible dead space, closes the service ceiling, and carries the office-side wall up to the mural datum to form the intended attic-like volume above the kitchen
-- A substantially tighter box-office/future-stair side: a roughly two-foot reveal beside the ticket hall, a narrower flush cubby, a return leg reduced to half its prior length, and a white stair construction wall
-- The complete fountain island—pillars, machines, and caddies—shifted slightly deeper into its court so its back edge aligns with the nearby trash cans while retaining the rear service aisle
-
-- A retained concession/office-side lobby translation whose guest-bar endpoint stays aligned with the fixed ticket approach, while the V13 box-office/stair edge uses its new compact footprint
-- A three-times-taller public lobby with an exposed charcoal ceiling, while the red-carpet ticket hall, dark-tile fountain court, office rooms, and kitchen service roofs remain at their established 4.6-meter height
-- A fully enclosed lower concession soffit joining the projecting mural fascia to the angled back wall, using original procedural botanical artwork informed by the supplied lobby reference rather than copying the photographed mural
-- A photo-informed concession service line: white service counter, blue register/candy run, white Expo pickup, six registers grouped `2 · candy · 2 · candy · 2`, and taller paired popcorn machines
-- Four customer ticket kiosks, one POS on the long box-office counter, and one central wooden ticket lectern replacing the former paired checkpoint stands
-- Two full-height white pillars bracketing the fountain island, including the deliberately narrow but player-tested passage beside the Theater 3 divider
-- Hallway-charcoal exterior faces and warm white interior faces on the Women's Restroom shell
-
-- A roughly 15%-shorter main theater hall, with complete auditorium and service-room modules shifted rigidly so none of their internal layouts, seating bowls, cubbies, or routes are stretched
-- Correct hall encounter order from ticket check toward the Theater 9 exit: Theaters 14/13/6 together, Women's Restroom, Theater 12, Theater 7, Theater 11, Theater 10, Theater 8, then Theater 9 with Candy Storage
-- A 50%-wider recessed `MEN` entrance cubby and a small whole-module correction that gives the Theater 3 jamb a deliberate reveal while preserving the BB, drinking-fountain nook, and trash-room relationships
-- The future-upstairs door relocated from the main hall into the left wall of Theater 6's short entrance vestibule, matching the clarified drawing
-
-- A stepped main theater hall: the run from Theater 9 to the drinking-water-fountain wall is now 6.7 meters wide, then it narrows at that exact wall to the prior 4.2-meter width through the Theater 2 exit
-- A rigid 2.5-meter translation of the complete front block—including the small south auditoriums, ticket approach, lobby, service rooms, fixtures, and entrance—so the wider hall adds space without stretching or rearranging those layouts
-- A direct Theater 3 approach: the courtyard door, gentle ramp, and auditorium now share one straight sightline with no invented last-second left turn
-- Hallway-dark public finishes around the drinking fountains and MEN entry, while the restroom-facing surfaces retain their lighter interior finish
-
-- A physically corrected left/right plan: concessions are on the guest's left when entering, with the map and first-person heading using the same orientation
-- A much larger gray-stone lobby rebuilt from the detailed lobby sketch: a single-plane six-assembly glass entrance, four ticket kiosks, the corrected L-shaped box office, a reserved future stair footprint, and an overflow-room-to-office sequence
-- The deliberately bent concession/bar counter, with the grouped six-POS/candy sequence on its diagonal blue face, a separate back bar, the sketched angled kitchen partition, taller poppers, two fryers, grill, and turbo oven
-- A real diagonal doorway connecting kitchen storage to the kitchen, while retaining the separate service doorway shown in the lobby sketch
-- All 14 stadium-style auditoriums with 1,093 procedurally placed brown-leather seats and tray tables
-- Matching footprint families for Theaters 1/2, 4/5, 3/6/7/8, and 9–14
-- Two explicit stadium models: Theaters 3–8 enter at the bottom and climb dual side stairs, while Theaters 1/2 and 9–14 enter level with the top row and descend—without an artificial entry ramp
-- One compact dark-gray-tile fountain courtyard: two equal-length counters, then Theater 4 immediately past the rear counter, Theater 5 beside it near the end wall, with Theater 3 and the future-task room on the same recessed plane
-- Rigidly relocated Theater 3 and Theater 6 modules: each bowl, screen, seating deck, route, usher/storage space, and roof now sits at its corrected entrance instead of connecting back to its former position
-- Sketch-specific circulation: Theater 3's near-adjacent courtyard door, open usher nook, one-door horizontal anteroom, two-door lower room, and gentle-incline side hall; Theater 6's short vestibule with the closed future-stair door on its left wall, right-turn transverse passage, shared two-door lower room, and continuously roofed under-tier hall; the exact 4/5 doglegs; and usher/trash nooks at 7/8
-- An extended concession counter with six POS stations, plus the self-serve island with two soda fountains, two ICEE bookends, cup/lid/straw caddies, and a matching rear counter
-- Concession backline, bar, hot line, kitchen storage, office overflow, manager office, box office, candy storage, trash room, the room behind the fountain counters, both main restrooms, and a closed electrical room
-- The compact Trash–water-fountain–BB cluster, now with a distinct vertical drinking-fountain nook, a separate recessed `MEN` cubby, and a full-height finished BB back wall shared cleanly with Theater 3's lower-storage/service side without overlapping either room
-- Detail-ready placeholders and stable IDs for both poppers, soda fountains, drinking fountains, grill, fryers, turbo oven, and bar well
-- Dashed lower-storage volumes on the map only where the sketch calls for them: the Theater 3 and Theater 6 under-tier rooms
-- Deeper, joined turn pockets for paired Theaters 1/2 and 13/14, Theater 9's entrance on the first-person left of its cubby with the auditorium extending left from it, and clear rear landings that reach both side stairs without seat/wall clipping
-- A fountain-width ticket approach with true two-wall 90-degree poster/empty alcoves, a waist-high divider between Theater 3 and the task room, and a shallow rectangular candy room with one hall door and no invented exterior exit
-- Desktop and touch first-person controls, 30%-faster walking/running, grounded jump with low-ceiling headroom protection, wall sliding without teleport recovery, stadium aisle elevations, and a live floor-plan minimap
-- A source-driven V14 minimap that preserves plan orientation and draws the translated lobby, compact box-office side, compressed stepped hall, reordered auditorium modules, revised BB/H₂O/MEN frontage, Theater 6 vestibule stair, Theater 3 route and lower storage, courtyard west edge, and Theater 9 cubby directly from the same layout records used by the world
-- Always-resident auditorium interiors, extended fog distance, and single-owner floors/walls to eliminate proximity pop-in and the most common flashing surfaces
-- Procedural materials, original island-botanical lobby art, room signs, screens, acoustic panels, leather, trays, and instanced seating
-
-The exact capacities represented are: 38 seats each in Theaters 1–2; 148 in 3; 58 each in 4–5; 148, 153, and 152 in 6–8; and 50 each in 9–14.
+See [V18 implementation and reference notes](docs/v18-notes.md) and the [established layout notes](docs/layout-notes.md).
 
 ## Controls
 
 | Input | Action |
-| --- | --- |
-| `W A S D` | Move |
-| Mouse | Look |
-| `Shift` | Run |
-| `Space` | Jump |
-| `M` | Show or hide the map |
-| `R` | Return to the entrance |
-| `Esc` | Pause / release mouse |
+|---|---|
+| WASD / mouse | Move / look |
+| Shift / Space | Run / jump |
+| E | Use the kiosk, register, podium, Expo or drink machine you are looking at |
+| I | Your ticket and orders |
+| M | Floor plan |
+| O | Sound, volume, and visitor options |
+| R | Return to the entrance |
+| Esc | Close a dialog or pause and release the mouse |
 
-Touch devices get a movement stick, drag-to-look, hold-to-run, and jump buttons.
+On touch devices, use the movement stick, drag to look, and tap the interaction prompt. The ticket, map and options buttons are also touch-accessible. Shows, seats and orders are simulated; there is no payment, external reservation, or saved personal information. Reloading starts a fresh visit.
 
-## Run locally
+## Development
 
-Requires Node.js 24 or a current compatible Node release.
+Node.js 24 and a WebGL 2-capable browser are required.
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
-
-Validation and production build:
 
 ```bash
 npm test
 npm run build
 ```
 
-`npm test` protects the 14-theater grouping, exact 1,093-seat total, compact courtyard order, paired cubby handedness and clearance, the rigid Theater 1/2 translation, top/bottom entry models, half-step side stairs, lower-storage and route roofs, exact restroom fixture banks and recessed Men's stall bank, mirrored coordinate transform, room IDs, rigid lobby translation, high/low ceiling zones, the enclosed rotated concession soffit and extended surround, two distinct lobby murals, sealed kitchen dead space, `2 · candy · 2 · candy · 2` service sequence, equipment anchors, rotating bar-screen timing, narrow stair geometry, lectern, kiosks, and shifted fountain-island clearance. It constructs the complete Three.js world headlessly and checks rendered-floor continuity, ceiling coverage, room reachability, containment, wall sliding, no-teleport movement, low-roof jumping, and manual recovery. GitHub Actions runs the same checks and deploys the built `dist` directory after changes reach `main` once the repository's Pages source is set to **GitHub Actions**.
+The five test suites cover the authoritative layout, rendered structural geometry, movement, all 14 auditorium routes and 152 retained location probes, and V18's actual door movement and visit interfaces. The V18 suite raycasts rendered kitchen floors and roofs, exercises all six entrances with a moving player capsule, checks all 19 interaction points, and completes the ticket/order/pickup/drink flow in a DOM test environment.
 
-## Layout decisions and current limits
+GitHub Actions runs the same tests and production build for pull requests and deploys `dist` to GitHub Pages after a merge to `main`.
 
-See [docs/layout-notes.md](docs/layout-notes.md) for the sketch translation, coordinate plan, known ambiguities, and the most useful measurements or corrections for the next pass.
+## Current scope
 
-This version deliberately stops at the spatial shell. It does not yet implement shifts, guests, orders, cleaning, closing tasks, or multiplayer networking. Equipment anchors and player state are separated from presentation so those systems can be added without rebuilding the floor plan.
+This release adds a small single-player visit to the spatial recreation. It does not implement employee shifts, cleaning tasks, persistent saves, real cinema listings, or multiplayer networking. Materials and characters remain an approximation. The reference photographs are documented but are not bundled into the game; artwork, programming and sounds are original.

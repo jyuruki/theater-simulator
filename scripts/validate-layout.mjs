@@ -1025,23 +1025,14 @@ assert.deepEqual(LOBBY_PLAN.concessionBackWall, {
   counterRunFraction: 2 / 3,
   mergedPartitionSegments: [3, 4],
   height: LOBBY_CEILING_PLAN.baseHeight,
-  materialKey: "wall",
+  materialKey: "mosaicWall",
 }, "The restored kitchen wall must remain exactly two-thirds of and parallel to the concession run.");
-assert.deepEqual(LOBBY_PLAN.kitchenDeadSpace.vertices, [
-  LOBBY_PLAN.kitchenPartition[2],
-  LOBBY_PLAN.kitchenPartition[3],
-  { x: -13.810416666666663, z: 14.8 },
-], "Only the shallow floor-mismatch wedge may remain sealed.");
-assert.equal(LOBBY_PLAN.kitchenDeadSpace.id, "kitchen-dead-wedge");
-assertNear(LOBBY_PLAN.kitchenDeadSpace.area, 0.5189583333333319, "Small dead-wedge area");
-assertNear(LOBBY_PLAN.kitchenDeadSpace.maxDepth, 0.2, "Small dead-wedge maximum depth");
-assert.deepEqual(LOBBY_PLAN.kitchenDeadSpace.separatingWall, {
-  id: "kitchen-dead-wedge-separating-wall",
-  start: LOBBY_PLAN.kitchenPartition[2],
-  end: { x: -13.810416666666663, z: 14.8 },
-  height: 4.6,
-  materialKey: "wall",
-});
+const wedge = LOBBY_PLAN.kitchenDeadSpace;
+assert.equal(wedge.id, "kitchen-dead-wedge");
+assertNear(wedge.separatingWall.start.x, -16.2, "separator starts on original floor edge");
+assertNear(wedge.separatingWall.end.x, -16.2, "separator ends on original floor edge");
+assert.deepEqual(wedge.separatingWall.end, LOBBY_PLAN.kitchenPartition[5]);
+assert.ok(wedge.area > 0 && wedge.area < 8, "Only the light-floor portion is sealed; the connector-side nook survives.");
 assert.deepEqual(LOBBY_PLAN.kitchenDeadSpace.ceiling, {
   id: "kitchen-dead-wedge-ceiling",
   elevation: 4.6,
@@ -1052,7 +1043,7 @@ const connectorNook = LOBBY_PLAN.kitchenConnectorNook;
 assert.equal(connectorNook.id, "kitchen-storage-connector-nook");
 assert.deepEqual(connectorNook.vertices, [
   LOBBY_PLAN.kitchenPartition[2],
-  LOBBY_PLAN.kitchenDeadSpace.vertices[2],
+  LOBBY_PLAN.kitchenDeadSpace.vertices[0],
   LOBBY_PLAN.kitchenPartition[5],
 ]);
 assert.equal(connectorNook.preservedDoorSegment, LOBBY_PLAN.kitchenStorageDoor.partitionSegment);
@@ -1452,7 +1443,7 @@ assert.ok(worldBounds.xMin < worldBounds.xMax);
 assert.equal(worldBounds.xMax - worldBounds.xMin, MAP_BOUNDS.xMax - MAP_BOUNDS.xMin);
 
 console.log(
-  `Layout valid: v17 · six single-plane double-door assemblies + physical-left windows · four flush kiosks + three showtime screens · V16 lobby/stair retained · 153m hall · 14 theaters · 1,093 seats.`,
+  `Layout valid: v18 · six single-plane double-door assemblies + physical-left windows · four flush kiosks + three showtime screens · V16 lobby/stair retained · 153m hall · 14 theaters · 1,093 seats.`,
 );
 
 function publicById(id) {

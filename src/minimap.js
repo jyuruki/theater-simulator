@@ -3,6 +3,7 @@ import {
   COURTYARD_PLAN,
   FOUNTAIN_PLAN,
   HALL_END_EXITS,
+  LOBBY_PLAN,
   MAP_BOUNDS,
   PUBLIC_SPACES,
   SERVICE_ROOMS,
@@ -738,6 +739,22 @@ function drawServiceDoors(context, view) {
   }
 }
 
+function drawKitchenBoundary(context, view) {
+  const wedge = LOBBY_PLAN.kitchenDeadSpace;
+  const points = wedge.vertices.map(point => project(point.x, point.z, view));
+  context.save();
+  context.beginPath();
+  points.forEach((point, index) => index === 0 ? context.moveTo(point.x, point.y) : context.lineTo(point.x, point.y));
+  context.closePath();
+  context.fillStyle = "rgba(8,9,13,0.92)";
+  context.fill();
+  const start = project(wedge.separatingWall.start.x, wedge.separatingWall.start.z, view);
+  const end = project(wedge.separatingWall.end.x, wedge.separatingWall.end.z, view);
+  context.beginPath();context.moveTo(start.x, start.y);context.lineTo(end.x, end.y);
+  context.strokeStyle = "#84b4ce";context.lineWidth = 1.2;context.stroke();
+  context.restore();
+}
+
 function drawHallExits(context, view) {
   for (const exit of HALL_END_EXITS) {
     drawDoorMarker(context, exit.side, exit.x, exit.z, view, { closed: true, width: 2.2 });
@@ -869,6 +886,7 @@ export function createMinimap(options = {}) {
     drawPublicSpaces(context, view);
     drawAuditoriums(context, view);
     drawServiceRooms(context, view);
+    drawKitchenBoundary(context, view);
     drawBoysEntryFeatures(context, view);
     drawEntryRoutes(context, view);
     drawV14SpatialRelationships(context, view);

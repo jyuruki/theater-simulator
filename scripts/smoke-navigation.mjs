@@ -53,13 +53,18 @@ const isStructuralCeiling = (name) => /-ceiling$/.test(name);
 THREE.Object3D.prototype.add = function captureStructuralMeshes(...objects) {
   for (const object of objects) {
     if (!object?.isMesh || object.geometry?.type !== "BoxGeometry") continue;
+    // Moving entrance leaves are local to their hinge. Audit the composed
+    // world transform, otherwise all six doors appear stacked at local zero.
+    const worldPosition = this.localToWorld(object.position.clone());
+    const worldQuaternion = this.getWorldQuaternion(new THREE.Quaternion()).multiply(object.quaternion);
+    const worldYaw = new THREE.Euler().setFromQuaternion(worldQuaternion, "YXZ").y;
 
     if (isStructuralFloor(object.name)) {
       structuralFloors.push({
         id: object.name,
-        x: object.position.x,
-        y: object.position.y,
-        z: object.position.z,
+        x: worldPosition.x,
+        y: worldPosition.y,
+        z: worldPosition.z,
         width: object.scale.x,
         height: object.scale.y,
         depth: object.scale.z,
@@ -71,9 +76,9 @@ THREE.Object3D.prototype.add = function captureStructuralMeshes(...objects) {
     if (isStructuralCeiling(object.name)) {
       structuralCeilings.push({
         id: object.name,
-        x: object.position.x,
-        y: object.position.y,
-        z: object.position.z,
+        x: worldPosition.x,
+        y: worldPosition.y,
+        z: worldPosition.z,
         width: object.scale.x,
         height: object.scale.y,
         depth: object.scale.z,
@@ -88,12 +93,12 @@ THREE.Object3D.prototype.add = function captureStructuralMeshes(...objects) {
       const longAxisIsX = object.scale.x >= object.scale.z;
       structuralWalls.push({
         id: object.name,
-        x: object.position.x,
-        z: object.position.z,
-        minY: object.position.y - object.scale.y / 2,
-        maxY: object.position.y + object.scale.y / 2,
+        x: worldPosition.x,
+        z: worldPosition.z,
+        minY: worldPosition.y - object.scale.y / 2,
+        maxY: worldPosition.y + object.scale.y / 2,
         length: longDimension,
-        angle: object.rotation.y + (longAxisIsX ? 0 : Math.PI / 2),
+        angle: worldYaw + (longAxisIsX ? 0 : Math.PI / 2),
       });
     }
   }
@@ -378,6 +383,12 @@ for (const floor of structuralFloors) {
       if (!surfaceContainsPlanPoint(floor, planXAt(gridX), planZAt(gridZ))) continue;
       floorSupported[gridIndex(gridX, gridZ)] = 1;
     }
+  }
+}
+
+for (const floor of LOBBY_PLAN.floorFinishes) {
+  for (let z = 0; z < gridDepth; z++) for (let x = 0; x < gridWidth; x++) {
+    if (polygonContainsPlanPoint(floor.vertices, { x: planXAt(x), z: planZAt(z) })) floorSupported[gridIndex(x, z)] = 1;
   }
 }
 
@@ -1283,20 +1294,10 @@ for (const side of [-1, 1]) {
 }
 
 const deadSpace = LOBBY_PLAN.kitchenDeadSpace;
-assert.deepEqual(
-  deadSpace.vertices,
-  [
-    { x: -19, z: 14.8 },
-    { x: -13.73333333333333, z: 15 },
-    { x: -13.810416666666663, z: 14.8 },
-  ],
-  "V14 must seal only the tiny triangular floor-mismatch wedge.",
-);
-assert.equal(deadSpace.separatingWall.id, "kitchen-dead-wedge-separating-wall");
-assert.deepEqual(deadSpace.separatingWall.start, LOBBY_PLAN.kitchenPartition[2]);
-assert.deepEqual(deadSpace.separatingWall.end, deadSpace.vertices[2]);
-assertNear(deadSpace.area, 0.5189583333333319, "tiny dead-wedge area");
-assertNear(deadSpace.maxDepth, 0.2, "tiny dead-wedge depth");
+assertNear(deadSpace.separatingWall.start.x, -16.2, "separator matches original dark-floor edge");
+assertNear(deadSpace.separatingWall.end.x, -16.2, "separator follows floor edge all the way to p5");
+assert.deepEqual(deadSpace.separatingWall.start, deadSpace.vertices[0]);
+assert.deepEqual(deadSpace.separatingWall.end, LOBBY_PLAN.kitchenPartition[5]);
 assertBlockedPlanLine(
   "kitchen dead-wedge separating wall",
   deadSpace.separatingWall.start,
@@ -1332,7 +1333,7 @@ const connectorNook = LOBBY_PLAN.kitchenConnectorNook;
 assert.equal(connectorNook.id, "kitchen-storage-connector-nook");
 assert.deepEqual(connectorNook.vertices, [
   LOBBY_PLAN.kitchenPartition[2],
-  deadSpace.vertices[2],
+  deadSpace.vertices[0],
   LOBBY_PLAN.kitchenPartition[5],
 ]);
 assert.equal(connectorNook.preservedDoorSegment, LOBBY_PLAN.kitchenStorageDoor.partitionSegment);
@@ -1532,5 +1533,5 @@ world.dispose();
 materials.dispose();
 
 console.log(
-  `Navigation smoke valid: 14 bowls + ${navigationTargets.length - 14} V17 route targets reachable under rendered floors/ceilings · six direct frontage routes + four-kiosk aisle · stacked open stair/landing samples · geometry overlap-free.`,
+  `Navigation smoke valid: 14 bowls + ${navigationTargets.length - 14} retained route targets reachable under rendered floors/ceilings · six direct frontage routes + four-kiosk aisle · stacked open stair/landing samples · geometry overlap-free.`,
 );
