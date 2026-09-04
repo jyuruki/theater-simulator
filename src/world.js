@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { createEntranceDoors } from "./entrance-doors.js";
 import {
   AUDITORIUMS,
   CONCESSION_SERVICE_SEQUENCE,
@@ -20,6 +21,7 @@ import {
 import {
   buildAuditoriumLayouts,
   pointInRect,
+  pointInPolygon,
   sampleAuditoriumGround,
   selectGroundCandidate,
 } from "./layout-geometry.js";
@@ -32,6 +34,7 @@ import {
 import {
   createBotanicalMuralTexture,
   createKioskShowtimeScreenTextures,
+  createKioskTouchscreenTexture,
   createLobbyBarScreenTextures,
   createOppositeLobbyMuralTexture,
   createSignTexture,
@@ -63,7 +66,7 @@ const publicById = (id) => PUBLIC_SPACES.find((space) => space.id === id);
 
 export function createTheaterWorld({ scene, materials }) {
   const root = new THREE.Group();
-  root.name = "Mililani 14 layout prototype v17";
+  root.name = "Mililani 14 theater visit v18";
   scene.add(root);
 
   const colliders = [];
@@ -157,6 +160,34 @@ export function createTheaterWorld({ scene, materials }) {
     );
   };
 
+  const faceGeometryCache = new Map();
+  const geometryForFaces = (faceMaterials) => {
+    if (!Array.isArray(faceMaterials)) return unitBoxGeometry;
+    const key = faceMaterials.map(material => material.uuid).join("/");
+    if (faceGeometryCache.has(key)) return faceGeometryCache.get(key);
+    // BoxGeometry normally draws six face groups even when five share a
+    // material. Combine equal finishes without changing normals, UVs or the
+    // six-slot face material contract used by the geometry audit.
+    const grouped = new Map();
+    for (const group of unitBoxGeometry.groups) {
+      const material = faceMaterials[group.materialIndex];
+      if (!grouped.has(material.uuid)) grouped.set(material.uuid, { index: group.materialIndex, indices: [] });
+      const destination = grouped.get(material.uuid).indices;
+      for (let i=group.start;i<group.start+group.count;i++) destination.push(unitBoxGeometry.index.getX(i));
+    }
+    const geometry = unitBoxGeometry.clone();
+    geometry.clearGroups();
+    const indices = [];
+    for (const group of grouped.values()) {
+      geometry.addGroup(indices.length, group.indices.length, group.index);
+      indices.push(...group.indices);
+    }
+    geometry.setIndex(indices);
+    faceGeometryCache.set(key, geometry);
+    disposableGeometries.push(geometry);
+    return geometry;
+  };
+
   const addBox = ({
     id,
     x,
@@ -174,12 +205,25 @@ export function createTheaterWorld({ scene, materials }) {
     space = "plan",
     collisionMetadata = null,
   }) => {
-    const mesh = new THREE.Mesh(unitBoxGeometry, material);
+    if (space === "plan" && height > 2 && width > depth * 2) {
+      for (const bounds of [HALL_PLAN.narrow, HALL_PLAN.wide]) {
+        if (x < bounds.xMin || x > bounds.xMax) continue;
+        const face = Math.abs(z-bounds.zMin)<0.015 ? 4 : Math.abs(z-bounds.zMax)<0.015 ? 5 : -1;
+        if (face < 0) continue;
+        const faces = Array.isArray(material) ? [...material] : Array(6).fill(material);
+        if (faces[face] === materials.darkWall) {
+          faces[face] = materials.hallWall;
+          material = faces;
+        }
+      }
+    }
+    const mesh = new THREE.Mesh(geometryForFaces(material), material);
     mesh.name = id;
     mesh.position.set(space === "plan" ? planToWorldX(x) : x, y, z);
     mesh.rotation.y = space === "plan" ? planToWorldYaw(rotationY) : rotationY;
     mesh.scale.set(width, height, depth);
-    mesh.castShadow = castShadow;
+    mesh.castShadow = castShadow || (space === "plan" && z < 24 && height < 4
+      && /kiosk|counter|box-office|stair.*tread|pillar/.test(id));
     mesh.receiveShadow = receiveShadow;
     parent.add(mesh);
     sourceMeshCount += 1;
@@ -1136,10 +1180,19 @@ export function createTheaterWorld({ scene, materials }) {
         addBox({ id: `${room.id}-urinal-${bankIndex}-${index}`, x, y: 0.72, z: wallZ - 0.32, width: Math.min(0.48, bayWidth * 0.56), height: 0.72, depth: 0.42, material: materials.porcelain, collide: true });
       } else {
         const width = fixture.trough ? fixture.end - fixture.start - 0.18 : Math.min(1.05, bayWidth - 0.18);
-        addBox({ id: `${room.id}-sink-${bankIndex}-${index}`, x, y: 0.82, z: wallZ - 0.38, width, height: 0.16, depth: 0.52, material: materials.porcelain, collide: true });
+        addBox({ id: `${room.id}-sink-${bankIndex}-${index}`, x, y: 0.82, z: wallZ - 0.38, width, height: 0.16, depth: 0.52, material: materials.black, collide: true });
         // Mirrors sit just inside the wall face; they never cross or share the
         // wall plane, avoiding the flashing/overhang seen in prior versions.
         addBox({ id: `${room.id}-mirror-${bankIndex}-${index}`, x, y: 1.72, z: wallZ - 0.12, width: Math.max(0.72, width - 0.14), height: 1.0, depth: 0.035, material: materials.mirror });
+        const basins = fixture.trough ? Math.max(2,Math.floor(width/1.12)) : 1;
+        for(let basin=0;basin<basins;basin++) {
+          const basinX = x + (basin-(basins-1)/2)*Math.min(1.12,width/basins);
+          addBox({ id:`${room.id}-basin-${bankIndex}-${index}-${basin}`,x:basinX,y:0.905,z:wallZ-0.4,width:0.42,height:0.013,depth:0.32,material:materials.floorDark });
+          addCylinder({ id:`${room.id}-tap-${bankIndex}-${index}-${basin}`,x:basinX,y:1.025,z:wallZ-0.19,radius:0.022,height:0.25,material:materials.stainless });
+          addBox({ id:`${room.id}-tap-spout-${bankIndex}-${index}-${basin}`,x:basinX,y:1.145,z:wallZ-0.27,width:0.045,height:0.036,depth:0.19,material:materials.stainless });
+        }
+        addBox({id:`${room.id}-paper-dispenser-${bankIndex}-${index}`,x:x+width/2-0.22,y:1.37,z:wallZ-0.2,width:0.24,height:0.28,depth:0.15,material:materials.black});
+        addBox({id:`${room.id}-paper-sheet-${bankIndex}-${index}`,x:x+width/2-0.22,y:1.195,z:wallZ-0.26,width:0.16,height:0.09,depth:0.015,material:materials.porcelain});
       }
     }
   };
@@ -1153,7 +1206,7 @@ export function createTheaterWorld({ scene, materials }) {
   const addRestroom = (room) => {
     const [main, ...lobes] = room.footprintRects;
     room.footprintRects.forEach((footprint, index) => {
-      addFloor(`${room.id}-section-${index}`, footprint, materials.lobbyTile);
+      addFloor(`${room.id}-section-${index}`, footprint, materials.restroomFloor, 0, root, 2.4);
       addCeiling(`${room.id}-section-${index}`, footprint);
     });
 
@@ -1163,10 +1216,10 @@ export function createTheaterWorld({ scene, materials }) {
       const fountainNook = publicById("boys-fountain-alcove");
       const entryCubby = publicById("boys-men-entry-cubby");
       if (stallRecess) {
-        addFloor("boys-restroom-stall-recess", stallRecess, materials.lobbyTile);
+        addFloor("boys-restroom-stall-recess", stallRecess, materials.restroomFloor, 0, root, 2.4);
         addCeiling("boys-restroom-stall-recess", stallRecess);
         addWallX("boys-restroom-stall-recess-back-wall", stallRecess.xMin, stallRecess.xMax, stallRecess.zMin, {
-          material: horizontalWallFaces({ planNorth: materials.wall, planSouth: materials.darkWall }),
+          material: horizontalWallFaces({ planNorth: materials.restroomWall, planSouth: materials.hallWall }),
         });
         // Below partition height the edge stall panels close both returns.
         // These slim upper caps finish the recess without creating a second
@@ -1176,7 +1229,7 @@ export function createTheaterWorld({ scene, materials }) {
             baseY: 2.1,
             height: WALL_HEIGHT - 2.1,
             thickness: 0.055,
-            material: materials.wall,
+            material: materials.restroomWall,
             collide: false,
           });
         }
@@ -1200,46 +1253,46 @@ export function createTheaterWorld({ scene, materials }) {
       // under-storage/usher surface to the north. Keeping this as one collider
       // prevents the overlapping-wall flicker that motivated V8.
       addWallX("boys-t3-shared-back-wall", T3_MEN_PLAN.sharedBackWall.xMin, T3_MEN_PLAN.sharedBackWall.xMax, T3_MEN_PLAN.sharedBackWall.z, {
-        material: horizontalWallFaces({ planNorth: materials.darkWall, planSouth: materials.wall }),
+        material: horizontalWallFaces({ planNorth: materials.darkWall, planSouth: materials.restroomWall }),
       });
       addWallZ(`${room.id}-west`, main.xMin, main.zMin, main.zMax, {
-        material: verticalWallFaces({ planWest: materials.darkWall, planEast: materials.wall }),
+        material: verticalWallFaces({ planWest: materials.hallWall, planEast: materials.restroomWall }),
       });
       // This vertical wall is the one called out in the V8 sketch: it runs
       // continuously from the hall-side lobe to Theater 3's left door jamb.
       addWallZ(`${room.id}-east`, main.xMax, lobe.zMin, main.zMax, {
-        material: verticalWallFaces({ planWest: materials.wall, planEast: materials.darkWall }),
+        material: verticalWallFaces({ planWest: materials.restroomWall, planEast: materials.hallWall }),
       });
       const recessOpening = stallRecess
         ? [{ center: (stallRecess.xMin + stallRecess.xMax) / 2, width: stallRecess.xMax - stallRecess.xMin, height: 2.1 }]
         : [];
       addWallXWithOpenings(`${room.id}-south`, main.xMin, lobe.xMin, main.zMin, recessOpening, {
-        material: horizontalWallFaces({ planNorth: materials.wall, planSouth: materials.darkWall }),
+        material: horizontalWallFaces({ planNorth: materials.restroomWall, planSouth: materials.hallWall }),
       });
       addWallX(`${room.id}-entry-south`, lobe.xMin, lobe.xMax, lobe.zMin, {
-        material: horizontalWallFaces({ planNorth: materials.wall, planSouth: materials.darkWall }),
+        material: horizontalWallFaces({ planNorth: materials.restroomWall, planSouth: materials.hallWall }),
       });
       // Close the rear of the H2O apron at the wide hall's north edge. The
       // adjacent MEN mouth remains open/headered and the restroom lobe owns
       // its own south wall, so these three frontage pieces never overlap.
       addWallX("boys-fountain-apron-north", fountainNook.bounds.xMin, fountainNook.bounds.xMax, fountainNook.bounds.zMax, {
-        material: materials.darkWall,
+        material: materials.hallWall,
       });
       addWallZWithOpenings(`${room.id}-entry-west`, lobe.xMin, lobe.zMin, lobe.zMax, [{ center: room.entry.center, width: room.entry.width }], {
-        material: verticalWallFaces({ planWest: materials.darkWall, planEast: materials.wall }),
+        material: verticalWallFaces({ planWest: materials.hallWall, planEast: materials.restroomWall }),
       });
       addDoorTrim(`${room.id}-entry`, "west", lobe.xMin, room.entry.center, { width: room.entry.width });
       const cubbyWidth = entryCubby.bounds.xMax - entryCubby.bounds.xMin;
       // The fountain nook is open to the hall. Its west/mounting wall is the
       // trash room's east wall, while this return separates H2O from MEN.
-      addWallZ("boys-entry-cubby-west", entryCubby.bounds.xMin, entryCubby.bounds.zMin, entryCubby.bounds.zMax, { material: materials.darkWall });
+      addWallZ("boys-entry-cubby-west", entryCubby.bounds.xMin, entryCubby.bounds.zMin, entryCubby.bounds.zMax, { material: materials.hallWall });
       addWallXWithOpenings(
         "boys-men-cubby-mouth",
         entryCubby.bounds.xMin,
         entryCubby.bounds.xMax,
         entryCubby.bounds.zMin,
         [{ center: (entryCubby.bounds.xMin + entryCubby.bounds.xMax) / 2, width: cubbyWidth }],
-        { material: materials.darkWall },
+        { material: materials.hallWall },
       );
       addLabel({ id: "boys-men-sign", text: "MEN", position: [(entryCubby.bounds.xMin + entryCubby.bounds.xMax) / 2, 2.95, entryCubby.bounds.zMin - 0.13], rotationY: Math.PI, width: 1.2, height: 0.42, small: true, accent: "#68a3d8" });
     } else {
@@ -1248,27 +1301,27 @@ export function createTheaterWorld({ scene, materials }) {
       // sides retain the warm, light finish. Authoring each shared boundary
       // once prevents the white/charcoal flicker caused by coplanar skins.
       addWallX(`${room.id}-north`, main.xMin, main.xMax, main.zMax, {
-        material: horizontalWallFaces({ planNorth: materials.darkWall, planSouth: materials.wall }),
+        material: horizontalWallFaces({ planNorth: materials.hallWall, planSouth: materials.restroomWall }),
       });
       addWallZ(`${room.id}-west`, main.xMin, southwestLobe.zMin, main.zMax, {
-        material: verticalWallFaces({ planWest: materials.darkWall, planEast: materials.wall }),
+        material: verticalWallFaces({ planWest: materials.hallWall, planEast: materials.restroomWall }),
       });
       addWallZ(`${room.id}-east`, main.xMax, main.zMin, main.zMax, {
-        material: verticalWallFaces({ planWest: materials.wall, planEast: materials.darkWall }),
+        material: verticalWallFaces({ planWest: materials.restroomWall, planEast: materials.hallWall }),
       });
       addWallX(`${room.id}-south-east`, entryLobe.xMax, main.xMax, main.zMin, {
-        material: horizontalWallFaces({ planNorth: materials.wall, planSouth: materials.darkWall }),
+        material: horizontalWallFaces({ planNorth: materials.restroomWall, planSouth: materials.hallWall }),
       });
       addWallX(`${room.id}-southwest-lobe-south`, southwestLobe.xMin, southwestLobe.xMax, southwestLobe.zMin, {
-        material: horizontalWallFaces({ planNorth: materials.wall, planSouth: materials.darkWall }),
+        material: horizontalWallFaces({ planNorth: materials.restroomWall, planSouth: materials.hallWall }),
       });
-      addWallZ(`${room.id}-southwest-lobe-east`, southwestLobe.xMax, southwestLobe.zMin, southwestLobe.zMax);
+      addWallZ(`${room.id}-southwest-lobe-east`, southwestLobe.xMax, southwestLobe.zMin, southwestLobe.zMax, { material: materials.restroomWall });
       addWallX(`${room.id}-connector-south`, connector.xMin, connector.xMax, connector.zMin, {
-        material: horizontalWallFaces({ planNorth: materials.wall, planSouth: materials.darkWall }),
+        material: horizontalWallFaces({ planNorth: materials.restroomWall, planSouth: materials.hallWall }),
       });
-      addWallX(`${room.id}-entry-lobe-north`, entryLobe.xMin, entryLobe.xMax, entryLobe.zMax);
+      addWallX(`${room.id}-entry-lobe-north`, entryLobe.xMin, entryLobe.xMax, entryLobe.zMax, { material: materials.restroomWall });
       addWallZ(`${room.id}-entry-lobe-east`, entryLobe.xMax, entryLobe.zMin, entryLobe.zMax, {
-        material: verticalWallFaces({ planWest: materials.wall, planEast: materials.darkWall }),
+        material: verticalWallFaces({ planWest: materials.restroomWall, planEast: materials.hallWall }),
       });
       addWallZWithOpenings(
         `${room.id}-entry-lobe-west`,
@@ -1276,7 +1329,7 @@ export function createTheaterWorld({ scene, materials }) {
         entryLobe.zMin,
         entryLobe.zMax,
         [{ center: room.entry.center, width: room.entry.width }],
-        { material: verticalWallFaces({ planWest: materials.darkWall, planEast: materials.wall }) },
+        { material: verticalWallFaces({ planWest: materials.hallWall, planEast: materials.restroomWall }) },
       );
       addDoorTrim(`${room.id}-entry`, "west", entryLobe.xMin, room.entry.center, { width: room.entry.width });
     }
@@ -1349,17 +1402,20 @@ export function createTheaterWorld({ scene, materials }) {
       const start = points[section.segmentIndex];
       const end = points[section.segmentIndex + 1];
       addPlanSegment(section.id, start, end, {
-        y: 0.56,
-        height: 1.12,
+        y: 0.65,
+        height: 0.94,
         depth: 1.08,
         material: counterMaterials[section.baseMaterialKey] ?? materials.wood,
+      });
+      addPlanSegment(`${section.id}-stainless-base`, start, end, {
+        y: 0.09, height: 0.18, depth: 1.08, material: materials.stainless,
       });
       addPlanSegment(`${section.id}-top`, start, end, {
         y: 1.16,
         height: 0.1,
         depth: 1.3,
         material: counterMaterials[section.topMaterialKey] ?? materials.counterStone,
-        collide: false,
+        collide: true,
       });
     }
     let candyDisplayIndex = 0;
@@ -1374,17 +1430,31 @@ export function createTheaterWorld({ scene, materials }) {
   const addBoxOfficeAndKiosks = () => {
     const vertical = LOBBY_PLAN.boxOfficeVertical;
     const horizontal = LOBBY_PLAN.boxOfficeReturn;
-    addBox({ id: "box-office-vertical", x: (vertical.xMin + vertical.xMax) / 2, y: 0.56, z: (vertical.zMin + vertical.zMax) / 2, width: vertical.xMax - vertical.xMin, height: 1.12, depth: vertical.zMax - vertical.zMin, material: materials.wood, collide: true });
+    addBox({ id: "box-office-vertical", x: (vertical.xMin + vertical.xMax) / 2, y: 0.56, z: (vertical.zMin + vertical.zMax) / 2, width: vertical.xMax - vertical.xMin, height: 1.12, depth: vertical.zMax - vertical.zMin, material: [counterWhiteMaterial, counterWhiteMaterial, materials.wood, materials.wood, materials.wood, materials.wood], collide: true });
     addBox({ id: "box-office-vertical-top", x: (vertical.xMin + vertical.xMax) / 2, y: 1.16, z: (vertical.zMin + vertical.zMax) / 2, width: vertical.xMax - vertical.xMin + 0.18, height: 0.1, depth: vertical.zMax - vertical.zMin + 0.18, material: materials.counterStone });
-    addBox({ id: "box-office-return", x: (horizontal.xMin + horizontal.xMax) / 2, y: 0.56, z: (horizontal.zMin + horizontal.zMax) / 2, width: horizontal.xMax - horizontal.xMin, height: 1.12, depth: horizontal.zMax - horizontal.zMin, material: materials.wood, collide: true });
+    addBox({ id: "box-office-return", x: (horizontal.xMin + horizontal.xMax) / 2, y: 0.56, z: (horizontal.zMin + horizontal.zMax) / 2, width: horizontal.xMax - horizontal.xMin, height: 1.12, depth: horizontal.zMax - horizontal.zMin, material: [materials.wood, materials.wood, materials.wood, materials.wood, counterWhiteMaterial, counterWhiteMaterial], collide: true });
     addBox({ id: "box-office-return-top", x: (horizontal.xMin + horizontal.xMax) / 2, y: 1.16, z: (horizontal.zMin + horizontal.zMax) / 2, width: horizontal.xMax - horizontal.xMin + 0.18, height: 0.1, depth: horizontal.zMax - horizontal.zMin + 0.18, material: materials.counterStone });
     addPOSStation(LOBBY_PLAN.boxOfficePos);
     addLabel({ id: "box-office-sign", text: "BOX OFFICE", position: [(horizontal.xMin + horizontal.xMax) / 2, 2.65, horizontal.zMin - 0.58], rotationY: Math.PI, width: 2.8, height: 0.48 });
+    const kioskTexture = createKioskTouchscreenTexture();
+    disposableTextures.add(kioskTexture);
+    const kioskDisplay = new THREE.MeshBasicMaterial({ name:"Kiosk / working ticket interface", map:kioskTexture, toneMapped:false });
+    disposableDecorMaterials.push(kioskDisplay);
     for (const kiosk of LOBBY_PLAN.kiosks) {
       const [x, , z] = kiosk.position;
-      addBox({ id: `${kiosk.id}-body`, x, y: 0.8, z, width: 0.76, height: 1.6, depth: 0.9, material: materials.black, collide: true, rotationY: kiosk.rotation });
-      addBox({ id: `${kiosk.id}-screen`, x: x - 0.42, y: 1.15, z, width: 0.05, height: 0.7, depth: 0.55, material: materials.display, rotationY: 0 });
-      addLabel({ id: `${kiosk.id}-label`, text: "TICKETS", position: [x - 0.48, 1.68, z], rotationY: -Math.PI / 2, width: 0.75, height: 0.25, small: true, accent: "#68a3d8" });
+      addBox({ id: `${kiosk.id}-body`, x, y: 0.8, z, width: 0.76, height: 1.6, depth: 0.9, material: materials.stainless, collide: true, rotationY: kiosk.rotation });
+      addBox({ id: `${kiosk.id}-head`, x:x-0.405, y:1.135,z,width:0.095,height:0.91,depth:0.72,material:materials.black });
+      const display=new THREE.Mesh(unitPlaneGeometry,kioskDisplay);
+      display.name=`${kiosk.id}-screen`;
+      display.position.set(planToWorldX(x-0.46),1.135,z);
+      display.rotation.y=Math.PI/2;
+      display.scale.set(0.53,0.8,1);
+      root.add(display); sourceMeshCount++;
+      addBox({id:`${kiosk.id}-receipt-slot`,x:x-0.454,y:0.59,z,width:0.017,height:0.03,depth:0.25,material:materials.black});
+      addBox({id:`${kiosk.id}-card-reader`,x:x-0.473,y:0.83,z:z-0.292,width:0.05,height:0.17,depth:0.11,material:materials.black,collide:true});
+      addBox({id:`${kiosk.id}-reader-light`,x:x-0.501,y:0.87,z:z-0.292,width:0.006,height:0.06,depth:0.06,material:materials.display});
+      for(let vent=0;vent<5;vent++) addBox({id:`${kiosk.id}-vent-${vent}`,x:x-0.454,y:0.18+vent*0.038,z,width:0.014,height:0.011,depth:0.34,material:materials.black});
+      addBox({id:`${kiosk.id}-foot`,x,y:0.035,z,width:0.88,height:0.07,depth:0.73,material:materials.black});
     }
     const kioskShowtimeTextures = createKioskShowtimeScreenTextures();
     kioskShowtimeTextures.forEach((texture) => disposableTextures.add(texture));
@@ -1649,7 +1719,25 @@ export function createTheaterWorld({ scene, materials }) {
   const frontWalkCenterZ = (frontWalk.bounds.zMin + frontWalk.bounds.zMax) / 2;
   const frontWalkDepth = frontWalk.bounds.zMax - frontWalk.bounds.zMin;
   addFloor(frontWalk.id, frontWalk.bounds, materials.concrete, 0, root, 3);
-  addFloor(lobby.id, { ...lobby.bounds, zMax: lobbyBackZ }, materials.lobbyStone, 0, root, 3);
+  for (const floor of LOBBY_PLAN.floorFinishes) {
+    const bounds = {
+      xMin: Math.min(...floor.vertices.map(p => p.x)), xMax: Math.max(...floor.vertices.map(p => p.x)),
+      zMin: Math.min(...floor.vertices.map(p => p.z)), zMax: Math.max(...floor.vertices.map(p => p.z)),
+    };
+    const material = tiledFloorMaterial(materials[floor.materialKey], bounds, floor.metersPerRepeat);
+    const mesh = addPlanPolygonSlab(floor.id, floor.vertices, floor.elevation, floor.thickness, material);
+    // ExtrudeGeometry defaults to raw world-unit UVs. Normalize them to the
+    // same floor-tile scale as the neighboring rectangular finishes.
+    const uv = mesh.geometry.getAttribute("uv");
+    const pos = mesh.geometry.getAttribute("position");
+    for (let i = 0; i < uv.count; i++) {
+      uv.setXY(i, (pos.getX(i) - planToWorldX(bounds.xMax)) / (bounds.xMax - bounds.xMin),
+        (pos.getY(i) - bounds.zMin) / (bounds.zMax - bounds.zMin));
+    }
+    uv.needsUpdate = true;
+    mesh.userData.floorFinish = floor.materialKey;
+    mesh.userData.planPolygon = floor.vertices;
+  }
   addFloor(approach.id, approach.bounds, materials.corridorCarpet, 0, root, 2.4);
   addFloor(posterAlcove.id, posterAlcove.bounds, materials.corridorCarpet, 0, root, 2.4);
   addFloor(emptyAlcove.id, emptyAlcove.bounds, materials.corridorCarpet, 0, root, 2.4);
@@ -1775,9 +1863,8 @@ export function createTheaterWorld({ scene, materials }) {
       depth: 0.05,
       material: materials.glass,
     });
-    addBox({ id: `${id}-leaf-left`, x: door.center - leafOffset, y: frontEntrance.doorHeight / 2, z, width: leafWidth, height: frontEntrance.doorHeight - 0.12, depth: 0.05, material: materials.glass, rotationY: 1.18 });
-    addBox({ id: `${id}-leaf-right`, x: door.center + leafOffset, y: frontEntrance.doorHeight / 2, z, width: leafWidth, height: frontEntrance.doorHeight - 0.12, depth: 0.05, material: materials.glass, rotationY: -1.18 });
   }
+  const entranceDoors = createEntranceDoors({ root, materials, entrance: frontEntrance });
   addWallZ("lobby-west", LOBBY_PLAN.envelope.xMin, lobbyFrontZ, lobbyBackZ, { height: LOBBY_PUBLIC_HEIGHT });
   addWallZ("lobby-east", LOBBY_PLAN.envelope.xMax, lobbyFrontZ, lobbyBackZ, { height: LOBBY_PUBLIC_HEIGHT });
   addWallX("lobby-back-west", LOBBY_PLAN.envelope.xMin, approach.bounds.xMin, lobbyBackZ, { height: LOBBY_PUBLIC_HEIGHT });
@@ -1890,7 +1977,7 @@ export function createTheaterWorld({ scene, materials }) {
         concessionBackWall.id,
         concessionBackWall.start,
         concessionBackWall.end,
-        { height: concessionBackWall.height, material: materials.wall },
+        { height: concessionBackWall.height, material: materials[concessionBackWall.materialKey] },
       );
     } else if (mergedPartitionSegments.has(index)) {
       continue;
@@ -1900,7 +1987,7 @@ export function createTheaterWorld({ scene, materials }) {
         start,
         end,
         LOBBY_PLAN.kitchenStorageDoor,
-        { material: materials.wall },
+        { material: materials.mosaicWall },
       );
     } else if (isServiceDoor) {
       addPlanSegmentWithOpening(
@@ -1908,22 +1995,21 @@ export function createTheaterWorld({ scene, materials }) {
         start,
         end,
         { ...LOBBY_PLAN.serviceDoor, width: LOBBY_PLAN.serviceDoor.width ?? 1.5 },
-        { material: materials.wall },
+        { material: materials.mosaicWall },
       );
     } else {
-      addPlanSegment(`kitchen-partition-${index}`, start, end, { material: materials.wall });
+      addPlanSegment(`kitchen-partition-${index}`, start, end, { material: materials.mosaicWall });
     }
   }
 
-  // The V12 connector nook is traversable again. Only the tiny floor-finish
-  // sliver at its north edge is sealed, and the existing floor union remains
-  // its sole floor owner so there is no coplanar duplicate to flash.
+  // Close only the light-floor part of the original triangle. The separator
+  // follows the straight dark-floor edge and preserves the connector nook.
   const kitchenDeadSpace = LOBBY_PLAN.kitchenDeadSpace;
   addPlanSegment(
     kitchenDeadSpace.separatingWall.id,
     kitchenDeadSpace.separatingWall.start,
     kitchenDeadSpace.separatingWall.end,
-    { height: kitchenDeadSpace.separatingWall.height, material: materials.wall },
+    { height: kitchenDeadSpace.separatingWall.height, material: materials[kitchenDeadSpace.separatingWall.materialKey] },
   );
   addPlanPolygonSlab(
     kitchenDeadSpace.ceiling.id,
@@ -2504,10 +2590,12 @@ export function createTheaterWorld({ scene, materials }) {
   const narrowHallCenterZ = (hallNarrow.zMin + hallNarrow.zMax) / 2;
   const wideHallCenterZ = (hallWide.zMin + hallWide.zMax) / 2;
   for (let x = hallNarrow.xMin + 6; x <= hallNarrow.xMax - 2; x += 12) {
-    addLightPanel(`hall-narrow-light-${x}`, x, narrowHallCenterZ, 2.65, 0.3);
+    addCylinder({id:`hall-narrow-downlight-bezel-${x}`,x,y:4.47,z:narrowHallCenterZ,radius:0.23,height:0.035,material:materials.stainless});
+    addCylinder({id:`hall-narrow-downlight-${x}`,x,y:4.445,z:narrowHallCenterZ,radius:0.19,height:0.018,material:materials.light});
   }
   for (let x = hallWide.xMin + 3.62; x <= hallWide.xMax - 2; x += 12) {
-    addLightPanel(`hall-wide-light-${x}`, x, wideHallCenterZ, 2.65, 0.3);
+    addCylinder({id:`hall-wide-downlight-bezel-${x}`,x,y:4.47,z:wideHallCenterZ,radius:0.23,height:0.035,material:materials.stainless});
+    addCylinder({id:`hall-wide-downlight-${x}`,x,y:4.445,z:wideHallCenterZ,radius:0.19,height:0.018,material:materials.light});
   }
   for (const [planX, z] of [[-14, 2.5], [-5, 2.5], [4, 2.5], [13, 2.5], [-11, 11.5], [0, 11.5], [11, 11.5]]) {
     addLightPanel(`lobby-light-${planX}-${z}`, planX, z, 2.2, 0.44, LOBBY_PUBLIC_HEIGHT - 0.18);
@@ -2601,6 +2689,18 @@ export function createTheaterWorld({ scene, materials }) {
     const containing = lowCeilingRegions
       .filter((region) => pointInRect(planX, z, region.bounds) && region.underside > feetY + 0.05)
       .map((region) => region.underside);
+    // Match the actual low roofs; the former sampler returned the high lobby
+    // roof even while the camera stood beneath the kitchen/nook/soffit.
+    for (const roof of [...LOBBY_PLAN.kitchenCeiling.surfaces,
+      LOBBY_PLAN.kitchenDeadSpace.ceiling, LOBBY_PLAN.muralFacade.soffit]) {
+      if (pointInPolygon(planX, z, roof.vertices) && roof.elevation - roof.thickness / 2 > feetY + 0.05) {
+        containing.push(roof.elevation - roof.thickness / 2);
+      }
+    }
+    for (const roomId of LOBBY_CEILING_PLAN.lowServiceRoomIds) {
+      if (roomId !== "kitchen" && pointInRect(planX, z, roomById(roomId).bounds)
+        && LOBBY_SERVICE_HEIGHT - 0.05 > feetY + 0.05) containing.push(LOBBY_SERVICE_HEIGHT - 0.05);
+    }
     if (pointInRect(planX, z, lobbyStair.topLanding) && feetY < lobbyStair.topY - 0.2) {
       containing.push(lobbyStair.topY - 0.11);
     }
@@ -2623,7 +2723,8 @@ export function createTheaterWorld({ scene, materials }) {
     for (const { group } of auditoriumGroups.values()) group.visible = true;
   };
 
-  const update = (delta = 0) => {
+  const update = (delta = 0, player = null) => {
+    entranceDoors.update(delta, player);
     if (!barScreenMaterial || barScreenTextures.length < 2 || !Number.isFinite(delta) || delta <= 0) return;
     barScreenElapsed += delta;
     const interval = LOBBY_PLAN.barScreen.intervalSeconds;
@@ -2653,6 +2754,8 @@ export function createTheaterWorld({ scene, materials }) {
   return {
     root,
     colliders,
+    dynamicColliders: entranceDoors.colliders,
+    entranceDoors,
     equipment,
     auditoriumGroups,
     auditoriumLayouts,
@@ -2662,6 +2765,7 @@ export function createTheaterWorld({ scene, materials }) {
     update,
     updateVisibility,
     dispose() {
+      entranceDoors.dispose();
       const disposedTextures = new Set();
       const disposeTexture = (texture) => {
         if (!texture || disposedTextures.has(texture)) return;
@@ -2689,7 +2793,7 @@ export function createTheaterWorld({ scene, materials }) {
       sourceMeshCount,
       colliderCount: colliders.length,
       lightCount: hallLights.length + 3,
-      layoutVersion: "mililani-sketch-v17",
+      layoutVersion: "mililani-sketch-v18",
     }),
   };
 }

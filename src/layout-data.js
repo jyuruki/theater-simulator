@@ -25,6 +25,8 @@ const rect = (xMin, xMax, zMin, zMax) => ({ xMin, xMax, zMin, zMax });
 // physical-left side, one structural pillar divides them from six single-plane
 // double-door assemblies on the physical-right, and the kiosk wall gains the
 // photographed fourth terminal plus three compact showtime displays.
+// V18 restores the kitchen separator to the original straight floor edge,
+// preserves the storage-door nook, and partitions the actual floor finishes.
 export const FRONT_SHIFT_Z = -2.5;
 export const LOBBY_SHIFT_X = 8.3;
 export const T12_TICKET_SHIFT_X = 1;
@@ -632,23 +634,19 @@ const MURAL_SOFFIT_VERTICES = Object.freeze([
   KITCHEN_PARTITION[6],
 ]);
 
-// V13 accidentally sealed the entire p2/p3/p5 work triangle. V14 restores
-// that connector nook and isolates only the 0.2 m-deep sliver between the
-// nearly-horizontal p2→p3 wall and the restored counter-parallel p3→p5 wall.
-const DEAD_WEDGE_AXIS_POINT = pointAtZ(
-  KITCHEN_PARTITION[5],
-  KITCHEN_PARTITION[3],
-  KITCHEN_PARTITION[2].z,
+// V18: the floor-finish boundary is the ORIGINAL straight service-strip edge
+// at p5.x. V13 closed the entire p2/p3/p5 triangle; V14 instead closed an
+// unrelated 20 cm sliver at its north edge. Clip that triangle at the actual
+// dark-floor edge: keep the connector-side nook, wall off only the light-floor
+// portion. The diagonal concession wall and mural remain independent.
+const DEAD_WEDGE_AXIS_POINT = pointAtX(
+  KITCHEN_PARTITION[2], KITCHEN_PARTITION[3], KITCHEN_PARTITION[5].x,
 );
 const KITCHEN_DEAD_SPACE_VERTICES = Object.freeze([
-  KITCHEN_PARTITION[2],
-  KITCHEN_PARTITION[3],
-  DEAD_WEDGE_AXIS_POINT,
+  DEAD_WEDGE_AXIS_POINT, KITCHEN_PARTITION[3], KITCHEN_PARTITION[5],
 ]);
 const KITCHEN_CONNECTOR_NOOK_VERTICES = Object.freeze([
-  KITCHEN_PARTITION[2],
-  DEAD_WEDGE_AXIS_POINT,
-  KITCHEN_PARTITION[5],
+  KITCHEN_PARTITION[2], DEAD_WEDGE_AXIS_POINT, KITCHEN_PARTITION[5],
 ]);
 const KITCHEN_MAIN_CEILING_VERTICES = Object.freeze([
   KITCHEN_PARTITION[2],
@@ -658,6 +656,22 @@ const KITCHEN_MAIN_CEILING_VERTICES = Object.freeze([
   Object.freeze({ x: KITCHEN_CEILING_BOUNDS.xMin, z: KITCHEN_CEILING_BOUNDS.zMax }),
   KITCHEN_PARTITION[0],
   KITCHEN_PARTITION[1],
+]);
+
+// Two abutting floor polygons replace the rectangular lobby finish where
+// it used to spill into the main kitchen. Both finish tops are at y=0;
+// neither overlays the other or covers the preserved dark service strip.
+const KITCHEN_FLOOR_EXTENSION = Object.freeze([
+  DEAD_WEDGE_AXIS_POINT, KITCHEN_PARTITION[3], MURAL_AXIS_END,
+  Object.freeze({ x: KITCHEN_CEILING_BOUNDS.xMax, z: LOBBY_BACK_Z }),
+  Object.freeze({ x: KITCHEN_PARTITION[5].x, z: LOBBY_BACK_Z }),
+]);
+const PUBLIC_LOBBY_FLOOR = Object.freeze([
+  Object.freeze({ x: KITCHEN_PARTITION[5].x, z: FRONT_ENTRANCE_Z }),
+  Object.freeze({ x: LOBBY_EAST_X, z: FRONT_ENTRANCE_Z }),
+  Object.freeze({ x: LOBBY_EAST_X, z: LOBBY_BACK_Z }),
+  KITCHEN_FLOOR_EXTENSION[3], MURAL_AXIS_END, KITCHEN_PARTITION[3],
+  DEAD_WEDGE_AXIS_POINT,
 ]);
 
 const OFFICE_ATTIC_BOUNDS = shiftedLobbyRect(-36.5, -24.5, 0.4, 7);
@@ -766,7 +780,7 @@ export const LOBBY_PLAN = Object.freeze({
     counterRunFraction: 2 / 3,
     mergedPartitionSegments: Object.freeze([3, 4]),
     height: LOBBY_CEILING_PLAN.baseHeight,
-    materialKey: "wall",
+    materialKey: "mosaicWall",
   }),
   serviceDoor: Object.freeze({
     x: shiftedLobbyX(-24.5), z: shiftedZ(10.35), partitionSegment: 5,
@@ -779,24 +793,21 @@ export const LOBBY_PLAN = Object.freeze({
   kitchenDeadSpace: Object.freeze({
     id: "kitchen-dead-wedge",
     vertices: KITCHEN_DEAD_SPACE_VERTICES,
-    area: Math.abs(
-      (KITCHEN_PARTITION[3].x - KITCHEN_PARTITION[2].x)
-        * (DEAD_WEDGE_AXIS_POINT.z - KITCHEN_PARTITION[2].z)
-      - (KITCHEN_PARTITION[3].z - KITCHEN_PARTITION[2].z)
-        * (DEAD_WEDGE_AXIS_POINT.x - KITCHEN_PARTITION[2].x)
-    ) / 2,
-    maxDepth: KITCHEN_PARTITION[3].z - KITCHEN_PARTITION[2].z,
+    area: Math.abs((KITCHEN_PARTITION[3].x - KITCHEN_PARTITION[5].x)
+      * (DEAD_WEDGE_AXIS_POINT.z - KITCHEN_PARTITION[5].z)) / 2,
+    maxDepth: KITCHEN_PARTITION[3].x - KITCHEN_PARTITION[5].x,
+    originalFloorEdgeX: KITCHEN_PARTITION[5].x,
     floorMaterialKey: "floorDark",
     separatingWall: Object.freeze({
       id: "kitchen-dead-wedge-separating-wall",
-      start: KITCHEN_PARTITION[2],
-      end: DEAD_WEDGE_AXIS_POINT,
+      start: DEAD_WEDGE_AXIS_POINT,
+      end: KITCHEN_PARTITION[5],
       height: LOBBY_CEILING_PLAN.baseHeight,
       materialKey: "wall",
     }),
     sharedPartitionEdges: Object.freeze([
-      Object.freeze({ segmentIndex: 2, start: KITCHEN_PARTITION[2], end: KITCHEN_PARTITION[3] }),
-      Object.freeze({ segmentIndex: 3, start: KITCHEN_PARTITION[3], end: DEAD_WEDGE_AXIS_POINT }),
+      Object.freeze({ segmentIndex: 2, start: DEAD_WEDGE_AXIS_POINT, end: KITCHEN_PARTITION[3] }),
+      Object.freeze({ segmentIndex: 3, start: KITCHEN_PARTITION[3], end: KITCHEN_PARTITION[5] }),
     ]),
     ceiling: Object.freeze({
       id: "kitchen-dead-wedge-ceiling",
@@ -819,6 +830,10 @@ export const LOBBY_PLAN = Object.freeze({
       vertices: KITCHEN_CONNECTOR_NOOK_VERTICES,
     }),
   }),
+  floorFinishes: Object.freeze([
+    Object.freeze({ id: "lobby-floor", vertices: PUBLIC_LOBBY_FLOOR, materialKey: "lobbyStone", elevation: -0.055, thickness: 0.11, metersPerRepeat: 3 }),
+    Object.freeze({ id: "kitchen-main-finish-floor", vertices: KITCHEN_FLOOR_EXTENSION, materialKey: "floorDark", elevation: -0.055, thickness: 0.11, metersPerRepeat: 2 }),
+  ]),
   kitchenCeiling: Object.freeze({
     id: "kitchen-complete-low-ceiling",
     legacyBounds: KITCHEN_CEILING_BOUNDS,
@@ -1651,7 +1666,7 @@ export function validateLayoutData() {
   }
   const deadSpace = LOBBY_PLAN.kitchenDeadSpace;
   const connectorNook = LOBBY_PLAN.kitchenConnectorNook;
-  const deadWedgeAxisPoint = deadSpace?.vertices?.[2];
+  const deadWedgeAxisPoint = deadSpace?.vertices?.[0];
   const kitchenCeiling = LOBBY_PLAN.kitchenCeiling;
   const kitchenMainCeiling = kitchenCeiling?.surfaces?.[0];
   const connectorNookCeiling = kitchenCeiling?.surfaces?.[1];
@@ -1663,15 +1678,16 @@ export function validateLayoutData() {
   ];
   if (deadSpace?.id !== "kitchen-dead-wedge"
     || deadSpace.vertices?.length !== 3
-    || deadSpace.vertices?.[0] !== partition[2]
+    || deadSpace.vertices?.[2] !== partition[5]
     || deadSpace.vertices?.[1] !== partition[3]
-    || !samePlanPoint(deadWedgeAxisPoint, pointAtZ(partition[5], partition[3], partition[2].z))
-    || deadSpace.area >= 1
+    || !samePlanPoint(deadWedgeAxisPoint, pointAtX(partition[2], partition[3], partition[5].x))
+    || deadSpace.area >= polygonArea([partition[2], partition[3], partition[5]]) / 2
     || !nearlyEqual(deadSpace.area, polygonArea(deadSpace.vertices))
-    || !nearlyEqual(deadSpace.maxDepth, 0.2)
+    || !nearlyEqual(deadSpace.originalFloorEdgeX, partition[5].x)
+    || !nearlyEqual(deadSpace.maxDepth, partition[3].x - partition[5].x)
     || deadSpace.separatingWall?.id !== "kitchen-dead-wedge-separating-wall"
-    || deadSpace.separatingWall?.start !== partition[2]
-    || !samePlanPoint(deadSpace.separatingWall?.end, deadWedgeAxisPoint)
+    || !samePlanPoint(deadSpace.separatingWall?.start, deadWedgeAxisPoint)
+    || deadSpace.separatingWall?.end !== partition[5]
     || deadSpace.sharedPartitionEdges?.length !== 2
     || deadSpace.sharedPartitionEdges?.[0]?.segmentIndex !== 2
     || deadSpace.sharedPartitionEdges?.[1]?.segmentIndex !== 3
@@ -1680,7 +1696,7 @@ export function validateLayoutData() {
     || deadSpace.ceiling.vertices !== deadSpace.vertices
     || !nearlyEqual(deadSpace.ceiling.elevation, LOBBY_CEILING_PLAN.baseHeight)
     || !nearlyEqual(deadSpace.ceiling.thickness, 0.1)) {
-    errors.push("V14 must isolate only the authored 0.2 m-deep kitchen wedge and give that tiny triangle its own separating wall and low ceiling.");
+    errors.push("V18 must place the kitchen separator on the original dark-floor boundary, preserving the connector side of the triangle.");
   }
   if (connectorNook?.id !== "kitchen-storage-connector-nook"
     || connectorNook.vertices?.length !== 3

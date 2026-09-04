@@ -21,11 +21,11 @@
       </section>
 
       <section id="intro" class="screen-layer intro-panel" aria-labelledby="intro-title">
-        <div class="eyebrow">LAYOUT PROTOTYPE · 14 SCREENS · 1,093 SEATS</div>
+        <div class="eyebrow">A NIGHT AT THE MOVIES · 14 SCREENS</div>
         <h1 id="intro-title">MILILANI <span>14</span></h1>
         <p>
-          Walk the seventeenth layout pass reconstructed from Jacob's detailed floor plans: the single-plane glass
-          frontage, expanded kiosk wall, high-volume lobby, narrow open stair, stadium bowls, and lower storage.
+          Step inside a familiar neighborhood cinema. Choose a show at the kiosks, grab something
+          from the kitchen, and explore all fourteen theaters—or just take your time looking around.
         </p>
         <button id="enter-button" type="button">ENTER THE THEATER</button>
         <div class="control-list" aria-label="Controls">
@@ -33,15 +33,18 @@
           <span><b>Mouse</b> Look</span>
           <span><b>Shift</b> Run</span>
           <span><b>Space</b> Jump</span>
+          <span><b>E</b> Interact</span>
+          <span><b>I</b> Your ticket</span>
           <span><b>M</b> Map</span>
           <span><b>Esc</b> Pause</span>
         </div>
       </section>
 
       <section id="pause-card" class="pause-card" hidden>
-        <div class="eyebrow">SHIFT PAUSED</div>
+        <div class="eyebrow">WALKTHROUGH PAUSED</div>
         <h2>Ready when you are.</h2>
         <button id="resume-button" type="button">RESUME WALKTHROUGH</button>
+        <button id="pause-settings-button" class="pause-options" type="button">Sound &amp; atmosphere</button>
       </section>
 
       <header id="hud" class="hud" hidden>
@@ -52,13 +55,18 @@
         </div>
         <div class="build-card">
           <span>LAYOUT BUILD</span>
-          <strong>v0.17</strong>
+          <strong>v0.18</strong>
         </div>
+        <nav class="visit-toolbar" aria-label="Visit controls">
+          <button id="ticket-button" type="button">My ticket <kbd>I</kbd></button>
+          <button id="map-button" type="button">Map <kbd>M</kbd></button>
+          <button id="settings-button" type="button" aria-label="Sound and atmosphere settings">Options</button>
+        </nav>
       </header>
 
       <div id="crosshair" class="crosshair" hidden aria-hidden="true"></div>
 
-      <aside id="minimap-panel" class="minimap-panel" aria-label="Theater minimap">
+      <aside id="minimap-panel" class="minimap-panel is-hidden" aria-label="Theater minimap">
         <div class="minimap-header">
           <span>FLOOR PLAN</span>
           <button id="map-close" type="button" aria-label="Hide map">×</button>
@@ -75,6 +83,10 @@
         <button id="touch-jump" type="button">JUMP</button>
         <button id="touch-run" type="button">RUN</button>
       </div>
+
+      <button id="interact-button" type="button" hidden></button>
+      <p id="visit-status" aria-live="polite"></p>
+      <dialog id="visit-dialog" aria-labelledby="visit-heading"></dialog>
 
       <div id="toast" class="toast" role="status" aria-live="polite"></div>
     </main>

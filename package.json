@@ -1,18 +1,19 @@
 {
   "name": "mililani-theater-simulator",
-  "version": "0.17.0",
+  "version": "0.18.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "node scripts/validate-layout.mjs && node scripts/smoke-world.mjs && node scripts/smoke-player.mjs && node scripts/smoke-navigation.mjs"
+    "test": "node scripts/validate-layout.mjs && node scripts/smoke-world.mjs && node scripts/smoke-player.mjs && node scripts/smoke-navigation.mjs && node scripts/smoke-visit.mjs"
   },
   "dependencies": {
     "three": "0.185.1"
   },
   "devDependencies": {
+    "happy-dom": "20.14.0",
     "vite": "8.2.1"
   }
 }

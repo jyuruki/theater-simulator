@@ -1,3 +1,5 @@
+> Current release: [V18 kitchen correction, reference evidence, interactions and validation](v18-notes.md). The notes below retain the earlier layout decisions and their history.
+
 # Layout reconstruction notes
 
 ## Source hierarchy

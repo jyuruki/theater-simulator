@@ -7,6 +7,7 @@
   --glass: rgba(13, 12, 18, 0.72);
 }
 
+
 * {
   box-sizing: border-box;
 }
@@ -441,4 +442,61 @@ button {
   .build-card {
     display: none;
   }
+}
+
+[hidden] { display: none !important; }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 3px solid #77d7db; outline-offset: 4px; }
+.visit-toolbar { position: absolute; top: 87px; left: 0; display: flex; gap: 6px; pointer-events: auto; }
+.visit-toolbar button { border: 1px solid #ffffff24; border-radius: 7px; background: #10121cdd; color: #efebe4; padding: 9px 11px; cursor: pointer; font-size: 11px; }
+kbd { color: #8c929e; font-size: 10px; margin-left: 6px; }
+#interact-button { position: fixed; z-index: 12; left: 50%; bottom: 90px; transform: translateX(-50%); border: 1px solid #ebd8b877; border-radius: 6px; background: #11131ee8; color: #fbefdb; padding: 12px 20px; cursor: pointer; font-size: 13px; white-space: nowrap; }
+#visit-status { position: fixed; z-index: 8; left: 20px; bottom: 8px; max-width: 65vw; color: #efe4cdbb; font-size: 11px; text-shadow: 0 1px 3px #000; pointer-events: none; }
+.pause-options { display: block; margin: 16px auto 0; background: none; border: 0; color: #b3bfc8; cursor: pointer; font-size: 12px; }
+#visit-dialog { width: min(740px, calc(100vw - 28px)); max-height: min(860px, calc(100dvh - 32px)); padding: 27px; border: 1px solid #576173; border-radius: 15px; color: #e7e8e9; background: #131923; box-shadow: 0 35px 100px #0008; overflow: auto; }
+#visit-dialog::backdrop { background: #03060bbb; backdrop-filter: blur(5px); }
+.dialog-heading { position: relative; padding-right: 30px; }
+.dialog-heading h2 { margin: 10px 0; color: #fff3dd; font-size: 28px; letter-spacing: -0.04em; }
+.dialog-close { position: absolute; right: -6px; top: -10px; padding: 8px 12px; border: 0; background: none; color: #b4c0cc; cursor: pointer; font-size: 28px; }
+.dialog-subtitle { margin: 6px 0 23px; color: #a2adbb; font-size: 13px; line-height: 1.6; }
+.dialog-content { display: flex; flex-direction: column; gap: 12px; }
+.dialog-content p { line-height: 1.55; margin: 4px 0; }
+.dialog-content h3 { font-size: 20px; margin: 7px 0; }
+.muted { color: #a1aabb; font-size: 12px; }
+.field-label { color: #bcc7d3; font-size: 12px; display: flex; flex-direction: column; gap: 8px; }
+select { width: 100%; padding: 12px; color: #eff1f3; background: #0b111b; border: 1px solid #3d4b60; border-radius: 6px; font: inherit; font-size: 14px; }
+.visit-button { display: inline-block; padding: 12px 17px; color: #e5e9ef; background: #222e40; border: 1px solid #3d4b60; border-radius: 6px; font-size: 13px; cursor: pointer; }
+.visit-button:hover:not(:disabled), .food-choice:hover { border-color: #aab7ca; background: #2c3b50; }
+.visit-button.primary { color: #fff; background: #a83448; border-color: #d0576c; margin-top: 8px; }
+.visit-button.selected { background: #ce4660; border-color: #ef8497; color: #fff; }
+.visit-button:disabled { cursor: default; opacity: 0.4; }
+.showtime-choices { display: flex; gap: 8px; }
+.seat-plan { padding: 12px 6px; overflow-x: auto; background: #0c121c; border-radius: 8px; }
+.seat-screen { width: 80%; min-width: 260px; margin: 0 auto 16px; padding: 5px; border-top: 2px solid #98a8c0; color: #8c9db5; font-size: 9px; letter-spacing: 0.22em; text-align: center; }
+.seat-row { display: flex; justify-content: center; align-items: center; gap: 4px; margin: 5px auto; width: max-content; min-width: 100%; }
+.row-label { width: 16px; color: #9baabe; font-size: 10px; flex: 0 0 16px; }
+.seat-choice { width: 23px; height: 24px; padding: 0; border: 1px solid #435268; border-radius: 5px 5px 2px 2px; background: #26384c; color: #aab7c8; font-size: 9px; cursor: pointer; flex-shrink: 0; }
+.seat-choice:hover { background: #42617b; }
+.seat-choice.selected { background: #e15871; border-color: #ff93a6; color: white; }
+.admission-ticket { padding: 21px; border: 1px dashed #b7aa88; border-radius: 8px; background: #252930; }
+.admission-ticket small { display: block; margin-top: 16px; color: #c3bdac; line-height: 1.55; }
+.food-menu { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.food-choice { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 18px; border: 1px solid #3d4b60; border-radius: 8px; background: #202c3d; color: #f1ebdd; text-align: left; cursor: pointer; }
+.food-choice span, .food-choice small { color: #a8b4c4; font-size: 12px; line-height: 1.4; }
+.food-choice strong { font-size: 17px; }
+.option-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; cursor: pointer; }
+.option-row input { width: 19px; height: 19px; accent-color: #e05a74; }
+input[type="range"] { width: 100%; accent-color: #e05a74; }
+@media (max-width: 760px), (pointer: coarse) {
+  #interact-button { bottom: max(174px, calc(env(safe-area-inset-bottom) + 158px)); }
+  #visit-status { top: 132px; bottom: auto; max-width: calc(100vw - 40px); font-size: 10px; }
+  .visit-toolbar { top: 83px; }
+  .visit-toolbar kbd { display: none; }
+  #visit-dialog { padding: 20px 15px; }
+  .dialog-heading h2 { font-size: 25px; }
+  .food-menu { grid-template-columns: 1fr; }
+  .seat-choice { width: 22px; }
+  .toast { bottom: 145px; max-width: 88vw; text-align: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
 }

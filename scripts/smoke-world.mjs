@@ -217,7 +217,7 @@ const auditoriumByNumber = new Map(AUDITORIUMS.map((auditorium) => [auditorium.n
 assert.equal(world.stats.auditoriumCount, 14);
 assert.equal(world.stats.seatCount, 1093);
 assert.equal(world.stats.equipmentAnchors, 13);
-assert.equal(world.stats.layoutVersion, "mililani-sketch-v17");
+assert.equal(world.stats.layoutVersion, "mililani-sketch-v18");
 assert.ok(world.stats.meshCount > 0);
 assert.ok(world.stats.colliderCount > 0);
 assert.equal(world.auditoriumGroups.size, 14);
@@ -245,7 +245,6 @@ for (const [id, footprint] of [["hall-west-exit", HALL_PLAN.narrow], ["hall-east
 }
 
 const shiftedRuntimeBoxes = [
-  ["lobby-floor", { ...publicById.get("lobby").bounds, zMax: LOBBY_PLAN.envelope.zMax }],
   ["lobby-approach-floor", TICKET_APPROACH_PLAN.bounds],
   ["ticket-poster-alcove-floor", TICKET_APPROACH_PLAN.posterAlcove],
   ["ticket-empty-alcove-floor", TICKET_APPROACH_PLAN.emptyAlcove],
@@ -283,7 +282,8 @@ for (const door of entrance.doors) {
   const prefix = `lobby-front-${door.id}`;
   for (const side of ["left", "right"]) {
     const leaf = boxById(`${prefix}-leaf-${side}`);
-    assertNear(leaf.z, entrance.facadeZ, `${prefix} ${side} single facade plane`, 0.06);
+    const leafWorldPosition = objectsByName(`${prefix}-leaf-${side}`)[0].getWorldPosition(new THREE.Vector3());
+    assertNear(leafWorldPosition.z, entrance.facadeZ, `${prefix} ${side} single facade plane`, 0.06);
     assertNear(leaf.y + leaf.height / 2, entrance.doorHeight - 0.06, `${prefix} ${side} leaf height`);
   }
   const transom = boxById(`${prefix}-fixed-transom`);
@@ -499,7 +499,7 @@ assert.deepEqual(
 const concessionRearWall = LOBBY_PLAN.concessionBackWall;
 assertPlanSegment(concessionRearWall.id, concessionRearWall.start, concessionRearWall.end, {
   height: concessionRearWall.height,
-  materialName: "Wall / warm neutral",
+  materialName: "Concession / white mosaic backsplash",
 });
 assert.ok(colliderIdsMatching(world, /^concession-back-wall-parallel-collider-\d+$/).length >= 1, "The two-thirds concession back wall needs segmented collision.");
 assertNear(
@@ -1080,8 +1080,8 @@ assert.deepEqual(objectsByName("boys-restroom-south"), [], "The former uninterru
 for (const id of ["boys-restroom-south-segment-0", "boys-restroom-south-segment-last", "boys-restroom-south-header-0"]) {
   const recessMouthPiece = boxById(id);
   assert.equal(recessMouthPiece.materialNames.length, 6, `${id} needs per-face hall/restroom finishes.`);
-  assert.equal(recessMouthPiece.materialNames[5], materials.darkWall.name, `${id} public south face must match the hall.`);
-  assert.equal(recessMouthPiece.materialNames[4], materials.wall.name, `${id} bathroom north face must remain light.`);
+  assert.equal(recessMouthPiece.materialNames[5], materials.hallWall.name, `${id} public south face must match the hall.`);
+  assert.equal(recessMouthPiece.materialNames[4], materials.restroomWall.name, `${id} bathroom north face must remain light.`);
 }
 for (const edge of [0, boysStallBank.count]) {
   const partition = boxById(`boys-restroom-stall-bank-0-partition-${edge}`);
@@ -1106,15 +1106,15 @@ assertNear(sharedWall.depth, 0.18, "boys/T3 shared wall thickness");
 assert.equal(colliderIdsMatching(world, /^boys-t3-shared-back-wall$/).length, 1, "The boys/T3 boundary must have exactly one collider.");
 assert.equal(sharedWall.materialNames.length, 6, "The shared wall needs per-face finishes.");
 assert.equal(sharedWall.materialNames[4], materials.darkWall.name, "The shared wall's +Z storage face must use the dark finish.");
-assert.equal(sharedWall.materialNames[5], materials.wall.name, "The shared wall's -Z bathroom face must use the warm finish.");
+assert.equal(sharedWall.materialNames[5], materials.restroomWall.name, "The shared wall's -Z bathroom face must use the warm finish.");
 for (const [id, publicFaceIndex, interiorFaceIndex] of [
   ["boys-restroom-entry-south", 5, 4],
   ["boys-restroom-east", 1, 0],
 ]) {
   const wall = boxById(id);
   assert.equal(wall.materialNames.length, 6, `${id} requires per-face finishes.`);
-  assert.equal(wall.materialNames[publicFaceIndex], materials.darkWall.name, `${id} public face must match the hall.`);
-  assert.equal(wall.materialNames[interiorFaceIndex], materials.wall.name, `${id} restroom face must remain warm.`);
+  assert.equal(wall.materialNames[publicFaceIndex], materials.hallWall.name, `${id} public face must match the hall.`);
+  assert.equal(wall.materialNames[interiorFaceIndex], materials.restroomWall.name, `${id} restroom face must remain warm.`);
 }
 const menCubbyHeader = boxById("boys-men-cubby-mouth-header-0");
 assertNear(menCubbyHeader.x, planToWorldX((boysMenCubby.bounds.xMin + boysMenCubby.bounds.xMax) / 2), "MEN cubby header center X");
@@ -1160,8 +1160,8 @@ for (let edge = 0; edge <= 6; edge += 1) {
   assertNear(northPartition.x, southPartition.x, `girls partition pair ${edge} alignment`);
 }
 
-const WARM_WALL = "Wall / warm neutral";
-const DARK_WALL = "Wall / charcoal";
+const WARM_WALL = materials.restroomWall.name;
+const DARK_WALL = materials.hallWall.name;
 const girlsExteriorFaceExpectations = [
   ["girls-restroom-north", 4, DARK_WALL, 5, WARM_WALL],
   ["girls-restroom-west", 0, DARK_WALL, 1, WARM_WALL],
@@ -1269,6 +1269,7 @@ assertNear(partitionMesh.height, partition.height, "T3/task partition height");
 assertNear(partitionMesh.depth, partition.zMax - partition.zMin, "T3/task partition depth");
 assert.equal(colliderIdsMatching(world, /^theater-3-task-waist-partition$/).length, 1);
 
+for (const floor of LOBBY_PLAN.floorFinishes) assertPolygonSlab(floor.id, floor, floor.id);
 const approachFloor = boxById("lobby-approach-floor");
 assertNear(approachFloor.width, TICKET_APPROACH_PLAN.bounds.xMax - TICKET_APPROACH_PLAN.bounds.xMin, "Narrow approach rendered width");
 assertNear(approachFloor.depth, TICKET_APPROACH_PLAN.bounds.zMax - TICKET_APPROACH_PLAN.bounds.zMin, "Narrow approach rendered depth");
@@ -1398,5 +1399,5 @@ assert.equal(oppositeMuralTextureDisposed, true, "World disposal must release th
 materials.dispose();
 
 console.log(
-  `World smoke valid: V17 · ${world.stats.meshCount} runtime meshes · ${world.stats.instancedMeshCount} instanced · ${world.stats.colliderCount} colliders · single-plane six-assembly glass frontage + four flush kiosks/three showtime screens · V16 lobby/stair retained.`,
+  `World smoke valid: V18 · ${world.stats.meshCount} runtime meshes · ${world.stats.instancedMeshCount} instanced · ${world.stats.colliderCount} colliders · single-plane six-assembly glass frontage + four flush kiosks/three showtime screens · V16 lobby/stair retained.`,
 );

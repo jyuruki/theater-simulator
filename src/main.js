@@ -1,5 +1,9 @@
 import * as THREE from "three";
-import { EQUIPMENT_ANCHORS, PLAYER_SPAWN_PLAN, validateLayoutData, zoneAt } from "./layout-data.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { createVisitUI } from "./visit-ui.js";
+import { createTheaterCrowd, createTheaterAudio } from "./atmosphere.js";
+import { createCinemaMedia } from "./cinema-media.js";
+import { PLAYER_SPAWN_PLAN, validateLayoutData, zoneAt } from "./layout-data.js";
 import { planToWorldX, worldToPlanDirection, worldToPlanPoint } from "./coordinates.js";
 import { createMaterialLibrary } from "./materials.js";
 import { createMinimap } from "./minimap.js";
@@ -32,10 +36,13 @@ function showToast(message, duration = 1900) {
 function showFatalError(error) {
   console.error(error);
   loadingScreen.classList.remove("is-hidden");
-  loadingScreen.innerHTML = `
-    <div class="eyebrow">LAYOUT COULD NOT START</div>
-    <p>${String(error?.message ?? error)}</p>
-  `;
+  loadingScreen.replaceChildren();
+  const heading = document.createElement("div");
+  heading.className = "eyebrow";
+  heading.textContent = "THEATER COULD NOT START";
+  const message = document.createElement("p");
+  message.textContent = String(error?.message ?? error);
+  loadingScreen.append(heading, message);
 }
 
 try {
@@ -48,12 +55,24 @@ try {
   renderer.toneMappingExposure = 1.12;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.setSize(window.innerWidth, window.innerHeight, false);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.autoUpdate = false;
+  renderer.shadowMap.needsUpdate = true;
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x08080b);
   // Keep atmospheric depth without making the far end of the authored
   // complex look as if it is loading in by proximity.
   scene.fog = new THREE.Fog(0x08080b, 220, 320);
+
+  const environment = new RoomEnvironment();
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const environmentTarget = pmrem.fromScene(environment, 0.04);
+  scene.environment = environmentTarget.texture;
+  scene.environmentIntensity = 0.22;
+  environment.dispose();
+  pmrem.dispose();
 
   const camera = new THREE.PerspectiveCamera(67, window.innerWidth / window.innerHeight, 0.06, 260);
   const spawnWorld = {
@@ -67,20 +86,29 @@ try {
   scene.add(hemisphere);
   const sun = new THREE.DirectionalLight(0xffead4, 1.8);
   sun.position.set(-18, 28, -16);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(1024, 1024);
+  Object.assign(sun.shadow.camera, { left:-33, right:33, top:36, bottom:-29, near:0.5, far:100 });
+  sun.shadow.normalBias = 0.025;
+  sun.shadow.bias = -0.00015;
   scene.add(sun);
 
   const materials = createMaterialLibrary(renderer);
   const world = createTheaterWorld({ scene, materials });
   const collisionWorld = new AABBCollisionWorld({ bounds: world.worldBounds });
   collisionWorld.addBoxes(world.colliders);
+  const doorColliders = collisionWorld.addBoxes(world.dynamicColliders);
+  const crowd = createTheaterCrowd({ scene, collisionWorld, world });
+  const audio = createTheaterAudio();
+  const media = createCinemaMedia({ scene, world, materials });
+  let interactions = null;
 
   let entered = false;
   let currentZoneId = "";
-  let nearestAnchorId = "";
 
   const setPausedUi = (paused) => {
     if (!entered) return;
-    pauseCard.hidden = !paused;
+    pauseCard.hidden = !paused || Boolean(interactions?.isOpen);
     crosshair.hidden = paused;
   };
 
@@ -120,13 +148,14 @@ try {
       crosshair.hidden = false;
     }
     pauseCard.hidden = true;
+    audio.start();
     controller.start();
   };
 
   enterButton.addEventListener("click", enterWalkthrough);
   resumeButton.addEventListener("click", () => controller.resume());
   canvas.addEventListener("click", () => {
-    if (entered && !controller.active && !controller.isTouchMode) controller.resume();
+    if (entered && !controller.active && !controller.isTouchMode && !interactions?.isOpen) controller.resume();
   });
 
   const toggleMap = (force) => {
@@ -135,8 +164,12 @@ try {
     if (!hide) minimap.resize();
   };
 
+  interactions = createVisitUI({ controller, camera, collisionWorld, showToast,
+    onSound: (kind) => audio.play(kind), audio, crowd, toggleMap });
+
   mapClose.addEventListener("click", () => toggleMap(true));
   window.addEventListener("keydown", (event) => {
+    if (interactions.isOpen) return;
     if (event.code === "KeyM" && !event.repeat) toggleMap();
     if (event.code === "KeyR" && !event.repeat && entered) {
       controller.setPosition([spawnWorld.x, spawnWorld.y, spawnWorld.z]);
@@ -154,21 +187,6 @@ try {
       locationName.textContent = zone.name;
       locationDetail.textContent = zone.detail;
     }
-
-    let nearest = null;
-    let nearestDistance = 2.25;
-    for (const anchor of EQUIPMENT_ANCHORS) {
-      const distance = Math.hypot(anchor.position[0] - planPosition.x, anchor.position[2] - planPosition.z);
-      if (distance < nearestDistance) {
-        nearest = anchor;
-        nearestDistance = distance;
-      }
-    }
-    const nextAnchorId = nearest?.id ?? "";
-    if (nextAnchorId && nextAnchorId !== nearestAnchorId) {
-      showToast(nearest.type.replaceAll("-", " ").toUpperCase());
-    }
-    nearestAnchorId = nextAnchorId;
   };
 
   const clock = new THREE.Clock();
@@ -178,9 +196,14 @@ try {
 
   function animate() {
     const delta = Math.min(clock.getDelta(), 0.1);
-    world.update?.(delta);
+    world.update(delta, controller.position);
+    doorColliders.forEach(collider => Object.assign(collider, collider.source));
+    crowd.update(delta, controller.position, entered && controller.active && !document.hidden);
     controller.update(delta);
     updateHud();
+    interactions.update(delta);
+    audio.update(controller.position, currentZoneId, entered && (controller.active || interactions.isOpen), controller.grounded);
+    media.update(delta, currentZoneId, entered && controller.active && !document.hidden);
 
     camera.getWorldDirection(cameraDirection);
     if (frame % 3 === 0 && !minimapPanel.classList.contains("is-hidden")) {
@@ -193,6 +216,7 @@ try {
     frame += 1;
     averageFrameTime += (delta - averageFrameTime) * 0.025;
     if (!adaptiveDprApplied && frame > 240 && averageFrameTime > 1 / 42 && renderer.getPixelRatio() > 1) {
+      renderer.shadowMap.enabled = false;
       renderer.setPixelRatio(1);
       renderer.setSize(window.innerWidth, window.innerHeight, false);
       adaptiveDprApplied = true;
@@ -215,12 +239,21 @@ try {
     document.body.dataset.ready = "true";
   });
 
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden && entered && !interactions.isOpen) controller.pause();
+  });
+  window.addEventListener("pagehide", (event) => {
+    if (event.persisted) return;
+    renderer.setAnimationLoop(null);
+    audio.dispose();
+  });
+
   Object.defineProperty(window, "__THEATER_DEBUG__", {
     configurable: false,
     enumerable: false,
     writable: false,
     value: Object.freeze({
-      layoutVersion: "mililani-sketch-v17",
+      layoutVersion: "mililani-sketch-v18",
       validation: Object.freeze(validation),
       stats: world.stats,
       controller,
@@ -228,6 +261,8 @@ try {
       scene,
       camera,
       equipment: world.equipment,
+      interactions,
+      crowd,
     }),
   });
 } catch (error) {
