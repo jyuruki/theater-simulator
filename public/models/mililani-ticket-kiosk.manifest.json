@@ -1,0 +1,60 @@
+{
+  "asset": "mililani-ticket-kiosk.glb",
+  "version": 1,
+  "authoringTool": "5.2.2 LTS",
+  "units": "meters",
+  "axes": {
+    "up": "+Y",
+    "front": "+Z",
+    "width": "X"
+  },
+  "origin": "floor center",
+  "bounds": {
+    "min": [
+      -0.36,
+      0.0,
+      -0.45
+    ],
+    "max": [
+      0.36,
+      1.6,
+      0.52
+    ]
+  },
+  "triangleCount": 2778,
+  "meshCount": 6,
+  "bodyMeshCount": 5,
+  "glbBytes": 107028,
+  "screen": {
+    "mesh": "KioskScreen",
+    "center": [
+      0,
+      1.135,
+      0.461
+    ],
+    "width": 0.53,
+    "height": 0.8,
+    "normal": [
+      0,
+      0,
+      1
+    ],
+    "uvOrigin": "top-left (glTF); set CanvasTexture.flipY=false in Three.js",
+    "material": "Kiosk_DisplayPlaceholder"
+  },
+  "reference": "User-provided IMG_7955.jpeg, cross-checked against Yelp close-up photo J17tqk4C7qSzSS-rXU0Yng.",
+  "referenceUrl": "https://www.yelp.com/biz_photos/consolidated-theatres-mililani-with-titan-luxe-mililani?select=J17tqk4C7qSzSS-rXU0Yng",
+  "sourceAssetLicense": "Original project geometry; no third-party assets or textures.",
+  "assumptions": [
+    "Dimensions fitted to existing gameplay collider, not surveyed measurements.",
+    "The 0.90m main housing depth is inherited from the existing game footprint.",
+    "Rear and side geometry inferred where obscured in reference."
+  ],
+  "validation": {
+    "exportReimportPassed": true,
+    "screenNormalsPassed": true,
+    "screenUvPassed": true,
+    "glTFScreenUvOrientationPassed": true,
+    "textureless": true
+  }
+}

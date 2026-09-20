@@ -95,6 +95,10 @@ try {
 
   const materials = createMaterialLibrary(renderer);
   const world = createTheaterWorld({ scene, materials });
+  world.loadKioskAssets({
+    url: `${import.meta.env.BASE_URL}models/mililani-ticket-kiosk.glb`,
+    onLoaded: () => { renderer.shadowMap.needsUpdate = true; },
+  });
   const collisionWorld = new AABBCollisionWorld({ bounds: world.worldBounds });
   collisionWorld.addBoxes(world.colliders);
   const doorColliders = collisionWorld.addBoxes(world.dynamicColliders);
@@ -181,7 +185,7 @@ try {
   const updateHud = () => {
     const position = controller.position;
     worldToPlanPoint(position, planPosition);
-    const zone = zoneAt(planPosition.x, planPosition.z);
+    const zone = zoneAt(planPosition.x, planPosition.z, position.y);
     if (zone.id !== currentZoneId) {
       currentZoneId = zone.id;
       locationName.textContent = zone.name;
@@ -246,6 +250,7 @@ try {
     if (event.persisted) return;
     renderer.setAnimationLoop(null);
     audio.dispose();
+    world.dispose();
   });
 
   Object.defineProperty(window, "__THEATER_DEBUG__", {

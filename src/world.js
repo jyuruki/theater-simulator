@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { createEntranceDoors } from "./entrance-doors.js";
+import { createKioskAssets } from "./kiosk-assets.js";
 import {
   AUDITORIUMS,
   CONCESSION_SERVICE_SEQUENCE,
@@ -71,6 +72,9 @@ export function createTheaterWorld({ scene, materials }) {
 
   const colliders = [];
   const equipment = new Map();
+  const kioskVisuals = [];
+  let kioskAssets = null;
+  let disposed = false;
   const auditoriumGroups = new Map();
   const auditoriumLayouts = buildAuditoriumLayouts(AUDITORIUMS);
   const unitBoxGeometry = new THREE.BoxGeometry(1, 1, 1);
@@ -223,7 +227,9 @@ export function createTheaterWorld({ scene, materials }) {
     mesh.rotation.y = space === "plan" ? planToWorldYaw(rotationY) : rotationY;
     mesh.scale.set(width, height, depth);
     mesh.castShadow = castShadow || (space === "plan" && z < 24 && height < 4
-      && /kiosk|counter|box-office|stair.*tread|pillar/.test(id));
+      && /kiosk|counter|box-office|stair.*tread|pillar/.test(id))
+      || (/^(office|kitchen)-/.test(id)
+        && (height > 2 || id.endsWith("-ceiling")));
     mesh.receiveShadow = receiveShadow;
     parent.add(mesh);
     sourceMeshCount += 1;
@@ -277,7 +283,9 @@ export function createTheaterWorld({ scene, materials }) {
     const batches = new Map();
     for (const child of parent.children) {
       if (!child.isMesh || child.isInstancedMesh || child.geometry !== unitBoxGeometry || Array.isArray(child.material)) continue;
-      const key = child.material.uuid;
+      // A casting roof must not turn every box with its material into a
+      // shadow caster (and non-receiving ceilings must retain that setting).
+      const key = `${child.material.uuid}:${child.castShadow}:${child.receiveShadow}`;
       if (!batches.has(key)) batches.set(key, []);
       batches.get(key).push(child);
     }
@@ -340,7 +348,7 @@ export function createTheaterWorld({ scene, materials }) {
   // kitchen roof. Build the authored plan polygon as a thin solid slab. The
   // layout polygon is clipped to the kitchen ceiling edge, making this a
   // watertight abutment rather than two coplanar surfaces fighting at runtime.
-  const addPlanPolygonSlab = (id, points, elevation, thickness, material) => {
+  const addPlanPolygonSlab = (id, points, elevation, thickness, material, castShadow = false) => {
     if (!Array.isArray(points) || points.length < 3) return null;
     const shape = new THREE.Shape();
     points.forEach((point, index) => {
@@ -363,6 +371,7 @@ export function createTheaterWorld({ scene, materials }) {
     // makes that depth extend downward from the authored ceiling elevation.
     mesh.position.y = elevation + thickness / 2;
     mesh.rotation.x = Math.PI / 2;
+    mesh.castShadow = castShadow;
     mesh.receiveShadow = true;
     root.add(mesh);
     sourceMeshCount += 1;
@@ -510,14 +519,21 @@ export function createTheaterWorld({ scene, materials }) {
 
   const addLabel = ({ id, text, position, rotationY = 0, width = 2.7, height = 0.62, accent = "#ef4657", small = false, parent = root }) => {
     const texture = createSignTexture(text, { accent, small });
-    const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide, toneMapped: false });
+    const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false });
     const sign = new THREE.Mesh(unitPlaneGeometry, material);
     sign.name = id;
     sign.position.set(planToWorldX(position[0]), position[1], position[2]);
     sign.rotation.y = planToWorldYaw(rotationY);
     sign.scale.set(width, height, 1);
+    // Give the placard an opaque body. Only its front carries lettering;
+    // the reverse is a physical blank back, never a mirrored texture.
+    const backing = new THREE.Mesh(unitBoxGeometry, materials.black);
+    backing.name = `${id}-backing`;
+    backing.scale.set(1, 1, 0.035);
+    backing.position.z = -0.02;
+    sign.add(backing);
     parent.add(sign);
-    sourceMeshCount += 1;
+    sourceMeshCount += 2;
     return sign;
   };
 
@@ -681,7 +697,7 @@ export function createTheaterWorld({ scene, materials }) {
   const addAuditoriumBowl = (auditorium, layout, parent) => {
     const counts = {
       seat: auditorium.seats,
-      arm: auditorium.seats * 2,
+      arm: auditorium.seats + layout.rows.length,
     };
     const cushionMesh = new THREE.InstancedMesh(seatGeometries.cushion, materials.seat, counts.seat);
     const backMesh = new THREE.InstancedMesh(seatGeometries.back, materials.seat, counts.seat);
@@ -730,31 +746,36 @@ export function createTheaterWorld({ scene, materials }) {
 
       const spacing = Math.min(0.76, (seatWidth - 0.14) / Math.max(1, row.seatCount));
       const rowWidth = spacing * (row.seatCount - 1);
+      // Leave a shared armrest and a small gap between upholstered bodies.
+      // Fit the mesh to the authored row pitch without changing seat counts.
+      const bodyScaleX = Math.min(1, (spacing - 0.095 - 0.025) / 0.62);
       for (let column = 0; column < row.seatCount; column += 1) {
         const planX = layout.centerX - rowWidth / 2 + column * spacing;
         const worldX = planToWorldX(planX);
         const backZ = row.z - forward * 0.23;
         matrix.makeTranslation(worldX, row.elevation + 0.54, row.z);
+        matrix.scale(new THREE.Vector3(bodyScaleX, 1, 1));
         cushionMesh.setMatrixAt(seatInstance, matrix);
         matrix.makeTranslation(worldX, row.elevation + 0.94, backZ);
+        matrix.scale(new THREE.Vector3(bodyScaleX, 1, 1));
         backMesh.setMatrixAt(seatInstance, matrix);
         matrix.makeTranslation(worldX, row.elevation + 0.28, row.z - forward * 0.06);
         baseMesh.setMatrixAt(seatInstance, matrix);
         matrix.makeTranslation(worldX, row.elevation + 0.8, row.z + forward * 0.34);
         trayMesh.setMatrixAt(seatInstance, matrix);
-        for (const offset of [-0.34, 0.34]) {
-          matrix.makeTranslation(worldX - offset, row.elevation + 0.68, row.z - forward * 0.02);
-          armMesh.setMatrixAt(armInstance, matrix);
-          armInstance += 1;
-        }
         seatInstance += 1;
+      }
+      for (let divider = 0; divider <= row.seatCount; divider += 1) {
+        const armX = layout.centerX - rowWidth / 2 - spacing / 2 + divider * spacing;
+        matrix.makeTranslation(planToWorldX(armX), row.elevation + 0.68, row.z - forward * 0.02);
+        armMesh.setMatrixAt(armInstance++, matrix);
       }
       addPlanCollider(
         `${auditorium.id}-seat-row-${rowIndex}`,
         layout.centerX,
         row.elevation + 0.82,
         row.z,
-        Math.max(0.5, rowWidth + 0.72),
+        rowWidth + spacing + 0.095,
         1.64,
         0.78,
       );
@@ -889,7 +910,7 @@ export function createTheaterWorld({ scene, materials }) {
     if (options.labelPosition) addLabel({ id: `${storage.id}-label`, text: storage.name.toUpperCase(), position: options.labelPosition, rotationY: options.labelRotation ?? 0, width: 2.5, height: 0.38, small: true, accent: "#f0c36f" });
   };
 
-  const addT3Route = (auditorium, layout) => {
+  const addT3Route = (auditorium, layout, ceilingY) => {
     const route = auditorium.entry.routeBounds;
     const directRoute = { ...route, zMax: auditorium.bounds.zMax };
     const ramp = auditorium.entry.ramp;
@@ -905,6 +926,9 @@ export function createTheaterWorld({ scene, materials }) {
     // the front cross-aisle, where walking straight opens directly into T3.
     addWallZ(`${auditorium.id}-route-west`, directRoute.xMin, nook.zMax, auditorium.entry.arrivalZ - 0.65, { material: materials.darkWall });
     addWallZ(`${auditorium.id}-route-east`, directRoute.xMax, directRoute.zMin, directRoute.zMax, { material: materials.darkWall });
+    addWallZ(`${auditorium.id}-route-east-upper`, directRoute.xMax, auditorium.bounds.zMin, directRoute.zMax, {
+      material: materials.darkWall, baseY: WALL_HEIGHT, height: ceilingY - WALL_HEIGHT,
+    });
 
     // Usher waiting nook: open on the east to the public route, with its
     // storage door on the west. The trash can sits clear of both openings.
@@ -924,7 +948,7 @@ export function createTheaterWorld({ scene, materials }) {
     addLightPanel(`${auditorium.id}-route-light-b`, (route.xMin + route.xMax) / 2, 82, 1.5, 0.32);
     addLightPanel(`${auditorium.id}-route-light-c`, (route.xMin + route.xMax) / 2, 93, 1.5, 0.32);
 
-    addStorageRoom(storage, { labelPosition: [(storage.bounds.xMin + storage.bounds.xMax) / 2, 2.0, storage.bounds.zMin + 0.12], labelRotation: Math.PI });
+    addStorageRoom(storage, { labelPosition: [(storage.bounds.xMin + storage.bounds.xMax) / 2, 2.0, storage.bounds.zMin - 0.12], labelRotation: Math.PI });
     addFloor(`${storage.id}-anteroom`, anteroom, materials.floorDark);
     addCeiling(`${storage.id}-anteroom`, anteroom, storage.ceilingHeight - 0.05);
     // The MEN/T3 shared back wall owns the full south edge of this anteroom.
@@ -970,7 +994,7 @@ export function createTheaterWorld({ scene, materials }) {
     addLightPanel(`${auditorium.id}-long-light-b`, routeCenter, 84.0, 1.45, 0.3);
   };
 
-  const addT6Route = (auditorium, layout) => {
+  const addT6Route = (auditorium, layout, ceilingY) => {
     const { entry } = auditorium;
     const storage = roomById(entry.storageId);
     const underTierHeight = storage.ceilingHeight;
@@ -992,12 +1016,17 @@ export function createTheaterWorld({ scene, materials }) {
     addWallX(`${auditorium.id}-transverse-south-right`, entry.vestibuleBounds.xMax, entry.transverseBounds.xMax, entry.transverseBounds.zMin, { material: materials.darkWall, height: underTierHeight });
     const transverseCenterX = (entry.transverseBounds.xMin + entry.transverseBounds.xMax) / 2;
     const longCenterX = (entry.longRouteBounds.xMin + entry.longRouteBounds.xMax) / 2;
-    addStorageRoom(storage, { labelPosition: [(storage.bounds.xMin + storage.bounds.xMax) / 2, 1.92, storage.bounds.zMin + 0.14], labelRotation: Math.PI });
+    addStorageRoom(storage, { labelPosition: [(storage.bounds.xMin + storage.bounds.xMax) / 2, 1.92, storage.bounds.zMin - 0.14], labelRotation: Math.PI });
     addWallX(`${auditorium.id}-transverse-return`, entry.transverseBounds.xMin, storage.bounds.xMin, entry.transverseBounds.zMax, { material: materials.darkWall, height: storage.ceilingHeight });
     // The auditorium's east perimeter wall is already the outer wall of this
     // passage. Authoring it again here produced coplanar dark surfaces.
     addWallZ(`${auditorium.id}-long-divider`, entry.longRouteBounds.xMin, storage.bounds.zMax, entry.arrivalZ - 0.1, { material: materials.darkWall, height: underTierHeight });
-    addLabel({ id: `${auditorium.id}-first-arrow`, text: "THEATER 6  →", position: [transverseCenterX, 1.78, entry.transverseBounds.zMax - 0.12], rotationY: Math.PI, width: 2.0, height: 0.4, small: true });
+    // Continue above the low passages and storage wall. This closes the
+    // raised aisle edge without blocking the transverse route underneath.
+    addWallZ(`${auditorium.id}-long-divider-upper`, entry.longRouteBounds.xMin, auditorium.bounds.zMin, entry.arrivalZ - 0.1, {
+      material: materials.darkWall, baseY: underTierHeight, height: ceilingY - underTierHeight,
+    });
+    addLabel({ id: `${auditorium.id}-first-arrow`, text: "THEATER 6  →", position: [transverseCenterX, 1.35, entry.transverseBounds.zMax - 0.12], rotationY: Math.PI, width: 2.0, height: 0.4, small: true });
     addLabel({ id: `${auditorium.id}-second-arrow`, text: "THEATER 6  ←", position: [entry.longRouteBounds.xMin + 0.1, 1.78, 78.0], rotationY: Math.PI / 2, width: 2.0, height: 0.4, small: true });
     const lowLightY = underTierHeight - 0.18;
     addLightPanel(`${auditorium.id}-route-light-a`, transverseCenterX, 66.8, 2.0, 0.32, lowLightY);
@@ -1080,6 +1109,14 @@ export function createTheaterWorld({ scene, materials }) {
       if (auditorium.number === 3) {
         const storage = roomById("under-storage-3");
         addWallX(`${auditorium.id}-south-west-cap`, auditorium.bounds.xMin, storage.bounds.xMin, auditorium.bounds.zMin, { material: materials.darkWall, baseY: wallBase, height: wallHeight, parent: interior });
+        // The two lower shells own their walls below these elevations. Close
+        // the raised auditorium above them, leaving every lower door open.
+        addWallX(`${auditorium.id}-south-storage-upper`, storage.bounds.xMin, storage.bounds.xMax, auditorium.bounds.zMin, {
+          material: materials.darkWall, baseY: storage.ceilingHeight, height: ceilingY - storage.ceilingHeight, parent: interior,
+        });
+        addWallX(`${auditorium.id}-south-entry-upper`, storage.bounds.xMax, auditorium.bounds.xMax, auditorium.bounds.zMin, {
+          material: materials.darkWall, baseY: WALL_HEIGHT, height: ceilingY - WALL_HEIGHT, parent: interior,
+        });
       } else {
         addWallXWithOpenings(`${auditorium.id}-south-wall`, auditorium.bounds.xMin, auditorium.bounds.xMax, auditorium.bounds.zMin, southOpenings, { material: materials.darkWall, baseY: wallBase, height: wallHeight, parent: interior });
       }
@@ -1102,9 +1139,9 @@ export function createTheaterWorld({ scene, materials }) {
         addWallZWithOpenings(`${auditorium.id}-east-wall`, auditorium.bounds.xMax, auditorium.bounds.zMin, auditorium.bounds.zMax, eastOpenings, { material: materials.darkWall, baseY: wallBase, height: wallHeight, parent: interior });
       }
       if ([6, 7, 8].includes(auditorium.number)) addDoorTrim(`${auditorium.id}-outer`, "south", auditorium.bounds.zMin, auditorium.entry.center, auditorium.number === 6 ? { width: 2.2, height: 2.18 } : undefined);
-      if (auditorium.number === 3) addT3Route(auditorium, layout);
+      if (auditorium.number === 3) addT3Route(auditorium, layout, ceilingY);
       if (auditorium.entry.type === "dogleg") addDoglegRoute(auditorium, layout);
-      if (auditorium.number === 6) addT6Route(auditorium, layout);
+      if (auditorium.number === 6) addT6Route(auditorium, layout, ceilingY);
       if ([7, 8].includes(auditorium.number)) addStraightRoute(auditorium, layout);
     }
 
@@ -1442,29 +1479,40 @@ export function createTheaterWorld({ scene, materials }) {
     disposableDecorMaterials.push(kioskDisplay);
     for (const kiosk of LOBBY_PLAN.kiosks) {
       const [x, , z] = kiosk.position;
-      addBox({ id: `${kiosk.id}-body`, x, y: 0.8, z, width: 0.76, height: 1.6, depth: 0.9, material: materials.stainless, collide: true, rotationY: kiosk.rotation });
-      addBox({ id: `${kiosk.id}-head`, x:x-0.405, y:1.135,z,width:0.095,height:0.91,depth:0.72,material:materials.black });
+      // Keep a parent after box batching so the complete fallback can be hidden.
+      const fallback = new THREE.Group();
+      fallback.name = `${kiosk.id}-fallback`;
+      root.add(fallback);
+      kioskVisuals.push({ id: kiosk.id, fallback, screenMaterial: kioskDisplay,
+        position: new THREE.Vector3(planToWorldX(x), 0, z) });
+      const addKioskBox = (options) => addBox({ ...options, parent: fallback });
+      addKioskBox({ id: `${kiosk.id}-body`, x, y: 0.8, z, width: 0.76, height: 1.6, depth: 0.9, material: materials.stainless, collide: true, rotationY: kiosk.rotation });
+      addKioskBox({ id: `${kiosk.id}-head`, x:x-0.405, y:1.135,z,width:0.095,height:0.91,depth:0.72,material:materials.black });
       const display=new THREE.Mesh(unitPlaneGeometry,kioskDisplay);
       display.name=`${kiosk.id}-screen`;
       display.position.set(planToWorldX(x-0.46),1.135,z);
       display.rotation.y=Math.PI/2;
       display.scale.set(0.53,0.8,1);
-      root.add(display); sourceMeshCount++;
-      addBox({id:`${kiosk.id}-receipt-slot`,x:x-0.454,y:0.59,z,width:0.017,height:0.03,depth:0.25,material:materials.black});
-      addBox({id:`${kiosk.id}-card-reader`,x:x-0.473,y:0.83,z:z-0.292,width:0.05,height:0.17,depth:0.11,material:materials.black,collide:true});
-      addBox({id:`${kiosk.id}-reader-light`,x:x-0.501,y:0.87,z:z-0.292,width:0.006,height:0.06,depth:0.06,material:materials.display});
-      for(let vent=0;vent<5;vent++) addBox({id:`${kiosk.id}-vent-${vent}`,x:x-0.454,y:0.18+vent*0.038,z,width:0.014,height:0.011,depth:0.34,material:materials.black});
-      addBox({id:`${kiosk.id}-foot`,x,y:0.035,z,width:0.88,height:0.07,depth:0.73,material:materials.black});
+      fallback.add(display); sourceMeshCount++;
+      addKioskBox({id:`${kiosk.id}-receipt-slot`,x:x-0.454,y:0.59,z,width:0.017,height:0.03,depth:0.25,material:materials.black});
+      addKioskBox({id:`${kiosk.id}-card-reader`,x:x-0.473,y:0.83,z:z-0.292,width:0.05,height:0.17,depth:0.11,material:materials.black,collide:true});
+      addKioskBox({id:`${kiosk.id}-reader-light`,x:x-0.501,y:0.87,z:z-0.292,width:0.006,height:0.06,depth:0.06,material:materials.display});
+      for(let vent=0;vent<5;vent++) addKioskBox({id:`${kiosk.id}-vent-${vent}`,x:x-0.454,y:0.18+vent*0.038,z,width:0.014,height:0.011,depth:0.34,material:materials.black});
+      addKioskBox({id:`${kiosk.id}-foot`,x,y:0.035,z,width:0.88,height:0.07,depth:0.73,material:materials.black});
     }
     const kioskShowtimeTextures = createKioskShowtimeScreenTextures();
     kioskShowtimeTextures.forEach((texture) => disposableTextures.add(texture));
     for (const [index, screen] of LOBBY_PLAN.kioskShowtimeScreens.entries()) {
+      const caseDepth = 0.08;
+      // wallX is the wall centerline. Mount the case outside its guest-facing
+      // surface so neither its bezel nor the luminous face is buried in plaster.
+      const caseX = screen.wallX - WALL_THICKNESS / 2 - 0.01 - caseDepth / 2;
       addBox({
         id: screen.id,
-        x: screen.wallX,
+        x: caseX,
         y: screen.centerY,
         z: screen.centerZ,
-        width: 0.08,
+        width: caseDepth,
         height: screen.height,
         depth: screen.width,
         material: materials.black,
@@ -1479,7 +1527,7 @@ export function createTheaterWorld({ scene, materials }) {
       disposableDecorMaterials.push(screenMaterial);
       const face = new THREE.Mesh(unitPlaneGeometry, screenMaterial);
       face.name = `${screen.id}-face`;
-      face.position.set(planToWorldX(screen.wallX - 0.052), screen.centerY, screen.centerZ);
+      face.position.set(planToWorldX(caseX - caseDepth / 2 - 0.002), screen.centerY, screen.centerZ);
       face.rotation.y = planToWorldYaw(-Math.PI / 2);
       face.scale.set(screen.width - 0.08, screen.height - 0.06, 1);
       face.userData.screenId = screen.id;
@@ -2017,6 +2065,7 @@ export function createTheaterWorld({ scene, materials }) {
     kitchenDeadSpace.ceiling.elevation,
     kitchenDeadSpace.ceiling.thickness,
     materials.ceiling,
+    true,
   );
 
   // Replace the kitchen room's obsolete rectangular roof with the exact
@@ -2030,6 +2079,7 @@ export function createTheaterWorld({ scene, materials }) {
       surface.elevation,
       surface.thickness,
       materials.ceiling,
+      true,
     );
   }
 
@@ -2386,6 +2436,7 @@ export function createTheaterWorld({ scene, materials }) {
     muralFacade.soffit.elevation,
     muralFacade.soffit.thickness,
     materials.ceiling,
+    true,
   );
   const muralFaceOffset = muralFacadeDepth / 2 + 0.018;
   for (const grayFill of muralFacade.grayFills) {
@@ -2764,7 +2815,15 @@ export function createTheaterWorld({ scene, materials }) {
     ceilingHeight,
     update,
     updateVisibility,
+    loadKioskAssets(options) {
+      if (disposed) return Promise.resolve(false);
+      kioskAssets ??= createKioskAssets({ ...options, root, kiosks: kioskVisuals });
+      return kioskAssets.ready;
+    },
     dispose() {
+      if (disposed) return;
+      disposed = true;
+      kioskAssets?.dispose();
       entranceDoors.dispose();
       const disposedTextures = new Set();
       const disposeTexture = (texture) => {

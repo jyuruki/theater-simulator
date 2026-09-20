@@ -1220,7 +1220,16 @@ export const MAP_BOUNDS = Object.freeze(rect(-41, 114, shiftedZ(-10), 99));
 export const PLAYER_SPAWN_PLAN = Object.freeze({ x: FRONT_ENTRANCE_DOORS[2].center, y: 0, z: shiftedZ(-6.8) });
 
 export const AUDITORIUM_ENTRY_ZONES = Object.freeze([
-  { id: "theater-3-entry", name: "Theater 3 Entrance", detail: "Shared courtyard door · horizontal under-tier storage left · straight gentle incline into the bowl", bounds: rect(-21.5, -4.3, COURTYARD_BACK_WALL_Z, 99) },
+  {
+    id: "theater-3-entry", name: "Theater 3 Entrance",
+    detail: "Shared courtyard door · horizontal under-tier storage left · straight gentle incline into the bowl",
+    bounds: rect(-9.9, -4.3, COURTYARD_BACK_WALL_Z, 94.5),
+    footprintRects: Object.freeze([
+      rect(-9.9, -6.7, COURTYARD_BACK_WALL_Z, 72),
+      rect(-6.7, -4.3, COURTYARD_BACK_WALL_Z, 94.5),
+    ]),
+    maxFeetY: 2.32,
+  },
   { id: "theater-4-entry", name: "Theater 4 Vestibule", detail: "Compact court door · left dogleg · east-side aisle", bounds: rect(7.5, 15.05, 68.2, 75) },
   { id: "theater-5-entry", name: "Theater 5 Vestibule", detail: "Wall-side court door · right dogleg · east-side aisle", bounds: rect(15.45, 21.5, 68.2, 75) },
 ]);
@@ -1236,9 +1245,17 @@ function pointInZone(x, z, zone) {
     : pointInBounds(x, z, zone.bounds);
 }
 
-export function zoneAt(x, z) {
+export function zoneAt(x, z, feetY = 0) {
+  // Storage and seating share X/Z footprints. Resolve the lower level
+  // before auditorium bounds, but only while the player is below its roof.
+  for (const room of SERVICE_ROOMS) {
+    if (room.kind === "storage-lower" && feetY < room.ceilingHeight
+      && (pointInBounds(x, z, room.bounds)
+        || (room.accessHall && pointInBounds(x, z, room.accessHall)))) return room;
+  }
   for (let index = AUDITORIUM_ENTRY_ZONES.length - 1; index >= 0; index -= 1) {
-    if (pointInZone(x, z, AUDITORIUM_ENTRY_ZONES[index])) return AUDITORIUM_ENTRY_ZONES[index];
+    const zone = AUDITORIUM_ENTRY_ZONES[index];
+    if (feetY < (zone.maxFeetY ?? Infinity) && pointInZone(x, z, zone)) return zone;
   }
   for (let index = ALL_ZONES.length - 1; index >= 0; index -= 1) {
     if (pointInZone(x, z, ALL_ZONES[index])) return ALL_ZONES[index];

@@ -6,6 +6,14 @@ A first-person browser recreation of Consolidated Theatres Mililani 14, built fr
 
 This is an independent recreation with approximate dimensions, not an official architectural survey or ticket service.
 
+## Walkthrough fixes and Blender assets
+
+The walkthrough fixes close the raised auditorium edges and upper exterior wall gaps in theaters 3 and 6, fit seat bodies and shared armrests to the actual row spacing, distinguish upper auditoriums from storage below in the location display, correct buried and reversed signs, and restore structural shadows in the office and kitchen. All 14 auditoriums and 1,093 seats are retained.
+
+The four ticket kiosks now share a small photo-guided Blender model, with the existing ticket interface and collision retained. The three overhead showtime screens have also been moved out of the wall surface so they render correctly. See [asset pass notes](docs/blender-first-pass.md), [photo evidence](docs/asset-reference-notes.md), and [editable Blender source](assets-source/README.md).
+
+Run the development server, then open `/asset-review.html` for an interactive comparison with the original kiosks. This inspection page is available during development; the public game uses the new models.
+
 ## Version 18
 
 - **Kitchen floor corrected:** the separating wall follows the original straight service-floor edge, closing only the light-floor triangle. The kitchen-storage connector nook remains open. The main kitchen receives its own dark floor polygon, and the kitchen/nook/soffit roofs meet at their existing low ceiling height.
@@ -46,9 +54,9 @@ npm test
 npm run build
 ```
 
-The five test suites cover the authoritative layout, rendered structural geometry, movement, all 14 auditorium routes and 152 retained location probes, and V18's actual door movement and visit interfaces. The V18 suite raycasts rendered kitchen floors and roofs, exercises all six entrances with a moving player capsule, checks all 19 interaction points, and completes the ticket/order/pickup/drink flow in a DOM test environment.
+The seven test suites cover the authoritative layout, rendered structural geometry, movement, all 14 auditorium routes and 152 retained location probes, V18's actual door movement and visit interfaces, kiosk asset loading, and auditorium enclosure regressions. The V18 suite raycasts rendered kitchen floors and roofs, exercises all six entrances with a moving player capsule, checks all 19 interaction points, and completes the ticket/order/pickup/drink flow in a DOM test environment. Additional checks walk toward the repaired raised edges, inspect seat mesh spacing, test stacked room labels, raycast signs and walls, and verify shadow occlusion.
 
-GitHub Actions runs the same tests and production build for pull requests and deploys `dist` to GitHub Pages after a merge to `main`.
+GitHub Actions runs the same tests and production build for pull requests and deploys `dist` to GitHub Pages on updates to `main`.
 
 ## Current scope
 

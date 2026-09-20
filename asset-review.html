@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mililani · Kiosk review</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#101315;color:#eeeae1;font:15px/1.5 system-ui,sans-serif}main{height:100vh;display:grid;grid-template-columns:280px 1fr}aside{padding:28px 24px;border-right:1px solid #323638;display:flex;flex-direction:column;gap:24px}h1{font-size:30px;line-height:1.15;margin:8px 0}h2{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#a4aaa5;margin:0 0 10px}p{color:#bfc4bd;font-size:14px}small{color:#a7ada6}.eyebrow{color:#cebc8c;font-size:11px;letter-spacing:.16em}button,a{font:inherit}button{display:block;width:100%;text-align:left;padding:10px 12px;margin:5px 0;border:1px solid #3a4141;color:#e6e9e3;background:#1d2323;border-radius:7px;cursor:pointer}button[aria-pressed=true]{border-color:#cebc8c;color:#efdcaa;background:#31312a}button:disabled{opacity:.4;cursor:default}a{color:#d8c38e}#view{position:relative;min-width:0}canvas{display:block;width:100%;height:100%}.caption{position:absolute;left:24px;bottom:20px;padding:9px 14px;background:#101315dd;border-radius:6px;font-size:12px}.status{margin-top:auto;border-top:1px solid #343a39;padding-top:16px;font-size:12px;color:#aab3a9}@media(max-width:700px){main{grid-template-columns:1fr;grid-template-rows:auto 1fr}aside{padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px}aside>header,aside>.status{display:none}h2{margin-bottom:5px}button{padding:6px 10px}p{display:none}.caption{bottom:10px;left:10px}}
+  </style>
+  <style>body{overflow:hidden}aside{min-height:0;overflow:auto;gap:18px}#view{min-height:0;overflow:hidden}</style>
+</head>
+<body>
+  <main>
+    <aside>
+      <header><div class="eyebrow">MILILANI 14 · FIRST ASSET PASS</div><h1>A closer match.</h1><p>Compare the original ticket kiosks with the new Blender model in the existing theater.</p></header>
+      <section><h2>Model</h2><button id="after" aria-pressed="true" disabled>Blender model</button><button id="before" aria-pressed="false">Original geometry</button></section>
+      <section><h2>View</h2><button data-view="bank" aria-pressed="true">Four-kiosk bank</button><button data-view="detail" aria-pressed="false">Cabinet detail</button><button data-view="side" aria-pressed="false">Side and depth</button></section>
+      <section><p>Drag to orbit. Scroll to zoom.</p><a href="./">Open the walkthrough →</a></section>
+      <div class="status" id="status">Loading theater and model…</div>
+    </aside>
+    <div id="view"><canvas aria-label="Theater kiosk comparison"></canvas><div class="caption">Photo-guided shape and finishes · existing layout and ticket interactions</div></div>
+  </main>
+  <script type="module" src="/src/asset-review.js"></script>
+</body>
+</html>

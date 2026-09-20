@@ -267,14 +267,22 @@ assert.ok(
   "The fourth kiosk must not collide with the compact stair south cap.",
 );
 assert.equal(LOBBY_PLAN.kioskShowtimeScreens.length, 3, "Three compact showtime screens must hang above the kiosks.");
+scene.updateMatrixWorld(true);
+const kioskWall = world.colliders.find(({ id }) => id === "lobby-east");
 for (const screen of LOBBY_PLAN.kioskShowtimeScreens) {
   const runtimeScreen = boxById(screen.id);
-  assertNear(runtimeScreen.x, planToWorldX(screen.wallX), `${screen.id} wall X`, 0.12);
+  assertNear(runtimeScreen.x - runtimeScreen.width / 2, kioskWall.maxX + 0.01,
+    `${screen.id} cabinet back must clear the guest-facing wall surface`);
   assertNear(runtimeScreen.y, screen.centerY, `${screen.id} center Y`);
   assertNear(runtimeScreen.z, screen.centerZ, `${screen.id} center Z`);
   assertNear(runtimeScreen.depth, screen.width, `${screen.id} compact width`);
   assertNear(runtimeScreen.height, screen.height, `${screen.id} height`);
   assert.ok(screen.width >= 0.76 && screen.width <= 1.5, `${screen.id} must remain roughly one kiosk wide.`);
+  const face = scene.getObjectByName(`${screen.id}-face`);
+  const eye = new THREE.Vector3(planToWorldX(screen.wallX - 2.5), 1.68, screen.centerZ);
+  const direction = face.getWorldPosition(new THREE.Vector3()).sub(eye).normalize();
+  const hits = new THREE.Raycaster(eye, direction, 0.01, 5).intersectObject(world.root, true);
+  assert.equal(hits[0]?.object, face, `${screen.id} display must be visible from the customer aisle, ahead of wall and case`);
 }
 assertNear(boxById("lobby-east").x, planToWorldX(15.11), "V16 narrowed east lobby wall");
 const entrance = LOBBY_PLAN.frontEntrance;
@@ -724,7 +732,8 @@ for (let z = sightline.bounds.zMin + 0.5; z < sightline.bounds.zMax - 0.5; z += 
 }
 
 const podium = LOBBY_PLAN.ticketPodium;
-const podiumBoxes = authoredBoxes.filter(({ id }) => id.startsWith(`${podium.id}-`));
+// The attached sign now has a solid backing; count the lectern body pieces.
+const podiumBoxes = authoredBoxes.filter(({ id }) => id.startsWith(`${podium.id}-`) && !id.endsWith("-label-backing"));
 assert.deepEqual(
   podiumBoxes.map(({ id }) => id).sort(),
   [`${podium.id}-base`, `${podium.id}-body`, `${podium.id}-top`].sort(),

@@ -4,4 +4,8 @@ artifacts/
 .vite/
 *.log
 .DS_Store
+.audit/
+walkthrough-audit.html
+walkthrough-fixes.html
+*.blend1
 

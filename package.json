@@ -7,7 +7,7 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "node scripts/validate-layout.mjs && node scripts/smoke-world.mjs && node scripts/smoke-player.mjs && node scripts/smoke-navigation.mjs && node scripts/smoke-visit.mjs"
+    "test": "node scripts/validate-layout.mjs && node scripts/smoke-world.mjs && node scripts/smoke-player.mjs && node scripts/smoke-navigation.mjs && node scripts/smoke-visit.mjs && node scripts/smoke-kiosk-assets.mjs && node scripts/smoke-enclosure.mjs"
   },
   "dependencies": {
     "three": "0.185.1"
