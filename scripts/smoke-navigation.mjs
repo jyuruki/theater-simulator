@@ -118,6 +118,8 @@ const {
   FRONT_SHIFT_Z,
   HALL_END_EXITS,
   HALL_PLAN,
+  HALL_COMPACTION,
+  AUDITORIUM_SHIFT_X,
   LOBBY_CEILING_PLAN,
   LOBBY_PLAN,
   LOBBY_SHIFT_X,
@@ -573,6 +575,20 @@ for (const auditorium of AUDITORIUMS) {
     x: bowlX,
     z: bowlZ,
   });
+  if (layout.entryCross) {
+    for (const side of ["west", "east"]) {
+      navigationTargets.push({
+        id: `${auditorium.id}-${side}-bc-cross-aisle`,
+        x: layout.sideAisles[side].centerX,
+        z: layout.entryCross.centerZ,
+      });
+    }
+    navigationTargets.push({
+      id: `${auditorium.id}-bc-cross-aisle-center`,
+      x: layout.centerX,
+      z: layout.entryCross.centerZ,
+    });
+  }
   if (auditorium.stadium.access === "top") {
     const rearZ = (layout.rearCross.bounds.zMin + layout.rearCross.bounds.zMax) / 2;
     for (const side of ["west", "east"]) {
@@ -608,10 +624,11 @@ const addBoundsTarget = (id, bounds) => navigationTargets.push({ id, ...boundsCe
 const theater1 = auditoriumByNumber.get(1);
 const theater2 = auditoriumByNumber.get(2);
 assert.equal(T12_TICKET_SHIFT_X, 1, "V15 T1/T2 ticket-ward translation");
-assert.deepEqual(theater1.bounds, { xMin: -24.5, xMax: -15, zMin: 42.5, zMax: 55.5 });
-assert.deepEqual(theater2.bounds, { xMin: -34, xMax: -24.5, zMin: 42.5, zMax: 55.5 });
-assert.deepEqual(theater1.entry.cubbyBounds, { xMin: -24.5, xMax: -21.3, zMin: 51.9, zMax: 55.5 });
-assert.deepEqual(theater2.entry.cubbyBounds, { xMin: -27.7, xMax: -24.5, zMin: 51.9, zMax: 55.5 });
+const westShift = HALL_COMPACTION.westShift;
+assert.deepEqual(theater1.bounds, { xMin: -24.5 + westShift, xMax: -15 + westShift, zMin: 42.5, zMax: 55.5 });
+assert.deepEqual(theater2.bounds, { xMin: -34 + westShift, xMax: -24.5 + westShift, zMin: 42.5, zMax: 55.5 });
+assert.deepEqual(theater1.entry.cubbyBounds, { xMin: -24.5 + westShift, xMax: -21.3 + westShift, zMin: 51.9, zMax: 55.5 });
+assert.deepEqual(theater2.entry.cubbyBounds, { xMin: -27.7 + westShift, xMax: -24.5 + westShift, zMin: 51.9, zMax: 55.5 });
 assert.equal(theater1.bounds.xMin, theater2.bounds.xMax, "Translated T1/T2 bowls must retain one shared wall.");
 assert.equal(theater1.entry.cubbyBounds.xMin, theater2.entry.cubbyBounds.xMax, "Translated T1/T2 cubbies must remain back-to-back.");
 
@@ -888,12 +905,12 @@ navigationTargets.push(
 
 const theater9 = auditoriumByNumber.get(9);
 const theater9Cubby = cubbyBoundsFor(theater9);
-assert.deepEqual(theater9.bounds, { xMin: 99.6, xMax: 110.1, zMin: 42, zMax: 55.5 });
-assert.equal(theater9.entry.center, 102.7);
+assert.deepEqual(theater9.bounds, { xMin: 99.6 + AUDITORIUM_SHIFT_X[9], xMax: 110.1 + AUDITORIUM_SHIFT_X[9], zMin: 42, zMax: 55.5 });
+assert.equal(theater9.entry.center, 102.7 + AUDITORIUM_SHIFT_X[9]);
 assert.equal(theater9.entry.turnSide, "east");
 assert.equal(theater9.entry.innerDoorCenter, 53.25);
-assertNear(theater9Cubby.xMin, 101.1, "T9 cubby xMin");
-assertNear(theater9Cubby.xMax, 104.3, "T9 cubby xMax");
+assertNear(theater9Cubby.xMin, 101.1 + AUDITORIUM_SHIFT_X[9], "T9 cubby xMin");
+assertNear(theater9Cubby.xMax, 104.3 + AUDITORIUM_SHIFT_X[9], "T9 cubby xMax");
 assertNear(theater9Cubby.zMin, 52.1, "T9 cubby zMin");
 assertNear(theater9Cubby.zMax, 55.5, "T9 cubby zMax");
 assertOpenPlanPoint("T9 hall door", theater9.entry.center, theater9.bounds.zMax);
@@ -1239,9 +1256,9 @@ addBoundsTarget("ticket-poster-alcove", TICKET_APPROACH_PLAN.posterAlcove);
 addBoundsTarget("ticket-empty-alcove", TICKET_APPROACH_PLAN.emptyAlcove);
 
 assert.equal(FRONT_SHIFT_Z, -2.5);
-assert.deepEqual(HALL_PLAN.narrow, { xMin: -40, xMax: -13.62, zMin: 55.5, zMax: 59.7 });
-assert.deepEqual(HALL_PLAN.wide, { xMin: -13.62, xMax: 113, zMin: 55.5, zMax: 62.2 });
-assertNear(HALL_PLAN.wide.xMax - HALL_PLAN.narrow.xMin, 153, "V10 full hall X length");
+assert.deepEqual(HALL_PLAN.narrow, { xMin: HALL_COMPACTION.westEndX, xMax: -13.62, zMin: 55.5, zMax: 59.7 });
+assert.deepEqual(HALL_PLAN.wide, { xMin: -13.62, xMax: HALL_COMPACTION.eastEndX, zMin: 55.5, zMax: 62.2 });
+assertNear(HALL_PLAN.wide.xMax - HALL_PLAN.narrow.xMin, 135.386, "Compacted full hall X length");
 for (const [id, bounds] of [["hall-narrow", HALL_PLAN.narrow], ["hall-wide", HALL_PLAN.wide]]) {
   const inset = 0.8;
   navigationTargets.push(
@@ -1498,11 +1515,13 @@ const farVoidProbes = [
     z: 70.5,
   },
   { id: "behind-court-east-seam", x: 7.4, z: 72 },
-  { id: "old-theater-6-long-route-ghost", x: 59, z: 78 },
-  { id: "v9-theater-7-vacated-gap", x: 82.5, z: 80 },
-  { id: "v9-theater-8-vacated-slab", x: 112, z: 80 },
-  { id: "v9-theater-10-vacated-slab", x: 97, z: 48 },
-  { id: "v9-theater-12-vacated-slab", x: 54.5, z: 48 },
+  { id: "old-theater-6-long-route-ghost", x: 50, z: 78 },
+  { id: "v19-between-theaters-7-and-8", x: 74.75, z: 80 },
+  { id: "v19-theater-8-vacated-slab", x: 100, z: 80 },
+  { id: "v19-theater-9-vacated-slab", x: 109, z: 48 },
+  { id: "v19-between-theaters-12-and-11", x: 59.3, z: 48 },
+  { id: "v19-west-hall-vacated-slab", x: -36, z: 57.5 },
+  { id: "v19-east-hall-vacated-slab", x: 108, z: 59 },
   { id: "v11-old-kitchen-west-ghost", x: -34, z: 10 },
   { id: "v11-old-front-walk-west-ghost", x: -24, z: -7.5 },
   { id: "v11-old-service-west-ghost", x: -33, z: 15 },
@@ -1518,7 +1537,7 @@ assert.deepEqual(
   [],
   `Player can escape to rear/far void probes: ${escapedVoidProbes.map(({ id }) => id).join(", ")}`,
 );
-const ghostStructureProbes = farVoidProbes.filter(({ id }) => id.startsWith("v9-") || id.startsWith("v11-"));
+const ghostStructureProbes = farVoidProbes.filter(({ id }) => /^v(?:9|11|19)-/.test(id));
 const retainedGhostStructures = ghostStructureProbes.filter(({ x, z }) => (
   structuralSurfaceAt(structuralFloors, x, z, 0.01)
   || structuralSurfaceAt(structuralCeilings, x, z, 0.01)
@@ -1526,7 +1545,7 @@ const retainedGhostStructures = ghostStructureProbes.filter(({ x, z }) => (
 assert.deepEqual(
   retainedGhostStructures.map(({ id }) => id),
   [],
-  `Vacated V9/V11 slabs retain floor/ceiling geometry: ${retainedGhostStructures.map(({ id }) => id).join(", ")}`,
+  `Vacated slabs retain floor/ceiling geometry: ${retainedGhostStructures.map(({ id }) => id).join(", ")}`,
 );
 
 world.dispose();

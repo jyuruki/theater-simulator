@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { planToWorldX } from "./coordinates.js";
+import { createNpcAssets } from "./npc-assets.js";
 
 export const VISITOR_ROUTES = Object.freeze([
   [
@@ -29,7 +30,7 @@ export const STAFF_POSITIONS = Object.freeze([
 
 export function createTheaterCrowd({ scene, collisionWorld, world }) {
   const root = new THREE.Group();
-  root.name = "V18 staff and visitors";
+  root.name = "Theater staff and visitors";
   scene.add(root);
   const geometries = [
     new THREE.SphereGeometry(1, 12, 10),
@@ -47,6 +48,8 @@ export function createTheaterCrowd({ scene, collisionWorld, world }) {
   };
   const actors = [];
   let enabled = true;
+  let disposed = false;
+  let npcAssets;
   const collisionAt = (x, z, radius = 0.3) =>
     collisionWorld.isOverlapping(
       { x: planToWorldX(x), y: 0, z },
@@ -80,11 +83,14 @@ export function createTheaterCrowd({ scene, collisionWorld, world }) {
   function person(index, points, staff) {
     const group = new THREE.Group();
     group.name = `${staff ? "staff" : "visitor"}-${index + 1}`;
+    const fallback = new THREE.Group();
+    fallback.name = `${group.name}-fallback`;
+    group.add(fallback);
     const skin = [0xc59172, 0x84563c, 0xb98161, 0xd2aa87, 0x9c6c50, 0xbc865e][
       index
     ];
     const shirt = staff ? 0x234d65 : [0x8d6158, 0x65746a, 0xc4b38d][index];
-    const mesh = (geometry, color, x, y, z, sx, sy, sz, parent = group) => {
+    const mesh = (geometry, color, x, y, z, sx, sy, sz, parent = fallback) => {
       const part = new THREE.Mesh(geometries[geometry], material(color));
       part.position.set(x, y, z);
       part.scale.set(sx, sy, sz);
@@ -101,13 +107,13 @@ export function createTheaterCrowd({ scene, collisionWorld, world }) {
       mesh(0, 0x25221f, side * 0.041, 1.637, 0.096, 0.01, 0.009, 0.006);
       const arm = new THREE.Group();
       arm.position.set(side * 0.198, 1.35, 0);
-      group.add(arm);
+      fallback.add(arm);
       mesh(1, shirt, 0, -0.105, 0, 0.058, 0.24, 0.058, arm);
       mesh(1, skin, 0, -0.295, 0, 0.038, 0.18, 0.038, arm);
       mesh(0, skin, 0, -0.4, 0, 0.041, 0.061, 0.033, arm);
       const leg = new THREE.Group();
       leg.position.set(side * 0.094, 0.83, 0);
-      group.add(leg);
+      fallback.add(leg);
       mesh(1, 0x30343a, 0, -0.34, 0, 0.078, 0.69, 0.069, leg);
       mesh(0, 0x212529, 0, -0.75, 0.042, 0.085, 0.079, 0.139, leg);
       limbs.push({ arm, leg, side });
@@ -136,6 +142,8 @@ export function createTheaterCrowd({ scene, collisionWorld, world }) {
       target: 1,
       box,
       limbs,
+      fallback,
+      fallbackLimbs: limbs,
       staff,
       phase: index * 1.7,
       speed: 0.62 + index * 0.055,
@@ -147,6 +155,11 @@ export function createTheaterCrowd({ scene, collisionWorld, world }) {
 
   return {
     actors,
+    loadAssets(options = {}) {
+      if (disposed) return Promise.resolve({ status: "disposed", actorCount: 0 });
+      npcAssets ??= createNpcAssets({ ...options, actors });
+      return npcAssets.ready;
+    },
     get enabled() {
       return enabled;
     },
@@ -217,6 +230,9 @@ export function createTheaterCrowd({ scene, collisionWorld, world }) {
       }
     },
     dispose() {
+      if (disposed) return;
+      disposed = true;
+      npcAssets?.dispose();
       actors.forEach((actor) => collisionWorld.remove(actor.box));
       root.removeFromParent();
       geometries.forEach((g) => g.dispose());

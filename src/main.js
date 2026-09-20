@@ -95,6 +95,10 @@ try {
 
   const materials = createMaterialLibrary(renderer);
   const world = createTheaterWorld({ scene, materials });
+  world.loadPropAssets({
+    url: `${import.meta.env.BASE_URL}models/theater-props.glb`,
+    onLoaded: () => { renderer.shadowMap.needsUpdate = true; },
+  });
   world.loadKioskAssets({
     url: `${import.meta.env.BASE_URL}models/mililani-ticket-kiosk.glb`,
     onLoaded: () => { renderer.shadowMap.needsUpdate = true; },
@@ -103,6 +107,7 @@ try {
   collisionWorld.addBoxes(world.colliders);
   const doorColliders = collisionWorld.addBoxes(world.dynamicColliders);
   const crowd = createTheaterCrowd({ scene, collisionWorld, world });
+  crowd.loadAssets({ url: `${import.meta.env.BASE_URL}models/theater-npcs.glb` });
   const audio = createTheaterAudio();
   const media = createCinemaMedia({ scene, world, materials });
   let interactions = null;
@@ -250,6 +255,8 @@ try {
     if (event.persisted) return;
     renderer.setAnimationLoop(null);
     audio.dispose();
+    crowd.dispose();
+    media.dispose();
     world.dispose();
   });
 
@@ -258,7 +265,7 @@ try {
     enumerable: false,
     writable: false,
     value: Object.freeze({
-      layoutVersion: "mililani-sketch-v18",
+      layoutVersion: "mililani-sketch-v19",
       validation: Object.freeze(validation),
       stats: world.stats,
       controller,

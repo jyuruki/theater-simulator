@@ -52,6 +52,12 @@ export const SHOWS = Object.freeze(
 
 export const CONCESSION_MENU = Object.freeze([
   Object.freeze({
+    id: "candy", name: "Cinema candy", detail: "Choose a treat from the concession candy display", preparation: 1,
+  }),
+  Object.freeze({
+    id: "bottled-water", name: "Bottled water", detail: "A chilled bottle from the concession water display", preparation: 1,
+  }),
+  Object.freeze({
     id: "popcorn",
     name: "Fresh popcorn",
     detail: "A warm tub of the cinema classic",

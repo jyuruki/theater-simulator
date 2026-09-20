@@ -2,6 +2,45 @@ export const EXPECTED_SEAT_TOTAL = 1093;
 
 const rect = (xMin, xMax, zMin, zMax) => ({ xMin, xMax, zMin, zMax });
 
+// V19 shortens only the hall runs: whole rooms, their routes and fixtures
+// move rigidly. The north-side room widths set the east wing's hard limit.
+export const HALL_COMPACTION = Object.freeze({
+  westReduction: 0.30,
+  westShift: 26.38 * 0.30,
+  westEndX: -40 + 26.38 * 0.30,
+  eastEndX: 103.3,
+  originalWestEndX: -40,
+  originalEastEndX: 113,
+  minimumRoomGap: 0.3,
+});
+export const AUDITORIUM_SHIFT_X = Object.freeze({
+  1: HALL_COMPACTION.westShift, 2: HALL_COMPACTION.westShift,
+  6: -6.5, 7: -7.4, 8: -8.1, 9: -8.3,
+  10: -7.4, 11: -7.4, 12: -7, 13: -2.5, 14: -2.5,
+});
+const SERVICE_SHIFT_X = Object.freeze({
+  "future-upstairs-stair": -6.5, "under-storage-6": -6.5,
+  "girls-restroom": -7, "candy-storage": -8.3,
+});
+function translateModuleX(source, dx = 0, auditorium = false) {
+  if (!dx) return source;
+  const copy = (value) => {
+    if (Array.isArray(value)) return value.map(copy);
+    if (!value || typeof value !== "object") return value;
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key,
+      typeof item === "number" && ["x", "xMin", "xMax", "start", "end"].includes(key)
+        ? item + dx : copy(item)]));
+  };
+  const moved = copy(source);
+  if (auditorium) moved.entry.center += dx;
+  else {
+    if (["south", "north"].includes(source.entrySide)) moved.doorCenter += dx;
+    if (source.doorCenters) moved.doorCenters = source.doorCenters.map(x => x + dx);
+    if (["east", "west"].includes(source.entry?.side)) moved.entry.coordinate += dx;
+  }
+  return moved;
+}
+
 // V10 preserves V9's stepped hall while shortening its full west-to-east run
 // by 15 percent and rigidly re-stationing complete auditorium/service modules.
 // V11 retains that Z translation and moves only the complete front lobby module
@@ -97,8 +136,8 @@ export const HALL_PLAN = Object.freeze({
   southZ: 55.5,
   narrowNorthZ: 59.7,
   wideNorthZ: 62.2,
-  narrow: rect(-40, -13.62, 55.5, 59.7),
-  wide: rect(-13.62, 113, 55.5, 62.2),
+  narrow: rect(HALL_COMPACTION.westEndX, -13.62, 55.5, 59.7),
+  wide: rect(-13.62, HALL_COMPACTION.eastEndX, 55.5, 62.2),
   drinkingFountainWall: Object.freeze({ x: -13.62, zMin: 59.7, zMax: 62.2 }),
 });
 
@@ -211,8 +250,9 @@ export const T3_MEN_PLAN = Object.freeze({
 
 export const TICKET_APPROACH_PLAN = Object.freeze({
   bounds: shiftedRect(-0.5, 12.1, 24, 58),
-  posterAlcove: shiftedRect(-6.5, -0.5, 52.2, 58),
-  emptyAlcove: shiftedRect(12.1, 18.1, 52.2, 58),
+  // Half the width and depth gives 25% of the former floor area.
+  posterAlcove: shiftedRect(-3.5, -0.5, 55.1, 58),
+  emptyAlcove: shiftedRect(12.1, 15.1, 55.1, 58),
 });
 
 // Layout data remains in hand-drawn plan space. X increases toward the
@@ -344,7 +384,16 @@ export const AUDITORIUMS = Object.freeze([
       sharedBoundarySide: "east", sharedPair: "theaters-13-14", sharedWallOwner: true,
     },
   },
-]);
+].map(room => translateModuleX(
+  [3, 6, 7, 8].includes(room.number)
+    ? { ...room,
+        stadium: { ...room.stadium, corridorRise: 0, seatingProfile: "front-cross-aisle" },
+        entry: { ...room.entry, ...(room.entry.ramp
+          ? { ramp: { ...room.entry.ramp, startHeight: 0, endHeight: 0 } } : {}) },
+      }
+    : room,
+  AUDITORIUM_SHIFT_X[room.number], true,
+)));
 
 export const PUBLIC_SPACES = Object.freeze([
   { id: "front-walk", name: "Front Walk", detail: "Public entrance", bounds: rect(FRONT_WALK_WEST_X, FRONT_WALK_EAST_X, shiftedZ(-10), shiftedZ(0)), kind: "exterior" },
@@ -428,7 +477,7 @@ export const SERVICE_ROOMS = Object.freeze([
   { id: "candy-storage", name: "Candy Storage", short: "CANDY", detail: "Wide, shallow bulk-candy room with one left-side hall door", bounds: rect(101, 111, 62.2, 67.2), kind: "storage", entrySide: "south", doorCenter: 102.7 },
   { id: "under-storage-3", name: "Under-Seat Storage 3", short: "U/S 3", detail: "One-door horizontal anteroom leading to a two-door under-tier room", bounds: rect(-21.5, -9.9, 72, 82.5), kind: "storage-lower", orientation: "horizontal", ceilingHeight: 2.32, doorSide: "south", doorCenters: [-18.6, -12.3], accessHall: rect(-21.5, -9.9, 68.2, 72), outerDoorSide: "east", outerDoorCenter: 70.1 },
   { id: "under-storage-6", name: "Under-Seat Storage 6", short: "U/S 6", detail: "Shared two-door room below Theater 6's upper tiers", bounds: rect(31.7, 44.7, 68.5, 71.8), kind: "storage-lower", ceilingHeight: 2.32, doorSide: "south", doorCenters: [35.2, 41.7] },
-]);
+].map(room => translateModuleX(room, SERVICE_SHIFT_X[room.id])));
 
 const CUSTOMER_COUNTER = Object.freeze([
   { x: shiftedLobbyX(-8.8), z: shiftedZ(20.4) },
@@ -1200,8 +1249,8 @@ export const CONCESSION_CANDY_DISPLAYS = Object.freeze(
 );
 
 export const HALL_END_EXITS = Object.freeze([
-  { id: "hall-west-exit", side: "west", x: -40, z: 57.6, segment: "narrow" },
-  { id: "hall-east-exit", side: "east", x: 113, z: 58.85, segment: "wide" },
+  { id: "hall-west-exit", side: "west", x: HALL_COMPACTION.westEndX, z: 57.6, segment: "narrow" },
+  { id: "hall-east-exit", side: "east", x: HALL_COMPACTION.eastEndX, z: 58.85, segment: "wide" },
 ]);
 
 export const ALL_ZONES = Object.freeze([
@@ -1216,7 +1265,7 @@ export const ALL_ZONES = Object.freeze([
   })),
 ]);
 
-export const MAP_BOUNDS = Object.freeze(rect(-41, 114, shiftedZ(-10), 99));
+export const MAP_BOUNDS = Object.freeze(rect(HALL_COMPACTION.westEndX - 1, HALL_COMPACTION.eastEndX + 1, shiftedZ(-10), 99));
 export const PLAYER_SPAWN_PLAN = Object.freeze({ x: FRONT_ENTRANCE_DOORS[2].center, y: 0, z: shiftedZ(-6.8) });
 
 export const AUDITORIUM_ENTRY_ZONES = Object.freeze([
@@ -1306,13 +1355,13 @@ export function validateLayoutData() {
     && Math.abs(bounds.xMax - expected.xMax) <= 1e-9
     && Math.abs(bounds.zMin - expected.zMin) <= 1e-9
     && Math.abs(bounds.zMax - expected.zMax) <= 1e-9;
-  if (!sameRect(theater1?.bounds, rect(-24.5, -15, 42.5, 55.5))
-    || !sameRect(theater2?.bounds, rect(-34, -24.5, 42.5, 55.5))
-    || theater1?.entry?.center !== -22.9
-    || theater2?.entry?.center !== -26.1
-    || !sameRect(theater1?.entry?.cubbyBounds, rect(-24.5, -21.3, 51.9, 55.5))
-    || !sameRect(theater2?.entry?.cubbyBounds, rect(-27.7, -24.5, 51.9, 55.5))) {
-    errors.push("V15 must translate the complete Theater 1/2 pair exactly +1.0 m toward ticket check without resizing or changing Z.");
+  if (!sameRect(theater1?.bounds, rect(-24.5 + HALL_COMPACTION.westShift, -15 + HALL_COMPACTION.westShift, 42.5, 55.5))
+    || !sameRect(theater2?.bounds, rect(-34 + HALL_COMPACTION.westShift, -24.5 + HALL_COMPACTION.westShift, 42.5, 55.5))
+    || Math.abs(theater1?.entry?.center - (-22.9 + HALL_COMPACTION.westShift)) > 1e-9
+    || Math.abs(theater2?.entry?.center - (-26.1 + HALL_COMPACTION.westShift)) > 1e-9
+    || !sameRect(theater1?.entry?.cubbyBounds, rect(-24.5 + HALL_COMPACTION.westShift, -21.3 + HALL_COMPACTION.westShift, 51.9, 55.5))
+    || !sameRect(theater2?.entry?.cubbyBounds, rect(-27.7 + HALL_COMPACTION.westShift, -24.5 + HALL_COMPACTION.westShift, 51.9, 55.5))) {
+    errors.push("The Theater 1/2 pair must move rigidly toward ticket check with the shortened west hall.");
   }
   const courtyardDoorCenters = COURTYARD_PLAN.doors.map(({ center }) => center);
   if (COURTYARD_PLAN.floorFinish !== "dark-gray-tile") errors.push("The fountain / T3–5 courtyard must use dark-gray tile.");
@@ -1899,8 +1948,9 @@ export function validateLayoutData() {
     || HALL_PLAN.wide.xMin !== HALL_PLAN.transitionX) {
     errors.push("The drinking-fountain wall must remain the exact V10 hallway-width transition.");
   }
-  if (Math.abs((HALL_PLAN.wide.xMax - HALL_PLAN.narrow.xMin) - 153) > 1e-9) {
-    errors.push("V10 must shorten the 180 m auditorium hall by exactly 15 percent.");
+  if (Math.abs((HALL_PLAN.narrow.xMax - HALL_PLAN.narrow.xMin) - 26.38 * 0.7) > 1e-9
+    || HALL_PLAN.wide.xMax !== HALL_COMPACTION.eastEndX) {
+    errors.push("Hall compaction must retain the room footprints and shorten the west wing by 30 percent.");
   }
   if (T3_MEN_PLAN.fountainNook.xMin !== HALL_PLAN.drinkingFountainWall.x
     || T3_MEN_PLAN.fountainNook.zMin !== HALL_PLAN.drinkingFountainWall.zMin

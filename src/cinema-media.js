@@ -139,19 +139,20 @@ export function createCinemaMedia({ scene, world, materials }) {
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     const z = alcove.zMin + ((index + 0.5) * (alcove.zMax - alcove.zMin)) / 3;
+    const posterScale = Math.min(1, (alcove.zMax - alcove.zMin) / 3 / 1.30);
     card(
       `approach-movie-poster-${index + 1}`,
       texture,
       alcove.xMin + 0.117,
       2.16,
       z,
-      1.03,
-      1.55,
+      1.03 * posterScale,
+      1.55 * posterScale,
       -Math.PI / 2,
     );
     const frame = new THREE.Mesh(box, materials.black);
     frame.position.set(planToWorldX(alcove.xMin + 0.096), 2.16, z);
-    frame.scale.set(0.027, 1.64, 1.12);
+    frame.scale.set(0.027, 1.64 * posterScale, 1.12 * posterScale);
     root.add(frame);
   }
 

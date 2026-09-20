@@ -1,0 +1,94 @@
+{
+  "asset": "theater-npcs.glb",
+  "version": 1,
+  "authoring": "Blender",
+  "license": "Original project asset; same license as this repository",
+  "meters": true,
+  "forward": "+Z",
+  "up": "+Y",
+  "rootOrigin": "floor between feet",
+  "characters": [
+    {
+      "name": "NPC_Visitor_01",
+      "role": "visitor",
+      "triangles": 3104,
+      "meshes": 5,
+      "parts": [
+        "Body",
+        "Arm_L",
+        "Arm_R",
+        "Leg_L",
+        "Leg_R"
+      ]
+    },
+    {
+      "name": "NPC_Visitor_02",
+      "role": "visitor",
+      "triangles": 3416,
+      "meshes": 5,
+      "parts": [
+        "Body",
+        "Arm_L",
+        "Arm_R",
+        "Leg_L",
+        "Leg_R"
+      ]
+    },
+    {
+      "name": "NPC_Visitor_03",
+      "role": "visitor",
+      "triangles": 3696,
+      "meshes": 5,
+      "parts": [
+        "Body",
+        "Arm_L",
+        "Arm_R",
+        "Leg_L",
+        "Leg_R"
+      ]
+    },
+    {
+      "name": "NPC_Staff_01",
+      "role": "staff",
+      "triangles": 3248,
+      "meshes": 5,
+      "parts": [
+        "Body",
+        "Arm_L",
+        "Arm_R",
+        "Leg_L",
+        "Leg_R"
+      ]
+    },
+    {
+      "name": "NPC_Staff_02",
+      "role": "staff",
+      "triangles": 3204,
+      "meshes": 5,
+      "parts": [
+        "Body",
+        "Arm_L",
+        "Arm_R",
+        "Leg_L",
+        "Leg_R"
+      ]
+    },
+    {
+      "name": "NPC_Staff_03",
+      "role": "staff",
+      "triangles": 3248,
+      "meshes": 5,
+      "parts": [
+        "Body",
+        "Arm_L",
+        "Arm_R",
+        "Leg_L",
+        "Leg_R"
+      ]
+    }
+  ],
+  "totalTriangles": 19916,
+  "materials": 1,
+  "textures": 0,
+  "gait": "Rigid shoulder and hip pivots; animated by atmosphere.js"
+}

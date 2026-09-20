@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { createEntranceDoors } from "./entrance-doors.js";
 import { createKioskAssets } from "./kiosk-assets.js";
+import { createPropAssets } from "./prop-assets.js";
+import { createPropPlacements, addTheaterFurnishings } from "./prop-placements.js";
 import {
   AUDITORIUMS,
   CONCESSION_SERVICE_SEQUENCE,
@@ -74,6 +76,7 @@ export function createTheaterWorld({ scene, materials }) {
   const equipment = new Map();
   const kioskVisuals = [];
   let kioskAssets = null;
+  let propAssets = null;
   let disposed = false;
   const auditoriumGroups = new Map();
   const auditoriumLayouts = buildAuditoriumLayouts(AUDITORIUMS);
@@ -282,7 +285,7 @@ export function createTheaterWorld({ scene, materials }) {
     }
     const batches = new Map();
     for (const child of parent.children) {
-      if (!child.isMesh || child.isInstancedMesh || child.geometry !== unitBoxGeometry || Array.isArray(child.material)) continue;
+      if (!child.isMesh || child.isInstancedMesh || child.userData.propFallback || child.geometry !== unitBoxGeometry || Array.isArray(child.material)) continue;
       // A casting roof must not turn every box with its material into a
       // shadow caster (and non-receiving ceilings must retain that setting).
       const key = `${child.material.uuid}:${child.castShadow}:${child.receiveShadow}`;
@@ -715,20 +718,20 @@ export function createTheaterWorld({ scene, materials }) {
     const seatWidth = layout.seatBounds.xMax - layout.seatBounds.xMin;
     const forward = auditorium.screenSide === "north" ? 1 : -1;
 
-    const treadDepth = layout.rowPitch - RISER_DEPTH;
     layout.rows.forEach((row, rowIndex) => {
+      const tierBounds = row.floorBounds;
       addBox({
         id: `${auditorium.id}-tier-${rowIndex}`,
         x: layout.centerX,
         y: row.elevation - 0.055,
-        z: row.z,
+        z: (tierBounds.zMin + tierBounds.zMax) / 2,
         width: seatWidth,
         height: 0.11,
-        depth: treadDepth,
+        depth: tierBounds.zMax - tierBounds.zMin,
         material: materials.carpet,
         parent,
       });
-      if (rowIndex > 0) {
+      if (rowIndex > 0 && row.elevation > layout.rows[rowIndex - 1].elevation) {
         const previous = layout.rows[rowIndex - 1];
         const transitionZ = (row.z + previous.z) / 2;
         addBox({
@@ -784,16 +787,24 @@ export function createTheaterWorld({ scene, materials }) {
     // Tier, riser, apron, and landing edges all share the same dimensions.
     // The previous build mixed a 96%-pitch tread with fixed risers, which left visible slits
     // in large rooms and coplanar overlaps in smaller rooms.
-    const frontScreenwardEdge = layout.frontRowZ - layout.direction * treadDepth / 2;
-    const rearWallwardEdge = layout.backRowZ + layout.direction * treadDepth / 2;
+    const frontTier = layout.rows[0].floorBounds;
+    const rearTier = layout.rows.at(-1).floorBounds;
+    const frontScreenwardEdge = layout.direction < 0 ? frontTier.zMax : frontTier.zMin;
+    const rearWallwardEdge = layout.direction < 0 ? rearTier.zMin : rearTier.zMax;
     const frontApron = auditorium.screenSide === "north"
       ? { xMin: layout.bowlBounds.xMin, xMax: layout.bowlBounds.xMax, zMin: frontScreenwardEdge, zMax: auditorium.bounds.zMax - 0.2 }
       : { xMin: layout.bowlBounds.xMin, xMax: layout.bowlBounds.xMax, zMin: auditorium.bounds.zMin + 0.2, zMax: frontScreenwardEdge };
     const rearLanding = auditorium.screenSide === "north"
-      ? { xMin: layout.bowlBounds.xMin, xMax: layout.bowlBounds.xMax, zMin: auditorium.bounds.zMin + 0.2, zMax: rearWallwardEdge }
-      : { xMin: layout.bowlBounds.xMin, xMax: layout.bowlBounds.xMax, zMin: rearWallwardEdge, zMax: auditorium.bounds.zMax - 0.2 };
+      ? { xMin: layout.bowlBounds.xMin, xMax: layout.bowlBounds.xMax, zMin: layout.bowlBounds.zMin + (layout.seatingProfile ? WALL_THICKNESS / 2 : 0.2), zMax: rearWallwardEdge }
+      : { xMin: layout.bowlBounds.xMin, xMax: layout.bowlBounds.xMax, zMin: rearWallwardEdge, zMax: layout.bowlBounds.zMax - (layout.seatingProfile ? WALL_THICKNESS / 2 : 0.2) };
     if (frontApron.zMax > frontApron.zMin) addFloor(`${auditorium.id}-screen-apron`, frontApron, materials.carpet, layout.frontElevation, parent);
     if (rearLanding.zMax > rearLanding.zMin) addFloor(`${auditorium.id}-rear-landing`, rearLanding, materials.carpet, layout.backElevation, parent);
+    if (layout.entryCross) {
+      addFloor(layout.entryCross.id, layout.entryCross.floorBounds, materials.carpet, layout.entryCross.elevation, parent);
+      for (const aisle of layout.flatSideAisles) {
+        addFloor(aisle.id, aisle.bounds, materials.carpet, aisle.elevation, parent);
+      }
+    }
 
     for (const aisle of Object.values(layout.sideAisles)) {
       const frontEndcap = {
@@ -815,13 +826,14 @@ export function createTheaterWorld({ scene, materials }) {
     for (const tread of layout.sideStairTreads) {
       const { x, z } = centerOf(tread.bounds);
       const { width, depth } = sizeOf(tread.bounds);
+      const slabHeight = layout.seatingProfile ? tread.stepRise + 0.09 : 0.09;
       addBox({
         id: tread.id,
         x,
-        y: tread.elevation - 0.045,
+        y: tread.elevation - slabHeight / 2,
         z,
         width,
-        height: 0.09,
+        height: slabHeight,
         depth: Math.max(0.1, depth + 0.015),
         material: materials.carpet,
         parent,
@@ -913,7 +925,8 @@ export function createTheaterWorld({ scene, materials }) {
   const addT3Route = (auditorium, layout, ceilingY) => {
     const route = auditorium.entry.routeBounds;
     const directRoute = { ...route, zMax: auditorium.bounds.zMax };
-    const ramp = auditorium.entry.ramp;
+    const ramp = layout.routeSurfaces.find((surface) => surface.kind === "corridor-ramp") ?? auditorium.entry.ramp;
+    const dividerEndZ = layout.entryCross ? layout.entryCross.bounds.zMin - WALL_THICKNESS / 2 : auditorium.entry.arrivalZ - 0.65;
     const nook = auditorium.entry.usherNookBounds;
     const storage = roomById(auditorium.entry.storageId);
     const anteroom = storage.accessHall;
@@ -924,7 +937,7 @@ export function createTheaterWorld({ scene, materials }) {
     // The public route is deliberately open to the usher nook for its first
     // few metres. It then divides the route from the seating bowl only until
     // the front cross-aisle, where walking straight opens directly into T3.
-    addWallZ(`${auditorium.id}-route-west`, directRoute.xMin, nook.zMax, auditorium.entry.arrivalZ - 0.65, { material: materials.darkWall });
+    addWallZ(`${auditorium.id}-route-west`, directRoute.xMin, nook.zMax, dividerEndZ, { material: materials.darkWall, height: ceilingY });
     addWallZ(`${auditorium.id}-route-east`, directRoute.xMax, directRoute.zMin, directRoute.zMax, { material: materials.darkWall });
     addWallZ(`${auditorium.id}-route-east-upper`, directRoute.xMax, auditorium.bounds.zMin, directRoute.zMax, {
       material: materials.darkWall, baseY: WALL_HEIGHT, height: ceilingY - WALL_HEIGHT,
@@ -998,6 +1011,7 @@ export function createTheaterWorld({ scene, materials }) {
     const { entry } = auditorium;
     const storage = roomById(entry.storageId);
     const underTierHeight = storage.ceilingHeight;
+    const dividerEndZ = layout.entryCross ? layout.entryCross.bounds.zMin - WALL_THICKNESS / 2 : entry.arrivalZ - 0.1;
     addFloor(`${auditorium.id}-vestibule`, entry.vestibuleBounds, materials.carpet);
     addFloor(`${auditorium.id}-transverse`, entry.transverseBounds, materials.carpet);
     addFloor(`${auditorium.id}-long`, entry.longRouteBounds, materials.carpet);
@@ -1020,10 +1034,10 @@ export function createTheaterWorld({ scene, materials }) {
     addWallX(`${auditorium.id}-transverse-return`, entry.transverseBounds.xMin, storage.bounds.xMin, entry.transverseBounds.zMax, { material: materials.darkWall, height: storage.ceilingHeight });
     // The auditorium's east perimeter wall is already the outer wall of this
     // passage. Authoring it again here produced coplanar dark surfaces.
-    addWallZ(`${auditorium.id}-long-divider`, entry.longRouteBounds.xMin, storage.bounds.zMax, entry.arrivalZ - 0.1, { material: materials.darkWall, height: underTierHeight });
+    addWallZ(`${auditorium.id}-long-divider`, entry.longRouteBounds.xMin, storage.bounds.zMax, dividerEndZ, { material: materials.darkWall, height: underTierHeight });
     // Continue above the low passages and storage wall. This closes the
     // raised aisle edge without blocking the transverse route underneath.
-    addWallZ(`${auditorium.id}-long-divider-upper`, entry.longRouteBounds.xMin, auditorium.bounds.zMin, entry.arrivalZ - 0.1, {
+    addWallZ(`${auditorium.id}-long-divider-upper`, entry.longRouteBounds.xMin, auditorium.bounds.zMin, dividerEndZ, {
       material: materials.darkWall, baseY: underTierHeight, height: ceilingY - underTierHeight,
     });
     addLabel({ id: `${auditorium.id}-first-arrow`, text: "THEATER 6  →", position: [transverseCenterX, 1.35, entry.transverseBounds.zMax - 0.12], rotationY: Math.PI, width: 2.0, height: 0.4, small: true });
@@ -1036,8 +1050,8 @@ export function createTheaterWorld({ scene, materials }) {
 
   const addStraightRoute = (auditorium, layout) => {
     const { entry, bounds } = auditorium;
-    const ramp = entry.ramp;
-    const routeBounds = { ...ramp.bounds, zMin: bounds.zMin, zMax: entry.arrivalZ + 0.55 };
+    const ramp = layout.routeSurfaces.find((surface) => surface.kind === "corridor-ramp") ?? entry.ramp;
+    const routeBounds = { ...ramp.bounds, zMin: bounds.zMin, zMax: layout.entryCross?.bounds.zMax ?? entry.arrivalZ + 0.55 };
     if (ramp.bounds.zMin > bounds.zMin) addFloor(`${auditorium.id}-soundlock`, { ...routeBounds, zMax: ramp.bounds.zMin }, materials.carpet, ramp.startHeight);
     addRamp(`${auditorium.id}-route-ramp`, ramp.bounds, ramp.startHeight, ramp.endHeight, materials.carpet);
     if (routeBounds.zMax > ramp.bounds.zMax) addFloor(`${auditorium.id}-arrival`, { ...routeBounds, zMin: ramp.bounds.zMax }, materials.carpet, ramp.endHeight);
@@ -1052,7 +1066,8 @@ export function createTheaterWorld({ scene, materials }) {
     // inner divider is unique. Its first section is deliberately open to the
     // usher waiting nook shown in both T7 and T8 drawings.
     const nook = entry.usherNookBounds;
-    addWallZ(`${auditorium.id}-route-divider`, dividerX, nook?.zMax ?? bounds.zMin, entry.arrivalZ - 0.65, { material: materials.darkWall, height: 4.9 });
+    const dividerEndZ = layout.entryCross ? layout.entryCross.bounds.zMin - WALL_THICKNESS / 2 : entry.arrivalZ - 0.65;
+    addWallZ(`${auditorium.id}-route-divider`, dividerX, nook?.zMax ?? bounds.zMin, dividerEndZ, { material: materials.darkWall, height: 7.55 });
     if (nook) {
       addFloor(`${auditorium.id}-usher-nook`, nook, materials.floorDark);
       addCeiling(`${auditorium.id}-usher-nook`, nook, 4.9);
@@ -1147,6 +1162,28 @@ export function createTheaterWorld({ scene, materials }) {
 
     addScreen(auditorium, layout, interior, ceilingY);
     addAuditoriumBowl(auditorium, layout, interior);
+    if (Number.isFinite(layout.rearWallZ)) {
+      // Close the room immediately behind the last seat backs. Only the
+      // portion above a real lower room stops at the deck; the other portions
+      // extend to ground so the discarded rear volume cannot be entered.
+      const lowerRoom = auditorium.entry.storageId ? roomById(auditorium.entry.storageId) : null;
+      const overLowerRoom = lowerRoom && layout.rearWallZ >= lowerRoom.bounds.zMin && layout.rearWallZ <= lowerRoom.bounds.zMax;
+      const rearWallBase = overLowerRoom ? layout.backElevation - 0.11 : 0;
+      addWallX(`${auditorium.id}-close-rear-wall`, layout.bowlBounds.xMin, layout.bowlBounds.xMax, layout.rearWallZ, {
+        material: materials.darkWall, baseY: rearWallBase,
+        height: ceilingY - rearWallBase, parent: interior,
+      });
+      if (overLowerRoom) {
+        for (const [side, startX, endX] of [
+          ["west", layout.bowlBounds.xMin, Math.max(layout.bowlBounds.xMin, lowerRoom.bounds.xMin)],
+          ["east", Math.min(layout.bowlBounds.xMax, lowerRoom.bounds.xMax), layout.bowlBounds.xMax],
+        ]) {
+          if (endX > startX + EPSILON) addWallX(`${auditorium.id}-close-rear-wall-lower-${side}`, startX, endX, layout.rearWallZ, {
+            material: materials.darkWall, baseY: 0, height: rearWallBase, parent: interior,
+          });
+        }
+      }
+    }
     addAcousticPanels(auditorium, interior, layout.frontElevation);
     const portalZ = auditorium.screenSide === "south" ? auditorium.bounds.zMax + 0.13
       : auditorium.entry.type === "dogleg" ? 68.05
@@ -2791,6 +2828,9 @@ export function createTheaterWorld({ scene, materials }) {
     }
   };
 
+  const furnishings = addTheaterFurnishings({ root, materials, colliders });
+  furnishings.forEach(({ fallback }) => disposableGeometries.push(fallback.geometry));
+  const propPlacements = createPropPlacements({ root, auditoriumLayouts, furnishings });
   batchBoxMeshes(root);
   let runtimeMeshCount = 0;
   let instancedMeshCount = 0;
@@ -2810,6 +2850,7 @@ export function createTheaterWorld({ scene, materials }) {
     equipment,
     auditoriumGroups,
     auditoriumLayouts,
+    propPlacements,
     worldBounds,
     groundHeight,
     ceilingHeight,
@@ -2820,10 +2861,16 @@ export function createTheaterWorld({ scene, materials }) {
       kioskAssets ??= createKioskAssets({ ...options, root, kiosks: kioskVisuals });
       return kioskAssets.ready;
     },
+    loadPropAssets(options) {
+      if (disposed) return Promise.resolve(false);
+      propAssets ??= createPropAssets({ ...options, root, placements: propPlacements });
+      return propAssets.ready;
+    },
     dispose() {
       if (disposed) return;
       disposed = true;
       kioskAssets?.dispose();
+      propAssets?.dispose();
       entranceDoors.dispose();
       const disposedTextures = new Set();
       const disposeTexture = (texture) => {

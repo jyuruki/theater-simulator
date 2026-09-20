@@ -1,0 +1,748 @@
+{
+  "asset": "theater-props.glb",
+  "version": 1,
+  "authoringTool": "Blender 5.2.2 LTS",
+  "units": "meters",
+  "axes": {
+    "up": "+Y",
+    "front": "+Z"
+  },
+  "origin": "floor center; wall-mounted and counter props placed at their mounting elevation",
+  "license": "Original project geometry; no third-party assets or textures.",
+  "glbBytes": 1543792,
+  "models": [
+    {
+      "name": "recliner",
+      "bounds": {
+        "min": [
+          -0.27,
+          0.06,
+          -0.36049
+        ],
+        "max": [
+          0.27,
+          1.405,
+          0.37
+        ],
+        "size": [
+          0.54,
+          1.345,
+          0.73049
+        ]
+      },
+      "triangles": 380,
+      "meshCount": 4
+    },
+    {
+      "name": "shared_armrest",
+      "bounds": {
+        "min": [
+          -0.052,
+          0.28,
+          -0.32
+        ],
+        "max": [
+          0.052,
+          0.825,
+          0.301
+        ],
+        "size": [
+          0.104,
+          0.545,
+          0.621
+        ]
+      },
+      "triangles": 288,
+      "meshCount": 3
+    },
+    {
+      "name": "trash_can",
+      "bounds": {
+        "min": [
+          -0.37,
+          0.0,
+          -0.37
+        ],
+        "max": [
+          0.37,
+          1.01,
+          0.37
+        ],
+        "size": [
+          0.74,
+          1.01,
+          0.74
+        ]
+      },
+      "triangles": 716,
+      "meshCount": 2
+    },
+    {
+      "name": "toilet",
+      "bounds": {
+        "min": [
+          -0.25,
+          0.0,
+          -0.342
+        ],
+        "max": [
+          0.25,
+          0.871,
+          0.34
+        ],
+        "size": [
+          0.5,
+          0.871,
+          0.682
+        ]
+      },
+      "triangles": 656,
+      "meshCount": 3
+    },
+    {
+      "name": "urinal",
+      "bounds": {
+        "min": [
+          -0.2235,
+          -0.01,
+          -0.215
+        ],
+        "max": [
+          0.2235,
+          0.9,
+          0.196
+        ],
+        "size": [
+          0.447,
+          0.91,
+          0.411
+        ]
+      },
+      "triangles": 480,
+      "meshCount": 4
+    },
+    {
+      "name": "sink",
+      "bounds": {
+        "min": [
+          -0.48,
+          0.0,
+          -0.27
+        ],
+        "max": [
+          0.48,
+          1.162,
+          0.27
+        ],
+        "size": [
+          0.96,
+          1.162,
+          0.54
+        ]
+      },
+      "triangles": 428,
+      "meshCount": 6
+    },
+    {
+      "name": "sink_basin",
+      "bounds": {
+        "min": [
+          -0.23776,
+          0.0,
+          -0.223
+        ],
+        "max": [
+          0.23776,
+          0.291,
+          0.195
+        ],
+        "size": [
+          0.47553,
+          0.291,
+          0.418
+        ]
+      },
+      "triangles": 260,
+      "meshCount": 4
+    },
+    {
+      "name": "mirror",
+      "bounds": {
+        "min": [
+          -0.45,
+          0.0,
+          -0.0225
+        ],
+        "max": [
+          0.45,
+          1.0,
+          0.0305
+        ],
+        "size": [
+          0.9,
+          1.0,
+          0.053
+        ]
+      },
+      "triangles": 56,
+      "meshCount": 2
+    },
+    {
+      "name": "paper_dispenser",
+      "bounds": {
+        "min": [
+          -0.12,
+          0.0,
+          -0.08
+        ],
+        "max": [
+          0.12,
+          0.37,
+          0.087
+        ],
+        "size": [
+          0.24,
+          0.37,
+          0.167
+        ]
+      },
+      "triangles": 112,
+      "meshCount": 3
+    },
+    {
+      "name": "pos",
+      "bounds": {
+        "min": [
+          -0.345,
+          0.0,
+          -0.305
+        ],
+        "max": [
+          0.38,
+          0.70486,
+          0.32
+        ],
+        "size": [
+          0.725,
+          0.70486,
+          0.625
+        ]
+      },
+      "triangles": 352,
+      "meshCount": 5
+    },
+    {
+      "name": "ticket_podium",
+      "bounds": {
+        "min": [
+          -0.41,
+          0.0,
+          -0.31917
+        ],
+        "max": [
+          0.41,
+          1.1605,
+          0.31917
+        ],
+        "size": [
+          0.82,
+          1.1605,
+          0.63834
+        ]
+      },
+      "triangles": 327,
+      "meshCount": 4
+    },
+    {
+      "name": "candy_display",
+      "bounds": {
+        "min": [
+          -0.9,
+          0.0,
+          -0.11
+        ],
+        "max": [
+          0.9,
+          1.05,
+          0.113
+        ],
+        "size": [
+          1.8,
+          1.05,
+          0.223
+        ]
+      },
+      "triangles": 4566,
+      "meshCount": 10
+    },
+    {
+      "name": "water_display",
+      "bounds": {
+        "min": [
+          -0.7,
+          0.0,
+          -0.17
+        ],
+        "max": [
+          0.7,
+          1.055,
+          0.174
+        ],
+        "size": [
+          1.4,
+          1.055,
+          0.344
+        ]
+      },
+      "triangles": 7979,
+      "meshCount": 5
+    },
+    {
+      "name": "popcorn_popper",
+      "bounds": {
+        "min": [
+          -0.65,
+          0.0,
+          -0.45
+        ],
+        "max": [
+          0.65,
+          2.76,
+          0.505
+        ],
+        "size": [
+          1.3,
+          2.76,
+          0.955
+        ]
+      },
+      "triangles": 2713,
+      "meshCount": 6
+    },
+    {
+      "name": "soda_fountain",
+      "bounds": {
+        "min": [
+          -0.6,
+          0.0,
+          -0.375
+        ],
+        "max": [
+          0.6,
+          1.15,
+          0.375
+        ],
+        "size": [
+          1.2,
+          1.15,
+          0.75
+        ]
+      },
+      "triangles": 936,
+      "meshCount": 8
+    },
+    {
+      "name": "icee_machine",
+      "bounds": {
+        "min": [
+          -0.5,
+          0.0,
+          -0.375
+        ],
+        "max": [
+          0.5,
+          1.38,
+          0.382
+        ],
+        "size": [
+          1.0,
+          1.38,
+          0.757
+        ]
+      },
+      "triangles": 1057,
+      "meshCount": 6
+    },
+    {
+      "name": "cup_caddy",
+      "bounds": {
+        "min": [
+          -0.39,
+          0.0,
+          -0.36
+        ],
+        "max": [
+          0.39,
+          0.7436,
+          0.36
+        ],
+        "size": [
+          0.78,
+          0.7436,
+          0.72
+        ]
+      },
+      "triangles": 2308,
+      "meshCount": 3
+    },
+    {
+      "name": "drinking_fountain",
+      "bounds": {
+        "min": [
+          -0.325,
+          0.385,
+          -0.24
+        ],
+        "max": [
+          0.325,
+          1.49,
+          0.26
+        ],
+        "size": [
+          0.65,
+          1.105,
+          0.5
+        ]
+      },
+      "triangles": 396,
+      "meshCount": 3
+    },
+    {
+      "name": "turbo_oven",
+      "bounds": {
+        "min": [
+          -0.5,
+          0.0,
+          -0.425
+        ],
+        "max": [
+          0.5,
+          1.8,
+          0.495
+        ],
+        "size": [
+          1.0,
+          1.8,
+          0.92
+        ]
+      },
+      "triangles": 568,
+      "meshCount": 4
+    },
+    {
+      "name": "fryer",
+      "bounds": {
+        "min": [
+          -0.45,
+          -0.0,
+          -0.4
+        ],
+        "max": [
+          0.45,
+          1.72,
+          0.455
+        ],
+        "size": [
+          0.9,
+          1.72,
+          0.855
+        ]
+      },
+      "triangles": 960,
+      "meshCount": 2
+    },
+    {
+      "name": "grill",
+      "bounds": {
+        "min": [
+          -0.7,
+          0.0,
+          -0.4
+        ],
+        "max": [
+          0.7,
+          1.52,
+          0.455
+        ],
+        "size": [
+          1.4,
+          1.52,
+          0.855
+        ]
+      },
+      "triangles": 928,
+      "meshCount": 2
+    },
+    {
+      "name": "bar_well",
+      "bounds": {
+        "min": [
+          -0.6,
+          0.0,
+          -0.375
+        ],
+        "max": [
+          0.6,
+          1.0835,
+          0.43
+        ],
+        "size": [
+          1.2,
+          1.0835,
+          0.805
+        ]
+      },
+      "triangles": 1024,
+      "meshCount": 4
+    },
+    {
+      "name": "storage_rack",
+      "bounds": {
+        "min": [
+          -0.8,
+          0.0,
+          -0.275
+        ],
+        "max": [
+          0.8,
+          1.95,
+          0.275
+        ],
+        "size": [
+          1.6,
+          1.95,
+          0.55
+        ]
+      },
+      "triangles": 964,
+      "meshCount": 4
+    },
+    {
+      "name": "storage_box",
+      "bounds": {
+        "min": [
+          -0.25,
+          0.0,
+          -0.2
+        ],
+        "max": [
+          0.25,
+          0.364,
+          0.21
+        ],
+        "size": [
+          0.5,
+          0.364,
+          0.41
+        ]
+      },
+      "triangles": 128,
+      "meshCount": 4
+    },
+    {
+      "name": "office_desk",
+      "bounds": {
+        "min": [
+          -0.7,
+          0.0,
+          -0.325
+        ],
+        "max": [
+          0.7,
+          0.78,
+          0.325
+        ],
+        "size": [
+          1.4,
+          0.78,
+          0.65
+        ]
+      },
+      "triangles": 308,
+      "meshCount": 3
+    },
+    {
+      "name": "office_chair",
+      "bounds": {
+        "min": [
+          -0.31,
+          0.0,
+          -0.28761
+        ],
+        "max": [
+          0.31,
+          1.11712,
+          0.26754
+        ],
+        "size": [
+          0.62,
+          1.11712,
+          0.55514
+        ]
+      },
+      "triangles": 516,
+      "meshCount": 3
+    },
+    {
+      "name": "sanitizer",
+      "bounds": {
+        "min": [
+          -0.16,
+          0.0,
+          -0.16
+        ],
+        "max": [
+          0.16,
+          1.28,
+          0.16
+        ],
+        "size": [
+          0.32,
+          1.28,
+          0.32
+        ]
+      },
+      "triangles": 236,
+      "meshCount": 4
+    },
+    {
+      "name": "stanchion",
+      "bounds": {
+        "min": [
+          -0.17,
+          0.0,
+          -0.17
+        ],
+        "max": [
+          0.17,
+          1.03,
+          0.17
+        ],
+        "size": [
+          0.34,
+          1.03,
+          0.34
+        ]
+      },
+      "triangles": 228,
+      "meshCount": 2
+    },
+    {
+      "name": "counter_blue",
+      "bounds": {
+        "min": [
+          -0.5,
+          0.0,
+          -0.5
+        ],
+        "max": [
+          0.5,
+          1.21,
+          0.5065
+        ],
+        "size": [
+          1.0,
+          1.21,
+          1.0065
+        ]
+      },
+      "triangles": 264,
+      "meshCount": 3
+    },
+    {
+      "name": "counter_white",
+      "bounds": {
+        "min": [
+          -0.5,
+          0.0,
+          -0.5
+        ],
+        "max": [
+          0.5,
+          1.21,
+          0.5065
+        ],
+        "size": [
+          1.0,
+          1.21,
+          1.0065
+        ]
+      },
+      "triangles": 264,
+      "meshCount": 3
+    },
+    {
+      "name": "counter_wood",
+      "bounds": {
+        "min": [
+          -0.5,
+          0.0,
+          -0.5
+        ],
+        "max": [
+          0.5,
+          1.21,
+          0.5065
+        ],
+        "size": [
+          1.0,
+          1.21,
+          1.0065
+        ]
+      },
+      "triangles": 264,
+      "meshCount": 3
+    },
+    {
+      "name": "stall_partition",
+      "bounds": {
+        "min": [
+          -0.5,
+          0.0,
+          -0.0275
+        ],
+        "max": [
+          0.5,
+          2.1,
+          0.0275
+        ],
+        "size": [
+          1.0,
+          2.1,
+          0.055
+        ]
+      },
+      "triangles": 220,
+      "meshCount": 2
+    },
+    {
+      "name": "stall_door",
+      "bounds": {
+        "min": [
+          -0.4,
+          0.09,
+          -0.0275
+        ],
+        "max": [
+          0.4,
+          1.99,
+          0.0515
+        ],
+        "size": [
+          0.8,
+          1.9,
+          0.079
+        ]
+      },
+      "triangles": 220,
+      "meshCount": 2
+    }
+  ],
+  "modelCount": 33,
+  "triangles": 31102,
+  "notes": [
+    "Simplified original manufactured fixtures; fitted to gameplay envelopes, not surveyed measurements.",
+    "Candy labels are invented project graphics. Chilled-water bay contains 24 individual bottle meshes.",
+    "Dynamic movie displays and architecture remain authored by the game."
+  ]
+}

@@ -42,16 +42,26 @@ function walk(x, z, feetY, yaw, frames = 110) {
   return result;
 }
 
-// Walk toward the formerly open edges from multiple aisle elevations.
-for (const x of [-21, -18, -15, -12, -10.4, -8.4, -7.3]) {
-  const y = world.groundHeight(planToWorldX(x), 73.3, 3.32);
-  const end = walk(x, 73.3, y, 0);
-  assert.ok(end.z > 72.3 && Math.abs(end.y - y) < 0.01, `T3 rear fall at x=${x}: ${JSON.stringify(end)}`);
+// The new rear wall is immediately behind the seats: test its two remaining
+// side landings instead of spawning inside the removed empty rear passage.
+let enclosureApproaches = 0;
+for (const room of AUDITORIUMS.filter((room) => room.stadium.seatingProfile)) {
+  const layout = world.auditoriumLayouts.get(room.id);
+  for (const aisle of Object.values(layout.sideAisles)) {
+    const end = walk(aisle.centerX, layout.backRowZ, layout.backElevation, 0);
+    assert.ok(end.z > layout.rearWallZ + 0.4 && Math.abs(end.y - layout.backElevation) < 0.01,
+      `${room.id} rear fall: ${JSON.stringify(end)}`);
+    enclosureApproaches += 1;
+  }
 }
-for (const z of [64, 68, 70, 72.4, 76, 80, 83.5]) {
-  const y = world.groundHeight(planToWorldX(43.7), z, 3.08);
-  const end = walk(43.7, z, y, Math.PI / 2);
-  assert.ok(end.x < 44.4 && Math.abs(end.y - y) < 0.01, `T6 side fall at z=${z}: ${JSON.stringify(end)}`);
+const t6Layout = world.auditoriumLayouts.get("theater-6");
+const t6EastX = t6Layout.sideAisles.east.centerX;
+for (const z of [...t6Layout.rows.slice(2).map((row) => row.z), t6Layout.entryCross.bounds.zMin - 0.4]) {
+  const y = world.groundHeight(planToWorldX(t6EastX), z, t6Layout.backElevation);
+  const end = walk(t6EastX, z, y, Math.PI / 2);
+  assert.ok(end.x < t6Layout.routeReserve.bounds.xMin - 0.3 && Math.abs(end.y - y) < 0.01,
+    `T6 side fall at z=${z}: ${JSON.stringify(end)}`);
+  enclosureApproaches += 1;
 }
 
 const ray = new THREE.Raycaster();
@@ -111,8 +121,10 @@ for (const storage of SERVICE_ROOMS.filter(r => r.kind === "storage-lower")) {
   const x = (storage.bounds.xMin + storage.bounds.xMax) / 2;
   const z = (storage.bounds.zMin + storage.bounds.zMax) / 2;
   assert.equal(zoneAt(x, z, 0).id, storage.id, "Lower room must retain its own location");
-  const y = world.groundHeight(planToWorldX(x), z, 3.32);
-  assert.equal(zoneAt(x, z, y).id, storage.id.replace("under-storage", "theater"));
+  const upperLayout = world.auditoriumLayouts.get(storage.id.replace("under-storage", "theater"));
+  const upperZ = Math.min(storage.bounds.zMax - 0.15, Math.max(storage.bounds.zMin + 0.15, upperLayout.backRowZ + 0.1));
+  const y = world.groundHeight(planToWorldX(x), upperZ, upperLayout.backElevation);
+  assert.equal(zoneAt(x, upperZ, y).id, storage.id.replace("under-storage", "theater"));
   const sign = world.root.getObjectByName(`${storage.id}-label`);
   const center = sign.getWorldPosition(new THREE.Vector3());
   const normal = new THREE.Vector3(0, 0, 1).transformDirection(sign.matrixWorld);
@@ -138,4 +150,4 @@ for (const [x, z] of [[-22.2, 2.9], [-24.7, 13], [-22.3, 18.1]]) {
   assert.ok(firstSurface?.object.castShadow, `Light leaks through the room shell at ${x}, ${z}`);
 }
 world.dispose(); materials.dispose();
-console.log("Enclosure regression valid: 14 elevated-edge walks blocked · T3 upper shell closed · 1,093 seats without adjacent mesh overlap · stacked zones, visible signs and interior shadow occlusion correct.");
+console.log(`Enclosure regression valid: ${enclosureApproaches} elevated-edge walks blocked · T3 upper shell closed · 1,093 seats without adjacent mesh overlap · stacked zones, visible signs and interior shadow occlusion correct.`);
