@@ -218,7 +218,7 @@ const auditoriumByNumber = new Map(AUDITORIUMS.map((auditorium) => [auditorium.n
 assert.equal(world.stats.auditoriumCount, 14);
 assert.equal(world.stats.seatCount, 1093);
 assert.equal(world.stats.equipmentAnchors, 13);
-assert.equal(world.stats.layoutVersion, "mililani-sketch-v20");
+assert.equal(world.stats.layoutVersion, "mililani-sketch-v21");
 assert.ok(world.stats.meshCount > 0);
 assert.ok(world.stats.colliderCount > 0);
 assert.equal(world.auditoriumGroups.size, 14);
@@ -1425,8 +1425,8 @@ for (const [id, expectedPlanX] of [
   assertNear(light.x, planToWorldX(expectedPlanX), `${id} translated X`);
   assert.ok(light.y + light.height / 2 < expectedT6Underside, `${id} must mount below the low roof.`);
 }
-assert.equal(world.ceilingHeight(planToWorldX(theater6.entry.longRouteBounds.xMin - 0.1), 84, 0), null, "T6 sampler must end at the translated long-route side wall.");
-assert.equal(world.ceilingHeight(planToWorldX(longCenterX), theater6.entry.longRouteBounds.zMax + 0.1, 0), null, "T6 sampler must end at the translated long-route arrival.");
+assertNear(world.ceilingHeight(planToWorldX(theater6.entry.longRouteBounds.xMin - 0.1), 84, 0), theater6Layout.presentation.ceilingUnderside, "T6 sampler switches to the high bowl roof beyond the long-route side wall.");
+assertNear(world.ceilingHeight(planToWorldX(longCenterX), theater6.entry.longRouteBounds.zMax + 0.1, 0), theater6Layout.presentation.ceilingUnderside, "T6 sampler switches to the high bowl roof beyond the long-route arrival.");
 assert.equal(world.ceilingHeight(planToWorldX(65), 60.1, 0), null, "The ordinary main hall must not report a low ceiling.");
 const t6StorageCenterX = (t6Storage.bounds.xMin + t6Storage.bounds.xMax) / 2;
 assert.equal(world.groundHeight(planToWorldX(t6StorageCenterX), 69.2, 0), 0);

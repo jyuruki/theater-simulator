@@ -7,6 +7,73 @@ export const STAIR_TREADS_PER_ROW = 2;
 export const DEFAULT_MAX_STEP_UP = 0.34;
 export const SEATING_RISER_DEPTH = 0.08;
 
+export const AUDITORIUM_SCREEN_SPEC = Object.freeze({
+  aspect: 1.6,
+  frontFloorClearance: 1.8,
+  sideClearance: 0.35,
+  wallInset: 0.12,
+  frameExtraWidth: 0.25,
+  frameBarHeight: 0.14,
+  frameBarOffset: 0.1,
+  frameDepth: 0.17,
+  ceilingClearance: 0.18,
+  ceilingThickness: 0.1,
+});
+
+/** Size the image first, then fit the complete auditorium shell around it. */
+export function buildAuditoriumPresentation(auditorium, layout) {
+  const spec = AUDITORIUM_SCREEN_SPEC;
+  const z = auditorium.screenSide === "north" ? auditorium.bounds.zMax - spec.wallInset : auditorium.bounds.zMin + spec.wallInset;
+  let xMin = auditorium.bounds.xMin + spec.sideClearance;
+  let xMax = auditorium.bounds.xMax - spec.sideClearance;
+  const route = layout.routeReserve;
+  if (route && layout.frontDrop > 0) {
+    // The low approach roof/guard occupies the wall beside the lowered A/B
+    // bank. An image spanning behind it can never be seen whole from A.
+    // Include the frame overhang when leaving clearance from that volume.
+    if (route.side === "east") xMax = Math.min(xMax, route.bounds.xMin - 0.18);
+    else xMin = Math.max(xMin, route.bounds.xMax + 0.18);
+  } else if (route && auditorium.entry.type === "dogleg") {
+    // The screen may extend slightly beyond the bowl's side in T4/5, but
+    // only as far as every seated eye sees past BOTH the divider and the
+    // low route roof. Project those front edges onto the screen plane.
+    const east = route.side === "east";
+    const edgeX = east ? route.bounds.xMin : route.bounds.xMax;
+    const barriers = [
+      { x: edgeX, z: auditorium.entry.longRouteBounds.zMax },
+      { x: edgeX + (east ? -0.09 : 0.09), z: auditorium.entry.arrivalZ - 0.65 + 0.09 },
+    ];
+    for (const row of layout.rows) {
+      const spacing = Math.min(0.76, (layout.seatBounds.xMax - layout.seatBounds.xMin - 0.14) / row.seatCount);
+      const eyeX = layout.centerX + (east ? 1 : -1) * spacing * (row.seatCount - 1) / 2;
+      const eyeZ = row.z + 0.05;
+      for (const edge of barriers) {
+        if (eyeZ >= edge.z) continue;
+        const projectedX = eyeX + (edge.x - eyeX) * (z - eyeZ) / (edge.z - eyeZ);
+        if (east) xMax = Math.min(xMax, projectedX - 0.05);
+        else xMin = Math.max(xMin, projectedX + 0.05);
+      }
+    }
+  }
+  const width = xMax - xMin;
+  const height = width / spec.aspect;
+  const bottomY = layout.frontElevation + spec.frontFloorClearance;
+  const topY = bottomY + height;
+  const frameTopY = topY + spec.frameBarOffset + spec.frameBarHeight / 2;
+  const minimumCeiling = { large150: 7.55, medium58: 6.25, standard50: 5.6, compact38: 5.45 }[auditorium.preset];
+  const ceilingY = Math.ceil(Math.max(minimumCeiling,
+    frameTopY + spec.ceilingClearance + spec.ceilingThickness / 2) * 10) / 10;
+  return Object.freeze({
+    screen: Object.freeze({
+      centerX: (xMin + xMax) / 2,
+      z,
+      width, height, aspect: spec.aspect, bottomY, topY,
+    }),
+    ceilingY,
+    ceilingUnderside: ceilingY - spec.ceilingThickness / 2,
+  });
+}
+
 const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
 const lerp = (start, end, amount) => start + (end - start) * amount;
 
@@ -343,6 +410,22 @@ export function buildAuditoriumLayout(auditorium, presets = AUDITORIUM_PRESETS) 
     walkableCrossing: !seatingProfile,
   });
 
+  const frontScreenwardEdge = direction < 0 ? rows[0].floorBounds.zMax : rows[0].floorBounds.zMin;
+  // The seat-bank margin is not an open gap around the screen apron. Extend
+  // only these flat front surfaces to the wall's inner face; the side route
+  // remains its own surface where its ground datum differs from row A.
+  const frontFloorX = {
+    xMin: routeReserve?.side === "west" ? bowlXMin : Math.min(bowlXMin, bounds.xMin + 0.09),
+    xMax: routeReserve?.side === "east" ? bowlXMax : Math.max(bowlXMax, bounds.xMax - 0.09),
+  };
+  const frontApronBounds = freezeBounds({ ...frontFloorX,
+    zMin: direction < 0 ? frontScreenwardEdge : bounds.zMin + 0.09,
+    zMax: direction < 0 ? bounds.zMax - 0.09 : frontScreenwardEdge,
+  });
+  const frontSurroundBounds = freezeBounds({ ...frontFloorX,
+    zMin: direction < 0 ? frontRowZ : bounds.zMin + 0.09,
+    zMax: direction < 0 ? bounds.zMax - 0.09 : frontRowZ,
+  });
   const layout = {
     id: auditorium.id,
     number: auditorium.number,
@@ -368,6 +451,8 @@ export function buildAuditoriumLayout(auditorium, presets = AUDITORIUM_PRESETS) 
     frontElevation,
     backElevation,
     frontRowZ,
+    frontApronBounds,
+    frontSurroundBounds,
     backRowZ,
     rearWallZ,
     bowlBounds,
@@ -400,6 +485,7 @@ export function buildAuditoriumLayout(auditorium, presets = AUDITORIUM_PRESETS) 
   layout.stairTreadsPerSide = layout.stairTransitions.reduce((sum, transition) => sum + transition.treadCount, 0);
   layout.sideStairTreads = buildSideStairTreads(layout);
   layout.routeSurfaces = buildRouteSurfaceDescriptors(auditorium, layout);
+  layout.presentation = buildAuditoriumPresentation(auditorium, layout);
   return Object.freeze(layout);
 }
 
@@ -482,7 +568,7 @@ function addRouteReserveSurface(surfaces, auditorium, layout) {
     ?? entry.transverseBounds?.zMax
     ?? auditorium.bounds.zMin;
   const endZ = auditorium.screenSide === "north"
-    ? auditorium.bounds.zMax - 0.2
+    ? auditorium.bounds.zMax - 0.09
     : Math.max(startZ + 0.05, entry.arrivalZ + 0.35);
   surfaces.push(flatSurface(
     `${auditorium.id}-reserved-side-route`,
@@ -663,6 +749,9 @@ export function sampleTierHeight(layout, z) {
 }
 
 export function sampleBowlFloorCandidate(layout, x, z) {
+  if (boundsContainPoint(layout.frontSurroundBounds, x, z)) {
+    return candidate({ id: `${layout.id}-screen-apron`, auditoriumId: layout.id, kind: "screen-apron" }, layout.frontElevation, 50);
+  }
   if (!boundsContainPoint(layout.bowlBounds, x, z)) return null;
   const aisle = Object.values(layout.sideAisles)
     .find((candidateAisle) => boundsContainPoint(candidateAisle.bounds, x, z));

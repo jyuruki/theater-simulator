@@ -110,9 +110,10 @@ export function createVisitUI({
   audio,
   crowd,
   toggleMap,
+  employeeMode = false,
 }) {
   const visit = createVisitState();
-  const targets = createInteractionTargets();
+  const targets = employeeMode ? [] : createInteractionTargets();
   const dialog = document.querySelector("#visit-dialog");
   const prompt = document.querySelector("#interact-button");
   const status = document.querySelector("#visit-status");
@@ -501,7 +502,9 @@ export function createVisitUI({
       peopleLabel,
       node(
         "p",
-        "WASD to move · E to interact · I for your ticket · M for the map · R to return to the entrance",
+        employeeMode
+          ? "WASD to move · E to pick up or use · hold Left Mouse or F to clean · Q to return tools · M for the map · R to return to the usher station"
+          : "WASD to move · E to interact · I for your ticket · M for the map · R to return to the entrance",
         "muted",
       ),
       button("Back to the theater", dismiss, "visit-button primary"),
@@ -509,7 +512,7 @@ export function createVisitUI({
   }
 
   const interact = () => {
-    if (!focusedTarget || !controller.active || dialog.open) return;
+    if (employeeMode || !focusedTarget || !controller.active || dialog.open) return;
     const kind = focusedTarget.kind;
     if (kind === "tickets") ticketKiosk();
     else if (kind === "concessions") concessions();
@@ -520,7 +523,7 @@ export function createVisitUI({
   prompt.addEventListener("click", interact);
   document
     .querySelector("#ticket-button")
-    .addEventListener("click", ticketWallet);
+    .addEventListener("click", () => { if (!employeeMode) ticketWallet(); });
   document
     .querySelector("#settings-button")
     .addEventListener("click", settings);
@@ -532,11 +535,11 @@ export function createVisitUI({
     .addEventListener("click", () => toggleMap());
   window.addEventListener("keydown", (event) => {
     if (event.repeat || dialog.open || !controller.started) return;
-    if (event.code === "KeyE") {
+    if (event.code === "KeyE" && !employeeMode) {
       event.preventDefault();
       interact();
     }
-    if (event.code === "KeyI") {
+    if (event.code === "KeyI" && !employeeMode) {
       event.preventDefault();
       ticketWallet();
     }
@@ -553,6 +556,7 @@ export function createVisitUI({
       return dialog.open;
     },
     update(delta) {
+      if (employeeMode) return;
       if (
         controller.started &&
         !document.hidden &&

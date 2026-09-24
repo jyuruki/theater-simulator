@@ -52,10 +52,17 @@ remain accessible with keyboard and touch as well as mouse input.
 
 ## Current implementation boundary
 
-The current release is a spatial walkthrough with an older visitor ticket/order
-prototype. The full employee career, cleaning simulation, food preparation and
-physical POS workflows are future work. This architecture update prepares the
-spaces and records the direction; it does not claim those systems are playable.
+Version 0.21 starts the player as an usher beside a physical cart and schedule
+sheet in Theater 2. Its first repeatable task is playable: sweep loose popcorn
+into a visible dustpan, empty it in the theater trash can, wipe two spills by
+moving a cloth over them, and return the tools. The sheet reflects actual dirt
+and disposal state. Progress saves locally. Cleaning uses constrained contact
+physics within the rear aisle; this is not yet a general rigid-body system.
+
+The old visitor ticket/order prototype is disabled in the employee experience.
+The broader career, timed theater-break scheduling, other usher duties, food
+preparation and physical POS workflows remain future work. Preserve the minimal
+menu approach while extending this first complete task.
 
 Theater 3's full-height anteroom leads through doors to legitimately lower
 under-seat storage. The lower inner ceiling is intentional, per the user's
