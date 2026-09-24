@@ -59,6 +59,9 @@ schedule, cleaning, supplies and waste state locally on the same browser.
 ## Scope and verification
 
 Room footprints, all 1,093 seats, screens and existing service routes are retained.
+Seat-cleaning views exposed older open stair risers and uncovered sidewall margins.
+These now have continuous surfaces at their existing heights, preserving entrance
+passages and the intentionally lower storage rooms.
 The new interactions use separate movable parts and visible physical states.
 Seeded messes are sparse occupancy samples rather than a full audience simulation.
 Bathroom cleaning, ICEE servicing, sound/picture checks, career progression,

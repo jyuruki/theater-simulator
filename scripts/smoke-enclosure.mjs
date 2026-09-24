@@ -78,6 +78,63 @@ for (const x of [-20, -15, -10.4, -8.4, -5.5]) {
   assert.ok(cast(x, 5, 73, 0, 0, -1, 1.2).length, `T3 rear upper enclosure missing at x=${x}`);
 }
 
+// Seat-cleaning views look upward from below the next tread. Vertical floor
+// rays alone miss the open risers and the margin between stairs and sidewalls.
+let stairClosureRays = 0, wallMarginRays = 0;
+for (const room of AUDITORIUMS) {
+  const layout = world.auditoriumLayouts.get(room.id);
+  for (const tread of layout.sideStairTreads) {
+    const x = (tread.bounds.xMin + tread.bounds.xMax) / 2;
+    const leadingZ = layout.direction > 0 ? tread.bounds.zMin : tread.bounds.zMax;
+    const lowerY = tread.elevation - tread.stepRise + .035;
+    const hit = cast(x, lowerY, leadingZ - layout.direction * .08, 0, 0, layout.direction, .12)[0];
+    assert.ok(hit && hit.distance < .10, `${tread.id} has an open riser above the previous tread`);
+    stairClosureRays++;
+    if (layout.routeReserve?.side === tread.side) continue;
+    const outerX = tread.side === "west" ? tread.bounds.xMin : tread.bounds.xMax;
+    const wallX = tread.side === "west" ? room.bounds.xMin + .09 : room.bounds.xMax - .09;
+    if ((wallX - outerX) * (tread.side === "west" ? -1 : 1) < .01) continue;
+    const marginX = (outerX + wallX) / 2;
+    const z = (tread.bounds.zMin + tread.bounds.zMax) / 2;
+    const floorHit = cast(marginX, tread.elevation + .12, z, 0, -1, 0, .15)[0];
+    assert.ok(floorHit && Math.abs(floorHit.point.y - tread.elevation) < .001,
+      `${tread.id} leaves an uncovered margin beside the wall`);
+    wallMarginRays++;
+  }
+  for (const aisle of Object.values(layout.sideAisles)) {
+    if (layout.routeReserve?.side === aisle.side) continue;
+    const outerX = aisle.side === "west" ? aisle.bounds.xMin : aisle.bounds.xMax;
+    const wallX = aisle.side === "west" ? room.bounds.xMin + .09 : room.bounds.xMax - .09;
+    if ((wallX - outerX) * (aisle.side === "west" ? -1 : 1) < .01) continue;
+    const marginX = (outerX + wallX) / 2;
+    const rearTier = layout.rows.at(-1).floorBounds;
+    const rearEdge = layout.direction > 0 ? rearTier.zMax : rearTier.zMin;
+    const probes = [[(layout.backRowZ + rearEdge) / 2, layout.backElevation]];
+    const landingEnd = layout.direction > 0 ? layout.bowlBounds.zMax - .2 : layout.bowlBounds.zMin + .2;
+    if ((landingEnd - rearEdge) * layout.direction > .02) probes.push([(rearEdge + landingEnd) / 2, layout.backElevation]);
+    for (const flat of layout.flatSideAisles.filter(flat => flat.id.includes(`-${aisle.side}-`))) {
+      probes.push([(flat.bounds.zMin + flat.bounds.zMax) / 2, flat.elevation]);
+    }
+    for (const [z, y] of probes) {
+      const hit = cast(marginX, y + .12, z, 0, -1, 0, .15)[0];
+      assert.ok(hit && Math.abs(hit.point.y - y) < .001, `${room.id} ${aisle.side} landing margin is open at z=${z}`);
+      wallMarginRays++;
+    }
+  }
+}
+
+// Reproduce five sky pixels from the real reachable Theater 2 A0 cleaning
+// stance, independent of optional GLB seats or the screenshot capture tool.
+const cleaningCamera = new THREE.PerspectiveCamera(67, 1280 / 550, .04, 260);
+cleaningCamera.position.set(26.996, .54, 44.27);
+cleaningCamera.lookAt(26.812226862351846, -.198, 45.083284803974315);
+cleaningCamera.updateMatrixWorld(true);
+for (const [x, y] of [[385, 95], [315, 185], [330, 307], [155, 405], [80, 500]]) {
+  ray.setFromCamera(new THREE.Vector2(x / 1280 * 2 - 1, 1 - y / 550 * 2), cleaningCamera);
+  ray.near = .04; ray.far = 8;
+  assert.ok(ray.intersectObject(world.root, true).length, `T2 cleaning view still exposes sky through stair pixel ${x},${y}`);
+}
+
 // Check rendered instance bounds, not just the spacing formula.
 const matrix = new THREE.Matrix4();
 function boxes(mesh, start, count) {
@@ -150,4 +207,4 @@ for (const [x, z] of [[-22.2, 2.9], [-24.7, 13], [-22.3, 18.1]]) {
   assert.ok(firstSurface?.object.castShadow, `Light leaks through the room shell at ${x}, ${z}`);
 }
 world.dispose(); materials.dispose();
-console.log(`Enclosure regression valid: ${enclosureApproaches} elevated-edge walks blocked · T3 upper shell closed · 1,093 seats without adjacent mesh overlap · stacked zones, visible signs and interior shadow occlusion correct.`);
+console.log(`Enclosure regression valid: ${enclosureApproaches} elevated-edge walks blocked · ${stairClosureRays} solid risers and ${wallMarginRays} closed wall margins · T2 cleaning sky leaks closed · T3 upper shell closed · 1,093 seats without adjacent mesh overlap · stacked zones, visible signs and interior shadow occlusion correct.`);

@@ -738,6 +738,16 @@ export function createTheaterWorld({ scene, materials }) {
     let armInstance = 0;
     const seatWidth = layout.seatBounds.xMax - layout.seatBounds.xMin;
     const forward = auditorium.screenSide === "north" ? 1 : -1;
+    // The seating margin is inside the room shell, not an open shaft. Close
+    // its non-route edges at the existing stair/landing height without moving
+    // the authored walking surfaces or extending over an entrance passage.
+    const closeWallEdges = (bounds) => ({
+      ...bounds,
+      xMin: Math.abs(bounds.xMin - layout.bowlBounds.xMin) < EPSILON && layout.routeReserve?.side !== "west"
+        ? Math.min(bounds.xMin, auditorium.bounds.xMin + WALL_THICKNESS / 2) : bounds.xMin,
+      xMax: Math.abs(bounds.xMax - layout.bowlBounds.xMax) < EPSILON && layout.routeReserve?.side !== "east"
+        ? Math.max(bounds.xMax, auditorium.bounds.xMax - WALL_THICKNESS / 2) : bounds.xMax,
+    });
 
     layout.rows.forEach((row, rowIndex) => {
       const tierBounds = row.floorBounds;
@@ -817,11 +827,11 @@ export function createTheaterWorld({ scene, materials }) {
       ? { xMin: layout.bowlBounds.xMin, xMax: layout.bowlBounds.xMax, zMin: layout.bowlBounds.zMin + (layout.seatingProfile ? WALL_THICKNESS / 2 : 0.2), zMax: rearWallwardEdge }
       : { xMin: layout.bowlBounds.xMin, xMax: layout.bowlBounds.xMax, zMin: rearWallwardEdge, zMax: layout.bowlBounds.zMax - (layout.seatingProfile ? WALL_THICKNESS / 2 : 0.2) };
     if (frontApron.zMax > frontApron.zMin) addFloor(`${auditorium.id}-screen-apron`, frontApron, materials.carpet, layout.frontElevation, parent);
-    if (rearLanding.zMax > rearLanding.zMin) addFloor(`${auditorium.id}-rear-landing`, rearLanding, materials.carpet, layout.backElevation, parent);
+    if (rearLanding.zMax > rearLanding.zMin) addFloor(`${auditorium.id}-rear-landing`, closeWallEdges(rearLanding), materials.carpet, layout.backElevation, parent);
     if (layout.entryCross) {
       addFloor(layout.entryCross.id, layout.entryCross.floorBounds, materials.carpet, layout.entryCross.elevation, parent);
       for (const aisle of layout.flatSideAisles) {
-        addFloor(aisle.id, aisle.bounds, materials.carpet, aisle.elevation, parent);
+        addFloor(aisle.id, closeWallEdges(aisle.bounds), materials.carpet, aisle.elevation, parent);
       }
     }
 
@@ -839,13 +849,16 @@ export function createTheaterWorld({ scene, materials }) {
         zMax: Math.max(layout.backRowZ + layout.direction * 0.0075, rearWallwardEdge),
       };
       addFloor(`${auditorium.id}-${aisle.side}-front-endcap`, frontEndcap, materials.carpet, layout.frontElevation, parent);
-      addFloor(`${auditorium.id}-${aisle.side}-rear-endcap`, rearEndcap, materials.carpet, layout.backElevation, parent);
+      addFloor(`${auditorium.id}-${aisle.side}-rear-endcap`, closeWallEdges(rearEndcap), materials.carpet, layout.backElevation, parent);
     }
 
     for (const tread of layout.sideStairTreads) {
-      const { x, z } = centerOf(tread.bounds);
-      const { width, depth } = sizeOf(tread.bounds);
-      const slabHeight = layout.seatingProfile ? tread.stepRise + 0.09 : 0.09;
+      const treadBounds = closeWallEdges(tread.bounds);
+      const { x, z } = centerOf(treadBounds);
+      const { width, depth } = sizeOf(treadBounds);
+      // Each solid riser reaches the slab below it. Thin floating treads left
+      // sky-visible slots when viewed from a lower row while cleaning seats.
+      const slabHeight = tread.stepRise + 0.09;
       const meetsGroundCrosswalk = layout.entryCross
         && tread.transition === layout.groundRowIndex - 1
         && tread.half === layout.stairTransitions[tread.transition].treadCount - 1;
