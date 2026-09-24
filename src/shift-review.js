@@ -27,7 +27,7 @@ function refreshViews(){
  for(const bin of snap.waste.bins){
   add(bin.id,`Rolling can · ${bin.room}`,[bin.x+1.1,1.68,bin.z+1.1],[bin.x,.68,bin.z]);
  }
- const g=snap.waste.gondola;add("gondola","Trash-room gondola",[g.x-1.6,1.68,g.z-2.3],[g.x,.8,g.z]);
+ const g=snap.waste.gondola;add("gondola","Trash-room gondola",[20.45,1.68,60.4],[g.x,.8,g.z]);
  for(const anchor of snap.supplies.anchors){
   add(`supply-${anchor.id.replaceAll(":","-")}`,anchor.id,[anchor.stand[0],anchor.stand[1]+1.68,anchor.stand[2]],anchor.position);
  }
