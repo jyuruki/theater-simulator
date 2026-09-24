@@ -216,7 +216,7 @@ for (const [number, baseline] of v9MovedTopEntryModules) {
   const auditorium = auditoriumByNumber.get(number);
   assertRigidPlanShift(auditorium.bounds, baseline.bounds, baseline.xShift + AUDITORIUM_SHIFT_X[number], 0, `Compacted Theater ${number}`);
   assertNear(auditorium.entry.center, baseline.center + baseline.xShift + AUDITORIUM_SHIFT_X[number], `Compacted Theater ${number} entrance translation`);
-  assertNear(auditorium.entry.innerDoorCenter, 53.25, `V10 Theater ${number} inner-door Z preservation`);
+  assertNear(auditorium.entry.innerDoorCenter, 54.245, `Theater ${number} inner door centered in its shallower cubby`);
 }
 
 assert.deepEqual(roomById("front-walk").bounds, { xMin: -18.7, xMax: 21.11, zMin: -12.5, zMax: -2.5 });
@@ -293,7 +293,7 @@ for (const auditorium of AUDITORIUMS.filter(({ entry }) => entry.type === "trash
   const cubbyDepth = auditorium.entry.cubbyBounds
     ? boundsDepth(auditorium.entry.cubbyBounds)
     : auditorium.entry.cubbyDepth;
-    assert.ok(cubbyDepth >= 3.4 - 1e-6, `Theater ${auditorium.number} needs the deeper trash cubby.`);
+  assert.ok(cubbyDepth >= 2.5 - 1e-6, `Theater ${auditorium.number} cubby must fit its 2.05m side doorway and jambs.`);
   const halfWidth = auditorium.entry.cubbyHalfWidth ?? 1.6;
   const cubby = auditorium.entry.cubbyBounds ?? {
     xMin: auditorium.entry.center - halfWidth,
@@ -306,15 +306,15 @@ for (const auditorium of AUDITORIUMS.filter(({ entry }) => entry.type === "trash
 }
 
 const v8ExplicitCubbies = new Map([
-  [13, { xMin: 28.5, xMax: 31.7, zMin: 54.6, zMax: 58 }],
-  [14, { xMin: 25.3, xMax: 28.5, zMin: 54.6, zMax: 58 }],
+  [13, { xMin: 28.5, xMax: 31.7, zMin: 55.49, zMax: 58 }],
+  [14, { xMin: 25.3, xMax: 28.5, zMin: 55.49, zMax: 58 }],
 ]);
 for (const [number, baseline] of v8ExplicitCubbies) {
   assertRigidPlanShift(auditoriumByNumber.get(number).entry.cubbyBounds, baseline, AUDITORIUM_SHIFT_X[number], FRONT_SHIFT_Z, `Theater ${number} cubby`);
 }
 for (const [number, baseline] of new Map([
-  [1, { xMin: -25.5, xMax: -22.3, zMin: 54.4, zMax: 58 }],
-  [2, { xMin: -28.7, xMax: -25.5, zMin: 54.4, zMax: 58 }],
+  [1, { xMin: -25.5, xMax: -22.3, zMin: 55.27, zMax: 58 }],
+  [2, { xMin: -28.7, xMax: -25.5, zMin: 55.27, zMax: 58 }],
 ])) {
   assertRigidPlanShift(
     auditoriumByNumber.get(number).entry.cubbyBounds,
@@ -325,17 +325,17 @@ for (const [number, baseline] of new Map([
   );
 }
 for (const number of [1, 2]) {
-  assertNear(auditoriumByNumber.get(number).entry.innerDoorCenter, 55.6 + FRONT_SHIFT_Z, `Theater ${number} inner door shift`);
+  assertNear(auditoriumByNumber.get(number).entry.innerDoorCenter, 54.135, `Theater ${number} recentered inner door`);
 }
 for (const number of [9, 10, 11, 12, 13, 14]) {
-  assertNear(auditoriumByNumber.get(number).entry.innerDoorCenter, 55.75 + FRONT_SHIFT_Z, `Theater ${number} inner door shift`);
+  assertNear(auditoriumByNumber.get(number).entry.innerDoorCenter, 54.245, `Theater ${number} recentered inner door`);
 }
 
 const layouts = buildAuditoriumLayouts(AUDITORIUMS);
 for (const auditorium of AUDITORIUMS) {
   const layout = layouts.get(auditorium.id);
   assert.equal(layout.rows.length, auditorium.rows.length);
-  assert.equal(layout.sideStairTreads.length, layout.steppedRowTransitions * layout.stairTreadsPerRow * 2, `${auditorium.id} needs authored stair treads on both sides of every raised transition.`);
+  assert.equal(layout.sideStairTreads.length, layout.stairTreadsPerSide * 2, `${auditorium.id} needs authored stair treads on both sides of every raised transition.`);
   assert.ok(layout.halfStepRise <= 0.22 + 1e-9, `${auditorium.id} stair tread is too high for reliable walking.`);
   assert.ok(layout.sideAisles.west.bounds.xMax <= layout.seatBounds.xMin + 1e-6);
   assert.ok(layout.sideAisles.east.bounds.xMin >= layout.seatBounds.xMax - 1e-6);
@@ -354,7 +354,8 @@ for (const auditorium of AUDITORIUMS) {
     const rearSeatClearance = (cubby.zMin - 0.09) - (layout.backRowZ + 0.39);
     assert.ok(rearSeatClearance >= 0.8, `${auditorium.id} needs a clear rear landing to reach both side stairs; got ${rearSeatClearance.toFixed(3)}m.`);
   } else {
-    assert.ok(layout.frontElevation >= 0, `${auditorium.id} bottom entry cannot descend below the hall.`);
+    if (layout.entryCross) assert.equal(layout.entryCross.elevation, 0, `${auditorium.id} crosswalk must remain level with the hall.`);
+    else assert.ok(layout.frontElevation >= 0, `${auditorium.id} original bottom entry cannot descend below the hall.`);
     assert.ok(layout.backElevation > layout.frontElevation, `${auditorium.id} rows must rise away from its screen.`);
   }
 }
@@ -579,7 +580,7 @@ assert.deepEqual(
   {
     center: 102.7 + AUDITORIUM_SHIFT_X[9],
     turnSide: "east",
-    cubby: { xMin: 102.7 + AUDITORIUM_SHIFT_X[9] - 1.6, xMax: 102.7 + AUDITORIUM_SHIFT_X[9] + 1.6, zMin: 52.1, zMax: 55.5 },
+    cubby: { xMin: 102.7 + AUDITORIUM_SHIFT_X[9] - 1.6, xMax: 102.7 + AUDITORIUM_SHIFT_X[9] + 1.6, zMin: 52.99, zMax: 55.5 },
   },
   "V10 T9 must retain its entrance topology under a rigid X translation.",
 );
@@ -616,7 +617,10 @@ for (const number of [7, 8]) {
 assert.equal(LOBBY_PLAN.customerCounter.length, 5, "Bent concession/bar counter must preserve every sketched vertex.");
 assert.equal(LOBBY_SHIFT_X, 8.3, "V11 must use one authoritative +8.3m lobby translation.");
 assert.deepEqual(LOBBY_PLAN.customerCounter[0], { x: -8.8 + LOBBY_SHIFT_X, z: 20.4 + FRONT_SHIFT_Z });
-assert.deepEqual(LOBBY_PLAN.customerCounter.at(-1), { x: -20.1 + LOBBY_SHIFT_X, z: 4.9 + FRONT_SHIFT_Z });
+assertNear(LOBBY_PLAN.customerCounter.at(-1).z, 4.9 + FRONT_SHIFT_Z, "Service-end Z stays fixed");
+assert.ok(LOBBY_PLAN.customerCounter.at(-1).x < -20.1 + LOBBY_SHIFT_X, "Free service end extends toward the kitchen/office wall");
+assertNear(LOBBY_PLAN.counterServiceGate.counter.x - LOBBY_PLAN.counterServiceGate.wall.x, 1.7, "Two-person service opening");
+assert.equal(LOBBY_PLAN.expo.segmentIndex, 1, "Expo belongs beside the kitchen, not the office-side free end");
 assertNear(
   LOBBY_PLAN.customerCounter[0].x,
   TICKET_APPROACH_PLAN.bounds.xMin,
@@ -762,15 +766,14 @@ assertBoundsNear(
 );
 assertNear(LOBBY_PLAN.boxOfficeSightline.axisX, 10.51, "Box-office ticket-hall sightline axis");
 assert.deepEqual(
-  LOBBY_PLAN.customerCounter,
+  LOBBY_PLAN.customerCounter.slice(0, 4),
   [
     { x: -8.8, z: 20.4 },
     { x: -16.1, z: 20.4 },
     { x: -16.8, z: 17.8 },
     { x: -20.5, z: 8.2 },
-    { x: -20.1, z: 4.9 },
   ].map(({ x, z }) => ({ x: x + LOBBY_SHIFT_X, z: z + FRONT_SHIFT_Z })),
-  "Every concession-counter vertex must move by the common V11 lobby shift.",
+  "The first four counter vertices retain the common lobby shift; only the free service end narrows its opening.",
 );
 assert.deepEqual(
   LOBBY_PLAN.kitchenPartition,
@@ -894,9 +897,9 @@ assert.deepEqual(
   })),
   [
     { id: "customer-counter-bar", segmentIndex: 0, role: "bar", baseMaterialKey: "wood", topMaterialKey: "counterStone" },
-    { id: "customer-counter-white-service", segmentIndex: 1, role: "service-white", baseMaterialKey: "counterWhite", topMaterialKey: "counterStone" },
+    { id: "customer-counter-expo", segmentIndex: 1, role: "expo", baseMaterialKey: "counterWhite", topMaterialKey: "counterStone" },
     { id: "customer-counter-concession", segmentIndex: 2, role: "concession", baseMaterialKey: "concessionBlue", topMaterialKey: "counterStone" },
-    { id: "customer-counter-expo", segmentIndex: 3, role: "expo", baseMaterialKey: "counterWhite", topMaterialKey: "counterStone" },
+    { id: "customer-counter-white-service", segmentIndex: 3, role: "service-white", baseMaterialKey: "counterWhite", topMaterialKey: "counterStone" },
   ],
   "The customer counter must preserve the white expo, blue concession, white end sequence after the bar.",
 );
@@ -1058,7 +1061,7 @@ assert.equal(Object.hasOwn(completeKitchenCeiling, "bounds"), false, "The obsole
 assert.deepEqual(completeKitchenCeiling.legacyBounds, { xMin: -20.7, xMax: -9.5, zMin: 14.5, zMax: 21.5 });
 assert.equal(completeKitchenCeiling.elevation, LOBBY_CEILING_PLAN.baseHeight);
 assert.equal(completeKitchenCeiling.replacementForRoomId, "kitchen");
-assert.deepEqual(completeKitchenCeiling.surfaces.map(({ id }) => id), ["kitchen-complete-ceiling", "kitchen-connector-nook-ceiling"]);
+assert.deepEqual(completeKitchenCeiling.surfaces.map(({ id }) => id), ["kitchen-complete-ceiling", "kitchen-connector-nook-ceiling", "kitchen-service-strip-ceiling"]);
 assert.deepEqual(completeKitchenCeiling.surfaces[0].vertices, [
   LOBBY_PLAN.kitchenPartition[2],
   LOBBY_PLAN.kitchenPartition[3],
@@ -1074,6 +1077,7 @@ assert.deepEqual(completeKitchenCeiling.closureSurfaceIds, [
   "kitchen-connector-nook-ceiling",
   "kitchen-dead-wedge-ceiling",
   "concession-mural-soffit",
+  "kitchen-service-strip-ceiling",
 ], "All four non-overlapping surfaces must form the total kitchen/mural low roof.");
 assert.deepEqual(LOBBY_PLAN.officeAttic, {
   id: "office-door-attic",
@@ -1429,7 +1433,8 @@ assert.equal(theater6.entry.transverseBounds.xMin, theater6.bounds.xMin);
 assert.equal(theater6.entry.transverseBounds.xMax, theater6.bounds.xMax, "T6 must not retain a transverse connector to its old position.");
 assert.equal(boundsWidth(theater6.entry.longRouteBounds), theater6.entry.routeWidth);
 assert.equal(theater6.entry.longRouteBounds.xMax, theater6.bounds.xMax, "T6 long route must remain on its east side.");
-assert.equal(t6Storage.ceilingHeight, 2.32, "T6 under-tier route needs the authoritative low roof height.");
+assert.equal(t6Storage.ceilingHeight, 2.32, "T6 storage retains its separate under-tier roof height.");
+assert.equal(theater6.entry.ceilingHeight, 3.48, "T6 public entrance halls have fifty percent more roof height.");
 assert.equal(t6Storage.bounds.zMin, theater6.entry.transverseBounds.zMax);
 assert.equal(t6Storage.bounds.xMax, theater6.entry.longRouteBounds.xMin);
 

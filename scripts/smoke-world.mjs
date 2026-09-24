@@ -218,7 +218,7 @@ const auditoriumByNumber = new Map(AUDITORIUMS.map((auditorium) => [auditorium.n
 assert.equal(world.stats.auditoriumCount, 14);
 assert.equal(world.stats.seatCount, 1093);
 assert.equal(world.stats.equipmentAnchors, 13);
-assert.equal(world.stats.layoutVersion, "mililani-sketch-v18");
+assert.equal(world.stats.layoutVersion, "mililani-sketch-v20");
 assert.ok(world.stats.meshCount > 0);
 assert.ok(world.stats.colliderCount > 0);
 assert.equal(world.auditoriumGroups.size, 14);
@@ -436,27 +436,24 @@ const counterMaterialNames = {
   counterStone: "Stone / charcoal quartz counter",
 };
 for (const section of LOBBY_PLAN.customerCounterSections) {
-  const start = LOBBY_PLAN.customerCounter[section.segmentIndex];
-  const end = LOBBY_PLAN.customerCounter[section.segmentIndex + 1];
-  const run = Math.hypot(end.x - start.x, end.z - start.z);
-  const base = boxById(section.id);
-  const top = boxById(`${section.id}-top`);
-  assertNear(base.x, planToWorldX((start.x + end.x) / 2), `${section.id} center X`);
-  assertNear(base.z, (start.z + end.z) / 2, `${section.id} center Z`);
-  assertNear(base.width, run, `${section.id} run length`);
-  assertNear(base.rotationY, Math.atan2(end.z - start.z, end.x - start.x), `${section.id} rotation`);
-  assert.deepEqual(base.materialNames, [counterMaterialNames[section.baseMaterialKey]], `${section.id} base finish`);
-  assert.deepEqual(top.materialNames, [counterMaterialNames[section.topMaterialKey]], `${section.id} top finish`);
+  const bases = [];
+  world.root.traverse(mesh => { if (mesh.userData.counterSection === section.id) bases.push(mesh); });
+  assert.ok(bases.length >= 1, `${section.id} needs its continuous mitered base`);
+  for (const base of bases) {
+    assert.equal(base.material.name, counterMaterialNames[section.baseMaterialKey], `${section.id} base finish`);
+    assert.ok(base.userData.planPolygon.length >= 4, `${section.id} is a solid footprint rather than overlapping tiles`);
+  }
+  assert.equal(world.root.getObjectByName("customer-counter-top").material.name, counterMaterialNames[section.topMaterialKey]);
   assert.ok(colliderIdsMatching(world, new RegExp(`^${section.id}-collider-\\d+$`)).length >= 1, `${section.id} needs segmented collision.`);
 }
 assert.deepEqual(
   LOBBY_PLAN.customerCounterSections.slice(1).map(({ role }) => role),
-  ["service-white", "concession", "expo"],
-  "The non-bar counter must read white, blue concession, white expo in order.",
+  ["expo", "concession", "service-white"],
+  "The kitchen-side white counter is Expo; the free office-side end is service access.",
 );
-const barCounter = boxById("customer-counter-bar");
+const barCounter = world.root.getObjectByName("customer-counter-bar");
 assertNear(
-  barCounter.x - barCounter.width / 2,
+  Math.min(...barCounter.userData.planPolygon.map(p => planToWorldX(p.x))),
   planToWorldX(TICKET_APPROACH_PLAN.bounds.xMin),
   "guest-bar physical-left end aligned to the ticket approach",
 );
@@ -547,6 +544,7 @@ assert.deepEqual(LOBBY_PLAN.kitchenCeiling.closureSurfaceIds, [
   connectorNookSurface.id,
   deadSpace.ceiling.id,
   LOBBY_PLAN.muralFacade.soffit.id,
+  "kitchen-service-strip-ceiling",
 ]);
 
 const atticHeight = LOBBY_PLAN.muralFacade.topY - LOBBY_CEILING_PLAN.baseHeight;
@@ -646,10 +644,15 @@ assert.notEqual(oppositeMuralFace.material.map, concessionMuralFace.material.map
 let oppositeMuralTextureDisposed = false;
 oppositeMuralFace.material.map.addEventListener("dispose", () => { oppositeMuralTextureDisposed = true; });
 
-assertBoxMatchesBounds("box-office-vertical", LOBBY_PLAN.boxOfficeVertical, "narrow V13 box-office long leg");
-const boxOfficeReturn = assertBoxMatchesBounds("box-office-return", LOBBY_PLAN.boxOfficeReturn, "half-length V13 box-office return");
-assertNear(boxOfficeReturn.width, 3.15, "box-office return half-length");
-assertNear(boxOfficeReturn.depth, 0.7, "box-office return narrow depth");
+for (const [id, bounds] of [["box-office-vertical", LOBBY_PLAN.boxOfficeVertical], ["box-office-return", LOBBY_PLAN.boxOfficeReturn]]) {
+  const polygon = world.root.getObjectByName(id).userData.planPolygon;
+  assertNear(Math.min(...polygon.map(p => p.x)), bounds.xMin, `${id} minimum X`);
+  assertNear(Math.max(...polygon.map(p => p.x)), bounds.xMax, `${id} maximum X`);
+  assertNear(Math.min(...polygon.map(p => p.z)), bounds.zMin, `${id} minimum Z`);
+  assertNear(Math.max(...polygon.map(p => p.z)), bounds.zMax, `${id} maximum Z`);
+}
+assertNear(LOBBY_PLAN.boxOfficeReturn.xMax - LOBBY_PLAN.boxOfficeReturn.xMin, 3.15, "box-office return half-length");
+assertNear(LOBBY_PLAN.boxOfficeReturn.zMax - LOBBY_PLAN.boxOfficeReturn.zMin, 0.7, "box-office return narrow depth");
 assertNear(LOBBY_PLAN.boxOfficeReturn.xMax, LOBBY_PLAN.futureStairs.xMin, "box-office return flush to stair wall");
 assertNear(LOBBY_PLAN.futureStairs.xMin - TICKET_APPROACH_PLAN.bounds.xMax, 1.01, "ticket-approach/stair reveal");
 assert.deepEqual(boxById("lobby-back-east-short-return").materialNames, ["Wall / warm neutral"], "The two-foot ticket-hall return must stay white.");
@@ -964,8 +967,8 @@ assert.equal(T12_TICKET_SHIFT_X, 1, "V15 ticket-ward shift constant");
 const westShift = AUDITORIUM_SHIFT_X[1];
 assert.deepEqual(theater1.bounds, { xMin: -24.5 + westShift, xMax: -15 + westShift, zMin: 42.5, zMax: 55.5 }, "T1 must translate rigidly toward the podium.");
 assert.deepEqual(theater2.bounds, { xMin: -34 + westShift, xMax: -24.5 + westShift, zMin: 42.5, zMax: 55.5 }, "T2 must translate rigidly with T1.");
-assert.deepEqual(theater1.entry.cubbyBounds, { xMin: -24.5 + westShift, xMax: -21.3 + westShift, zMin: 51.9, zMax: 55.5 }, "T1 cubby must translate with its bowl.");
-assert.deepEqual(theater2.entry.cubbyBounds, { xMin: -27.7 + westShift, xMax: -24.5 + westShift, zMin: 51.9, zMax: 55.5 }, "T2 cubby must translate with its bowl.");
+assert.deepEqual(theater1.entry.cubbyBounds, { xMin: -24.5 + westShift, xMax: -21.3 + westShift, zMin: 52.77, zMax: 55.5 }, "T1 cubby retreats to widen the rear gap while retaining its outside door.");
+assert.deepEqual(theater2.entry.cubbyBounds, { xMin: -27.7 + westShift, xMax: -24.5 + westShift, zMin: 52.77, zMax: 55.5 }, "T2 cubby retreats to widen the rear gap while retaining its outside door.");
 assertNear(theater1.entry.center, -22.9 + westShift, "T1 outer door translation");
 assertNear(theater2.entry.center, -26.1 + westShift, "T2 outer door translation");
 assert.equal(theater1.bounds.xMin, theater2.bounds.xMax, "T1/T2 shared wall must remain exact after translation.");
@@ -1045,9 +1048,29 @@ assertNear(
     (t3Storage.accessHall.zMin + t3Storage.accessHall.zMax) / 2,
     0,
   ),
-  t3Storage.ceilingHeight - 0.1,
+  t3Storage.accessHallCeilingHeight - 0.1,
   "T3 anteroom ceiling sampler",
 );
+assertNear(t3Storage.accessHallCeilingHeight, 4.6, "T3 anteroom retains regular hallway height");
+scene.updateMatrixWorld(true);
+for (const y of [2.4, 3.0, 3.8, 4.45]) {
+  for (const z of [t3Storage.outerDoorCenter - 0.8, t3Storage.outerDoorCenter, t3Storage.outerDoorCenter + 0.8]) {
+    const ray = new THREE.Raycaster(new THREE.Vector3(planToWorldX(t3Storage.accessHall.xMax + 0.6), y, z),
+      new THREE.Vector3(1, 0, 0), 0.001, 0.65);
+    assert.ok(ray.intersectObject(world.root, true).length, `T3 storage entry wall must close above the door at y=${y}, z=${z}`);
+  }
+}
+for (const bounds of [t3Storage.accessHall, t3Storage.bounds]) {
+  const x = (bounds.xMin + bounds.xMax) / 2;
+  const z = (bounds.zMin + bounds.zMax) / 2;
+  const expected = (bounds === t3Storage.accessHall ? t3Storage.accessHallCeilingHeight : t3Storage.ceilingHeight) - 0.1;
+  const ray = new THREE.Raycaster(new THREE.Vector3(planToWorldX(x), 0.2, z), new THREE.Vector3(0, 1, 0), 0.001, 6);
+  const hit = ray.intersectObject(world.root, true)[0];
+  assert.ok(hit, "T3 storage spaces need a rendered roof");
+  assertNear(hit.point.y, expected, "T3 actual rendered ceiling underside", 1e-5);
+  assertNear(world.ceilingHeight(planToWorldX(x), z, 0), expected, "T3 rendered and sampled headroom agree");
+  assertNear(world.groundHeight(planToWorldX(x), z, 0), 0, "T3 storage floor remains at ground level");
+}
 
 const fixtureExpectations = [
   [/^boys-restroom-stall-bank-\d+-door-\d+$/, 9, "boys stalls"],
@@ -1211,7 +1234,7 @@ assert.equal(theater9.entry.center, 102.7 + AUDITORIUM_SHIFT_X[9]);
 assert.equal(theater9.entry.turnSide, "east");
 assertNear(theater9Cubby.xMin, 101.1 + AUDITORIUM_SHIFT_X[9], "T9 cubby xMin");
 assertNear(theater9Cubby.xMax, 104.3 + AUDITORIUM_SHIFT_X[9], "T9 cubby xMax");
-assertNear(theater9Cubby.zMin, 52.1, "T9 cubby zMin");
+assertNear(theater9Cubby.zMin, 52.99, "T9 cubby zMin");
 assertNear(theater9Cubby.zMax, 55.5, "T9 cubby zMax");
 const t9InnerHeader = boxById("theater-9-cubby-east-header-0");
 assertNear(t9InnerHeader.x, planToWorldX(theater9Cubby.xMax), "T9 inner door physical-left X");
@@ -1335,7 +1358,8 @@ assert.deepEqual(t6Storage.doorCenters, [35.2 + t6Shift, 41.7 + t6Shift]);
 assertBoxMatchesBounds("theater-6-ceiling", theater6.bounds, "translated T6 auditorium ceiling");
 assertBoxMatchesBounds("under-storage-6-floor", t6Storage.bounds, "translated T6 storage floor");
 assertBoxMatchesBounds("under-storage-6-roof-ceiling", t6Storage.bounds, "translated T6 storage roof");
-const expectedT6Underside = t6Storage.ceilingHeight - 0.1;
+assertNear(theater6.entry.ceilingHeight, 2.32 * 1.5, "T6 public route roof raised by fifty percent");
+const expectedT6Underside = theater6.entry.ceilingHeight - 0.1;
 const futureUpstairs = serviceById.get("future-upstairs-stair");
 const stairLeaf = boxById("future-upstairs-stair-closed-leaf");
 assert.equal(futureUpstairs.entrySide, "east");
@@ -1377,6 +1401,18 @@ for (const [id, bounds] of t6LowRoofRegions) {
   assertNear(roof.depth, bounds.zMax - bounds.zMin, `${id} depth`);
   assertNear(roof.y - roof.height / 2, expectedT6Underside, `${id} rendered underside`);
   assertBoxMatchesBounds(id.replace(/-ceiling$/, "-floor"), bounds, `${id} matching floor`);
+  for (const fraction of [0.25, 0.75]) {
+    const z = bounds.zMin + (bounds.zMax - bounds.zMin) * fraction;
+    const ray = new THREE.Raycaster(new THREE.Vector3(planToWorldX(centerX), 0.2, z), new THREE.Vector3(0, 1, 0), 0.001, 5);
+    const hit = ray.intersectObject(world.root, true)[0];
+    assert.ok(hit, `${id} needs a continuous rendered ceiling`);
+    assertNear(hit.point.y, expectedT6Underside, `${id} actual raycast headroom`, 1e-5);
+  }
+}
+for (const x of t6Storage.doorCenters) {
+  const ray = new THREE.Raycaster(new THREE.Vector3(planToWorldX(x), 3.15, t6Storage.bounds.zMin - 0.5),
+    new THREE.Vector3(0, 0, 1), 0.001, 0.6);
+  assert.ok(ray.intersectObject(world.root, true).length, "T6 taller hall must have a header above each low storage door");
 }
 const transverseCenterX = (theater6.entry.transverseBounds.xMin + theater6.entry.transverseBounds.xMax) / 2;
 const longCenterX = (theater6.entry.longRouteBounds.xMin + theater6.entry.longRouteBounds.xMax) / 2;

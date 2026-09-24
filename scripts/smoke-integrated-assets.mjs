@@ -35,7 +35,9 @@ for (const placement of placements) {
   check(placement.position.every(Number.isFinite) && placement.size.every((value) => Number.isFinite(value) && value > 0), `Invalid transform ${placement.id}`);
 }
 const counts = Object.fromEntries(PROP_MODEL_NAMES.map((name) => [name, placements.filter(({ model }) => model === name).length]));
-for (const name of PROP_MODEL_NAMES.filter((name) => name !== "stanchion")) check(counts[name] > 0, `Missing model family: ${name}`);
+const architecturalOrUnused = new Set(["stanchion", "counter_blue", "counter_white"]);
+for (const name of PROP_MODEL_NAMES.filter((name) => !architecturalOrUnused.has(name))) check(counts[name] > 0, `Missing model family: ${name}`);
+check(counts.counter_blue === 0 && counts.counter_white === 0, "Continuous architectural counters must not regain tiled cabinet replacements");
 check(counts.recliner === 1093, `Expected 1093 recliners, got ${counts.recliner}`);
 const expectedArms = [...world.auditoriumLayouts.values()].reduce((sum, layout) => sum + layout.rows.reduce((n, row) => n + row.seatCount + 1, 0), 0);
 check(counts.shared_armrest === expectedArms, `Expected ${expectedArms} shared armrests, got ${counts.shared_armrest}`);
@@ -169,12 +171,14 @@ for (const display of CONCESSION_SERVICE_SEQUENCE.filter(({ type }) => type === 
 // which inherited the countertop overhang depth and buried the products.
 const continuousCabinets = LOBBY_PLAN.customerCounterSections.filter(({ baseMaterialKey }) => baseMaterialKey === "concessionBlue")
   .map(({ id }) => {
-    const top = world.root.getObjectByName(`${id}-top`);
-    const height = top.position.y + top.scale.y / 2;
-    const control = new THREE.Mesh(new THREE.BoxGeometry(top.scale.x, height, top.scale.z), top.material);
+    const section = LOBBY_PLAN.customerCounterSections.find(section => section.id === id);
+    const start = LOBBY_PLAN.customerCounter[section.segmentIndex], end = LOBBY_PLAN.customerCounter[section.segmentIndex + 1];
+    const length = Math.hypot(end.x - start.x, end.z - start.z), height = 1.21;
+    const top = world.root.getObjectByName("customer-counter-top");
+    const control = new THREE.Mesh(new THREE.BoxGeometry(length, height, 1.3), top.material);
     control.name = `${id}-continuous-cabinet-negative-control`;
-    control.position.set(top.position.x, height / 2, top.position.z);
-    control.rotation.copy(top.rotation);
+    control.position.set(planToWorldX((start.x + end.x) / 2), height / 2, (start.z + end.z) / 2);
+    control.rotation.y = Math.atan2(end.z - start.z, end.x - start.x);
     control.updateMatrix();
     control.matrixWorld.multiplyMatrices(world.root.matrixWorld, control.matrix);
     return control;

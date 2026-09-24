@@ -178,13 +178,16 @@ export function buildAuditoriumLayout(auditorium, presets = AUDITORIUM_PRESETS) 
     : finite(preset.rowPitch, `${auditorium.preset}.rowPitch`);
   const rise = seatingProfile?.rowRise ?? finite(preset.rise, `${auditorium.preset}.rise`);
   const rowTransitions = auditorium.rows.length - 1;
-  const levelRowCount = seatingProfile?.levelRowCount ?? 1;
-  const steppedRowTransitions = auditorium.rows.length - levelRowCount;
+  const groundRowIndex = seatingProfile?.groundRowIndex ?? 0;
+  const levelRowCount = 1;
+  const steppedRowTransitions = rowTransitions;
   const stairTreadsPerRow = seatingProfile?.stairTreadsPerRow ?? STAIR_TREADS_PER_ROW;
-  const totalRise = steppedRowTransitions * rise;
+  const frontDrop = groundRowIndex * (seatingProfile?.frontRowRise ?? 0);
+  const rearRise = (rowTransitions - groundRowIndex) * rise;
+  const totalRise = frontDrop + rearRise;
   const corridorRise = finite(auditorium.stadium.corridorRise ?? 0, `${auditorium.id}.stadium.corridorRise`);
-  const frontElevation = auditorium.stadium.access === "top" ? -totalRise : corridorRise;
-  const backElevation = auditorium.stadium.access === "top" ? 0 : corridorRise + totalRise;
+  const frontElevation = auditorium.stadium.access === "top" ? -totalRise : corridorRise - frontDrop;
+  const backElevation = auditorium.stadium.access === "top" ? 0 : corridorRise + rearRise;
   const direction = auditorium.screenSide === "north" ? -1 : 1;
   // Arrival is at B/C for the new profile, so it must not determine row A.
   const frontRowZ = seatingProfile
@@ -192,6 +195,14 @@ export function buildAuditoriumLayout(auditorium, presets = AUDITORIUM_PRESETS) 
       ? bounds.zMax - seatingProfile.screenApronDepth
       : bounds.zMin + seatingProfile.screenApronDepth)
     : resolveFrontRowZ(auditorium, rowPitch);
+  let rearEntryClearance = null;
+  if (auditorium.stadium.access === "top" && auditorium.entry.type === "trash-cubby") {
+    const cubbyFrontZ = auditorium.entry.cubbyBounds?.zMin ?? bounds.zMax - (auditorium.entry.cubbyDepth ?? 2.2);
+    const originalBackZ = frontRowZ + direction * rowTransitions * rowPitch;
+    const clearance = cubbyFrontZ - 0.09 - (originalBackZ + 0.39);
+    rearEntryClearance = Object.freeze({ original: auditorium.entry.rearClearanceBefore ?? clearance,
+      current: clearance, seatBankShift: 0, cubbyWallRetreat: auditorium.entry.cubbyWallRetreat ?? 0 });
+  }
   const rowDistance = (index) => index * rowPitch
     + (seatingProfile && index > seatingProfile.crossAisleAfterRow ? seatingProfile.crossAisleDepth : 0);
   const backRowZ = frontRowZ + direction * rowDistance(rowTransitions);
@@ -240,12 +251,14 @@ export function buildAuditoriumLayout(auditorium, presets = AUDITORIUM_PRESETS) 
 
   const rows = Object.freeze(auditorium.rows.map((seatCount, index) => {
     const z = frontRowZ + direction * rowDistance(index);
-    const elevation = frontElevation + Math.max(0, index - levelRowCount + 1) * rise;
+    const elevation = seatingProfile
+      ? corridorRise + (index - groundRowIndex) * (index < groundRowIndex ? seatingProfile.frontRowRise : rise)
+      : frontElevation + index * rise;
     let frontDistance = rowDistance(index) - rowPitch / 2;
     let rearDistance = rowDistance(index) + rowPitch / 2;
     if (seatingProfile) {
-      if (index >= levelRowCount) frontDistance += SEATING_RISER_DEPTH / 2;
-      if (index >= levelRowCount - 1 && index < rowTransitions) rearDistance -= SEATING_RISER_DEPTH / 2;
+      if (index > 0 && index !== groundRowIndex) frontDistance += SEATING_RISER_DEPTH / 2;
+      if (index < rowTransitions) rearDistance -= index === seatingProfile.crossAisleAfterRow ? SEATING_RISER_DEPTH : SEATING_RISER_DEPTH / 2;
       if (index === rowTransitions) rearDistance = rowDistance(index) + seatingProfile.rearWallOffset - 0.09;
     } else {
       frontDistance += SEATING_RISER_DEPTH / 2;
@@ -271,7 +284,7 @@ export function buildAuditoriumLayout(auditorium, presets = AUDITORIUM_PRESETS) 
     : null;
   const entryCross = seatingProfile ? Object.freeze({
     id: `${auditorium.id}-entry-cross-aisle`,
-    elevation: frontElevation,
+    elevation: corridorRise,
     beforeRow: "B", afterRow: "C",
     centerZ: entryCrossCenterZ,
     bounds: freezeBounds({
@@ -287,11 +300,11 @@ export function buildAuditoriumLayout(auditorium, presets = AUDITORIUM_PRESETS) 
     }),
   }) : null;
   const flatSideAisles = Object.freeze(seatingProfile ? Object.values(sideAisles).map((aisle) => Object.freeze({
-    id: `${auditorium.id}-${aisle.side}-level-front-aisle`,
-    elevation: frontElevation,
+    id: `${auditorium.id}-${aisle.side}-level-cross-aisle`,
+    elevation: corridorRise,
     bounds: freezeBounds({ ...aisle.bounds,
-      zMin: Math.min(frontRowZ, rows[levelRowCount - 1].z),
-      zMax: Math.max(frontRowZ, rows[levelRowCount - 1].z),
+      zMin: Math.min(entryCross.bounds.zMax, rows[groundRowIndex].z),
+      zMax: Math.max(entryCross.bounds.zMax, rows[groundRowIndex].z),
     }),
   })) : []);
 
@@ -344,6 +357,9 @@ export function buildAuditoriumLayout(auditorium, presets = AUDITORIUM_PRESETS) 
     halfStepRise: rise / stairTreadsPerRow,
     stairTreadsPerRow,
     levelRowCount,
+    groundRowIndex,
+    frontDrop,
+    rearEntryClearance,
     steppedRowTransitions,
     seatingProfile,
     rowTransitions,
@@ -366,6 +382,22 @@ export function buildAuditoriumLayout(auditorium, presets = AUDITORIUM_PRESETS) 
     routeReserve: routeReserve ? Object.freeze({ ...routeReserve, bounds: freezeBounds(routeReserve.bounds) }) : null,
     rows,
   };
+  layout.tierRisers = Object.freeze(rows.slice(1).map((row, index) => {
+    const previous = rows[index];
+    const z = seatingProfile && row.index === groundRowIndex
+      ? entryCross.bounds.zMax + SEATING_RISER_DEPTH / 2
+      : (row.z + previous.z) / 2;
+    return Object.freeze({ index: row.index, z, startElevation: previous.elevation, endElevation: row.elevation });
+  }));
+  layout.stairTransitions = Object.freeze(rows.slice(1).map((row, index) => {
+    const previous = rows[index];
+    const endZ = seatingProfile && row.index === groundRowIndex ? entryCross.bounds.zMax : row.z;
+    const transitionRise = row.elevation - previous.elevation;
+    const treadCount = seatingProfile ? Math.round(transitionRise / 0.22) : STAIR_TREADS_PER_ROW;
+    return Object.freeze({ index, startZ: previous.z, endZ, startElevation: previous.elevation,
+      endElevation: row.elevation, treadCount, stepRise: transitionRise / treadCount });
+  }));
+  layout.stairTreadsPerSide = layout.stairTransitions.reduce((sum, transition) => sum + transition.treadCount, 0);
   layout.sideStairTreads = buildSideStairTreads(layout);
   layout.routeSurfaces = buildRouteSurfaceDescriptors(auditorium, layout);
   return Object.freeze(layout);
@@ -375,19 +407,17 @@ export function buildAuditoriumLayout(auditorium, presets = AUDITORIUM_PRESETS) 
 export function buildSideStairTreads(layout) {
   const treads = [];
   for (const aisle of Object.values(layout.sideAisles)) {
-    for (let transition = 0; transition < layout.rowTransitions; transition += 1) {
-      const previous = layout.rows[transition];
-      const next = layout.rows[transition + 1];
-      if (Math.abs(next.elevation - previous.elevation) <= EPSILON) continue;
-      const transitionStartZ = previous.z;
-      const transitionDistance = Math.abs(next.z - previous.z);
-      for (let half = 0; half < layout.stairTreadsPerRow; half += 1) {
+    for (const transitionDefinition of layout.stairTransitions) {
+      const transition = transitionDefinition.index;
+      const transitionStartZ = transitionDefinition.startZ;
+      const transitionDistance = Math.abs(transitionDefinition.endZ - transitionStartZ);
+      for (let half = 0; half < transitionDefinition.treadCount; half += 1) {
         const startZ = transitionStartZ
-          + layout.direction * transitionDistance * (half / layout.stairTreadsPerRow);
+          + layout.direction * transitionDistance * (half / transitionDefinition.treadCount);
         const endZ = transitionStartZ
-          + layout.direction * transitionDistance * ((half + 1) / layout.stairTreadsPerRow);
-        const elevation = previous.elevation
-          + (half + 1) * layout.halfStepRise;
+          + layout.direction * transitionDistance * ((half + 1) / transitionDefinition.treadCount);
+        const elevation = transitionDefinition.startElevation
+          + (half + 1) * transitionDefinition.stepRise;
         treads.push(Object.freeze({
           id: `${layout.id}-${aisle.side}-stair-${transition}-${half}`,
           kind: "stadium-stair-tread",
@@ -396,7 +426,7 @@ export function buildSideStairTreads(layout) {
           transition,
           half,
           elevation,
-          stepRise: layout.halfStepRise,
+          stepRise: transitionDefinition.stepRise,
           bounds: freezeBounds({
             xMin: aisle.bounds.xMin,
             xMax: aisle.bounds.xMax,
@@ -610,16 +640,13 @@ export function sampleSideStairHeight(layout, z) {
   const totalDistance = Math.abs(layout.backRowZ - layout.frontRowZ);
   if (distance <= EPSILON) return layout.frontElevation;
   if (distance >= totalDistance - EPSILON) return layout.backElevation;
-  for (let index = 1; index < layout.rows.length; index += 1) {
-    const previous = layout.rows[index - 1];
-    const next = layout.rows[index];
-    const endDistance = progressFromFront(layout, next.z);
+  for (const transition of layout.stairTransitions) {
+    const endDistance = progressFromFront(layout, transition.endZ);
     if (distance > endDistance + EPSILON) continue;
-    if (Math.abs(next.elevation - previous.elevation) <= EPSILON) return previous.elevation;
-    const startDistance = progressFromFront(layout, previous.z);
-    const stepDepth = (endDistance - startDistance) / layout.stairTreadsPerRow;
-    const stepIndex = clamp(Math.ceil((distance - startDistance) / stepDepth - EPSILON), 0, layout.stairTreadsPerRow);
-    return previous.elevation + stepIndex * layout.halfStepRise;
+    const startDistance = progressFromFront(layout, transition.startZ);
+    const stepDepth = (endDistance - startDistance) / transition.treadCount;
+    const stepIndex = clamp(Math.ceil((distance - startDistance) / stepDepth - EPSILON), 0, transition.treadCount);
+    return transition.startElevation + stepIndex * transition.stepRise;
   }
   return layout.backElevation;
 }
@@ -629,7 +656,7 @@ export function sampleTierHeight(layout, z) {
   for (let index = 1; index < layout.rows.length; index += 1) {
     const previous = layout.rows[index - 1];
     const next = layout.rows[index];
-    const boundaryDistance = progressFromFront(layout, (previous.z + next.z) / 2);
+    const boundaryDistance = progressFromFront(layout, layout.tierRisers[index - 1].z);
     if (distance < boundaryDistance) return previous.elevation;
   }
   return layout.backElevation;

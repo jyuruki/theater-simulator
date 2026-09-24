@@ -3,6 +3,8 @@ import { createEntranceDoors } from "./entrance-doors.js";
 import { createKioskAssets } from "./kiosk-assets.js";
 import { createPropAssets } from "./prop-assets.js";
 import { createPropPlacements, addTheaterFurnishings } from "./prop-placements.js";
+import { createCounterBuilder } from "./counter-geometry.js";
+import { createServiceGate } from "./service-gate.js";
 import {
   AUDITORIUMS,
   CONCESSION_SERVICE_SEQUENCE,
@@ -69,7 +71,7 @@ const publicById = (id) => PUBLIC_SPACES.find((space) => space.id === id);
 
 export function createTheaterWorld({ scene, materials }) {
   const root = new THREE.Group();
-  root.name = "Mililani 14 theater visit v18";
+  root.name = "Mililani 14 theater floor v20";
   scene.add(root);
 
   const colliders = [];
@@ -366,6 +368,20 @@ export function createTheaterWorld({ scene, materials }) {
       steps: 1,
       curveSegments: 1,
     });
+    if (material === materials.ceiling) {
+      // Share the adjacent storage roof's UV origin and scale. Extrusion's
+      // default meter-based UVs would repeat its eight-tile map eight times
+      // per meter, making the repaired strip look like a different ceiling.
+      const bounds = roomById("kitchen-storage").bounds;
+      const positions = geometry.getAttribute("position");
+      const uv = geometry.getAttribute("uv");
+      for (let i = 0; i < positions.count; i += 1) {
+        uv.setXY(i,
+          (positions.getX(i) - planToWorldX(bounds.xMax)) / (bounds.xMax - bounds.xMin),
+          (positions.getY(i) - bounds.zMin) / (bounds.zMax - bounds.zMin));
+      }
+      uv.needsUpdate = true;
+    }
     geometry.computeVertexNormals();
     disposableGeometries.push(geometry);
     const mesh = new THREE.Mesh(geometry, material);
@@ -681,14 +697,16 @@ export function createTheaterWorld({ scene, materials }) {
 
   const addScreen = (auditorium, layout, parent, ceilingY) => {
     const roomWidth = auditorium.bounds.xMax - auditorium.bounds.xMin;
-    const width = Math.min(roomWidth - 1.2, auditorium.preset === "large150" ? 15.6 : auditorium.preset === "medium58" ? 9.8 : 8.9);
-    const maximumHeight = auditorium.preset === "large150" ? 5.35 : auditorium.preset === "medium58" ? 4.2 : 3.75;
-    const height = Math.min(width / 2.08, maximumHeight, ceilingY - layout.frontElevation - 0.7);
+    const aspect = 2.08;
+    const screenBottom = layout.frontElevation + 0.18;
+    const heightAvailable = ceilingY - 0.3 - screenBottom;
+    const width = Math.min(roomWidth - 0.7, heightAvailable * aspect);
+    const height = width / aspect;
     const x = (auditorium.bounds.xMin + auditorium.bounds.xMax) / 2;
     const z = auditorium.screenSide === "north" ? auditorium.bounds.zMax - 0.12 : auditorium.bounds.zMin + 0.12;
     const screen = new THREE.Mesh(unitPlaneGeometry, materials.screen);
     screen.name = `${auditorium.id}-screen`;
-    screen.position.set(planToWorldX(x), layout.frontElevation + height / 2 + 0.38, z);
+    screen.position.set(planToWorldX(x), screenBottom + height / 2, z);
     screen.rotation.y = planToWorldYaw(auditorium.screenSide === "north" ? Math.PI : 0);
     screen.scale.set(width, height, 1);
     parent.add(screen);
@@ -733,7 +751,7 @@ export function createTheaterWorld({ scene, materials }) {
       });
       if (rowIndex > 0 && row.elevation > layout.rows[rowIndex - 1].elevation) {
         const previous = layout.rows[rowIndex - 1];
-        const transitionZ = (row.z + previous.z) / 2;
+        const transitionZ = layout.tierRisers[rowIndex - 1].z;
         addBox({
           id: `${auditorium.id}-riser-${rowIndex}`,
           x: layout.centerX,
@@ -827,14 +845,17 @@ export function createTheaterWorld({ scene, materials }) {
       const { x, z } = centerOf(tread.bounds);
       const { width, depth } = sizeOf(tread.bounds);
       const slabHeight = layout.seatingProfile ? tread.stepRise + 0.09 : 0.09;
+      const meetsGroundCrosswalk = layout.entryCross
+        && tread.transition === layout.groundRowIndex - 1
+        && tread.half === layout.stairTransitions[tread.transition].treadCount - 1;
       addBox({
         id: tread.id,
         x,
         y: tread.elevation - slabHeight / 2,
-        z,
+        z: meetsGroundCrosswalk ? z - layout.direction * 0.00375 : z,
         width,
         height: slabHeight,
-        depth: Math.max(0.1, depth + 0.015),
+        depth: Math.max(0.1, depth + (meetsGroundCrosswalk ? 0.0075 : 0.015)),
         material: materials.carpet,
         parent,
       });
@@ -910,11 +931,13 @@ export function createTheaterWorld({ scene, materials }) {
     addCeiling(`${storage.id}-roof`, storage.bounds, height - 0.05);
     const openings = { north: [], south: [], east: [], west: [] };
     const doorSide = storage.doorSide;
+    const entryWallHeight = Math.max(height, options.entryWallHeight ?? height);
+    const wallOptions = (side) => ({ material: materials.darkWall, height: side === doorSide ? entryWallHeight : height });
     for (const center of storage.doorCenters ?? []) openings[doorSide].push({ center, height: 2.18 });
-    addWallXWithOpenings(`${storage.id}-south`, storage.bounds.xMin, storage.bounds.xMax, storage.bounds.zMin, openings.south, { material: materials.darkWall, height });
-    addWallXWithOpenings(`${storage.id}-north`, storage.bounds.xMin, storage.bounds.xMax, storage.bounds.zMax, openings.north, { material: materials.darkWall, height });
-    addWallZWithOpenings(`${storage.id}-west`, storage.bounds.xMin, storage.bounds.zMin, storage.bounds.zMax, openings.west, { material: materials.darkWall, height });
-    addWallZWithOpenings(`${storage.id}-east`, storage.bounds.xMax, storage.bounds.zMin, storage.bounds.zMax, openings.east, { material: materials.darkWall, height });
+    addWallXWithOpenings(`${storage.id}-south`, storage.bounds.xMin, storage.bounds.xMax, storage.bounds.zMin, openings.south, wallOptions("south"));
+    addWallXWithOpenings(`${storage.id}-north`, storage.bounds.xMin, storage.bounds.xMax, storage.bounds.zMax, openings.north, wallOptions("north"));
+    addWallZWithOpenings(`${storage.id}-west`, storage.bounds.xMin, storage.bounds.zMin, storage.bounds.zMax, openings.west, wallOptions("west"));
+    addWallZWithOpenings(`${storage.id}-east`, storage.bounds.xMax, storage.bounds.zMin, storage.bounds.zMax, openings.east, wallOptions("east"));
     for (const [side, sideOpenings] of Object.entries(openings)) {
       const coordinate = side === "south" ? storage.bounds.zMin : side === "north" ? storage.bounds.zMax : side === "west" ? storage.bounds.xMin : storage.bounds.xMax;
       sideOpenings.forEach((opening, index) => addDoorTrim(`${storage.id}-${side}-${index}`, side, coordinate, opening.center, { height: 2.18 }));
@@ -930,6 +953,7 @@ export function createTheaterWorld({ scene, materials }) {
     const nook = auditorium.entry.usherNookBounds;
     const storage = roomById(auditorium.entry.storageId);
     const anteroom = storage.accessHall;
+    const anteroomCeilingHeight = storage.accessHallCeilingHeight ?? storage.ceilingHeight;
     addFloor(`${auditorium.id}-route-flat`, { ...directRoute, zMax: ramp.bounds.zMin }, materials.corridorCarpet, ramp.startHeight, root, 2.4);
     addRamp(`${auditorium.id}-route-ramp`, ramp.bounds, ramp.startHeight, ramp.endHeight, materials.corridorCarpet);
     addFloor(`${auditorium.id}-route-arrival`, { ...directRoute, zMin: ramp.bounds.zMax }, materials.corridorCarpet, ramp.endHeight, root, 2.4);
@@ -952,7 +976,7 @@ export function createTheaterWorld({ scene, materials }) {
     addWallX(`${auditorium.id}-usher-nook-north`, nook.xMin, nook.xMax, nook.zMax, { material: materials.darkWall });
     addWallZWithOpenings(`${storage.id}-anteroom-east`, anteroom.xMax, anteroom.zMin, anteroom.zMax, [
       { center: storage.outerDoorCenter, height: 2.18 },
-    ], { material: materials.darkWall, height: storage.ceilingHeight });
+    ], { material: materials.darkWall, height: anteroomCeilingHeight });
     addDoorTrim(`${auditorium.id}-storage-hall-door`, "west", anteroom.xMax, storage.outerDoorCenter, { height: 2.18 });
     addTrashCan(`${auditorium.id}-usher-trash`, nook.xMin + 0.58, nook.zMin + 0.65);
     addLabel({ id: `${auditorium.id}-storage-arrow`, text: "STORAGE  ←", position: [anteroom.xMax + 0.11, 2.05, storage.outerDoorCenter], rotationY: Math.PI / 2, width: 1.8, height: 0.36, small: true, accent: "#f0c36f" });
@@ -961,12 +985,12 @@ export function createTheaterWorld({ scene, materials }) {
     addLightPanel(`${auditorium.id}-route-light-b`, (route.xMin + route.xMax) / 2, 82, 1.5, 0.32);
     addLightPanel(`${auditorium.id}-route-light-c`, (route.xMin + route.xMax) / 2, 93, 1.5, 0.32);
 
-    addStorageRoom(storage, { labelPosition: [(storage.bounds.xMin + storage.bounds.xMax) / 2, 2.0, storage.bounds.zMin - 0.12], labelRotation: Math.PI });
+    addStorageRoom(storage, { entryWallHeight: anteroomCeilingHeight, labelPosition: [(storage.bounds.xMin + storage.bounds.xMax) / 2, 2.0, storage.bounds.zMin - 0.12], labelRotation: Math.PI });
     addFloor(`${storage.id}-anteroom`, anteroom, materials.floorDark);
-    addCeiling(`${storage.id}-anteroom`, anteroom, storage.ceilingHeight - 0.05);
+    addCeiling(`${storage.id}-anteroom`, anteroom, anteroomCeilingHeight - 0.05);
     // The MEN/T3 shared back wall owns the full south edge of this anteroom.
     // Authoring another low wall here would overlap it and flash while moving.
-    addWallZ(`${storage.id}-anteroom-west`, anteroom.xMin, anteroom.zMin, anteroom.zMax, { material: materials.darkWall, height: storage.ceilingHeight });
+    addWallZ(`${storage.id}-anteroom-west`, anteroom.xMin, anteroom.zMin, anteroom.zMax, { material: materials.darkWall, height: anteroomCeilingHeight });
     // Storage's south wall owns the shared two-door boundary at z=72.
   };
 
@@ -1011,6 +1035,7 @@ export function createTheaterWorld({ scene, materials }) {
     const { entry } = auditorium;
     const storage = roomById(entry.storageId);
     const underTierHeight = storage.ceilingHeight;
+    const routeCeilingHeight = entry.ceilingHeight ?? underTierHeight;
     const dividerEndZ = layout.entryCross ? layout.entryCross.bounds.zMin - WALL_THICKNESS / 2 : entry.arrivalZ - 0.1;
     addFloor(`${auditorium.id}-vestibule`, entry.vestibuleBounds, materials.carpet);
     addFloor(`${auditorium.id}-transverse`, entry.transverseBounds, materials.carpet);
@@ -1019,19 +1044,19 @@ export function createTheaterWorld({ scene, materials }) {
       ...layout.routeReserve.bounds,
       zMin: entry.longRouteBounds.zMax,
       zMax: auditorium.bounds.zMax - 0.2,
-    }, materials.carpet, layout.frontElevation);
-    addCeiling(`${auditorium.id}-vestibule`, entry.vestibuleBounds, underTierHeight - 0.05);
-    addCeiling(`${auditorium.id}-transverse`, entry.transverseBounds, underTierHeight - 0.05);
-    // This entire hall runs beneath the upper seating deck. Keeping the roof
-    // low and continuous prevents sightlines into the back rows from below.
-    addCeiling(`${auditorium.id}-long`, entry.longRouteBounds, underTierHeight - 0.05);
+    }, materials.carpet, layout.entryCross?.elevation ?? layout.frontElevation);
+    addCeiling(`${auditorium.id}-vestibule`, entry.vestibuleBounds, routeCeilingHeight - 0.05);
+    addCeiling(`${auditorium.id}-transverse`, entry.transverseBounds, routeCeilingHeight - 0.05);
+    // Public circulation is behind or beside the bowl. Its higher roof does
+    // not require changing the separate storage room beneath the seating.
+    addCeiling(`${auditorium.id}-long`, entry.longRouteBounds, routeCeilingHeight - 0.05);
     // The auditorium's west perimeter owns the vestibule exterior wall.
-    addWallZ(`${auditorium.id}-vestibule-east`, entry.vestibuleBounds.xMax, entry.vestibuleBounds.zMin, entry.vestibuleBounds.zMax, { material: materials.darkWall, height: underTierHeight });
-    addWallX(`${auditorium.id}-transverse-south-right`, entry.vestibuleBounds.xMax, entry.transverseBounds.xMax, entry.transverseBounds.zMin, { material: materials.darkWall, height: underTierHeight });
+    addWallZ(`${auditorium.id}-vestibule-east`, entry.vestibuleBounds.xMax, entry.vestibuleBounds.zMin, entry.vestibuleBounds.zMax, { material: materials.darkWall, height: routeCeilingHeight });
+    addWallX(`${auditorium.id}-transverse-south-right`, entry.vestibuleBounds.xMax, entry.transverseBounds.xMax, entry.transverseBounds.zMin, { material: materials.darkWall, height: routeCeilingHeight });
     const transverseCenterX = (entry.transverseBounds.xMin + entry.transverseBounds.xMax) / 2;
     const longCenterX = (entry.longRouteBounds.xMin + entry.longRouteBounds.xMax) / 2;
-    addStorageRoom(storage, { labelPosition: [(storage.bounds.xMin + storage.bounds.xMax) / 2, 1.92, storage.bounds.zMin - 0.14], labelRotation: Math.PI });
-    addWallX(`${auditorium.id}-transverse-return`, entry.transverseBounds.xMin, storage.bounds.xMin, entry.transverseBounds.zMax, { material: materials.darkWall, height: storage.ceilingHeight });
+    addStorageRoom(storage, { entryWallHeight: routeCeilingHeight, labelPosition: [(storage.bounds.xMin + storage.bounds.xMax) / 2, 1.92, storage.bounds.zMin - 0.14], labelRotation: Math.PI });
+    addWallX(`${auditorium.id}-transverse-return`, entry.transverseBounds.xMin, storage.bounds.xMin, entry.transverseBounds.zMax, { material: materials.darkWall, height: routeCeilingHeight });
     // The auditorium's east perimeter wall is already the outer wall of this
     // passage. Authoring it again here produced coplanar dark surfaces.
     addWallZ(`${auditorium.id}-long-divider`, entry.longRouteBounds.xMin, storage.bounds.zMax, dividerEndZ, { material: materials.darkWall, height: underTierHeight });
@@ -1042,7 +1067,7 @@ export function createTheaterWorld({ scene, materials }) {
     });
     addLabel({ id: `${auditorium.id}-first-arrow`, text: "THEATER 6  →", position: [transverseCenterX, 1.35, entry.transverseBounds.zMax - 0.12], rotationY: Math.PI, width: 2.0, height: 0.4, small: true });
     addLabel({ id: `${auditorium.id}-second-arrow`, text: "THEATER 6  ←", position: [entry.longRouteBounds.xMin + 0.1, 1.78, 78.0], rotationY: Math.PI / 2, width: 2.0, height: 0.4, small: true });
-    const lowLightY = underTierHeight - 0.18;
+    const lowLightY = routeCeilingHeight - 0.18;
     addLightPanel(`${auditorium.id}-route-light-a`, transverseCenterX, 66.8, 2.0, 0.32, lowLightY);
     addLightPanel(`${auditorium.id}-route-light-b`, longCenterX, 74, 1.45, 0.32, lowLightY);
     addLightPanel(`${auditorium.id}-route-light-c`, longCenterX, 83.5, 1.45, 0.32, lowLightY);
@@ -1059,7 +1084,7 @@ export function createTheaterWorld({ scene, materials }) {
       ...layout.routeReserve.bounds,
       zMin: routeBounds.zMax,
       zMax: bounds.zMax - 0.2,
-    }, materials.carpet, layout.frontElevation);
+    }, materials.carpet, layout.entryCross?.elevation ?? layout.frontElevation);
     addCeiling(`${auditorium.id}-route`, routeBounds, 4.9);
     const dividerX = entry.routeSide === "west" ? routeBounds.xMax : routeBounds.xMin;
     // The auditorium perimeter supplies the route's outside wall; only the
@@ -1117,9 +1142,9 @@ export function createTheaterWorld({ scene, materials }) {
         const long = auditorium.entry.longRouteBounds;
         southOpenings.push({ center: (long.xMin + long.xMax) / 2, width: long.xMax - long.xMin });
       } else if (auditorium.number === 6) {
-        southOpenings.push({ center: auditorium.entry.center, width: 2.2, height: 2.18 });
+        southOpenings.push({ center: auditorium.entry.center, width: 2.2, height: 2.18, baseY: 0 });
       } else if ([7, 8].includes(auditorium.number)) {
-        southOpenings.push({ center: auditorium.entry.center });
+        southOpenings.push({ center: auditorium.entry.center, baseY: 0 });
       }
       if (auditorium.number === 3) {
         const storage = roomById("under-storage-3");
@@ -1127,7 +1152,8 @@ export function createTheaterWorld({ scene, materials }) {
         // The two lower shells own their walls below these elevations. Close
         // the raised auditorium above them, leaving every lower door open.
         addWallX(`${auditorium.id}-south-storage-upper`, storage.bounds.xMin, storage.bounds.xMax, auditorium.bounds.zMin, {
-          material: materials.darkWall, baseY: storage.ceilingHeight, height: ceilingY - storage.ceilingHeight, parent: interior,
+          material: materials.darkWall, baseY: Math.max(storage.ceilingHeight, storage.accessHallCeilingHeight ?? 0),
+          height: ceilingY - Math.max(storage.ceilingHeight, storage.accessHallCeilingHeight ?? 0), parent: interior,
         });
         addWallX(`${auditorium.id}-south-entry-upper`, storage.bounds.xMax, auditorium.bounds.xMax, auditorium.bounds.zMin, {
           material: materials.darkWall, baseY: WALL_HEIGHT, height: ceilingY - WALL_HEIGHT, parent: interior,
@@ -1145,6 +1171,7 @@ export function createTheaterWorld({ scene, materials }) {
         westOpenings.push({
           center: futureUpstairs.doorCenter,
           width: futureUpstairs.doorWidth ?? DOOR_WIDTH,
+          baseY: 0,
         });
       }
       if (auditorium.entry.sharedBoundarySide !== "west" || auditorium.entry.sharedWallOwner) {
@@ -1162,6 +1189,33 @@ export function createTheaterWorld({ scene, materials }) {
 
     addScreen(auditorium, layout, interior, ceilingY);
     addAuditoriumBowl(auditorium, layout, interior);
+    if (layout.entryCross && layout.frontDrop > 0 && layout.routeReserve) {
+      // The original approach strip remains at ground level beside the two
+      // lowered front rows. Guard that edge; access down to A/B uses the
+      // authored side stairs from the crosswalk rather than an abrupt drop.
+      const x = layout.routeReserve.side === "west" ? layout.bowlBounds.xMin : layout.bowlBounds.xMax;
+      const startZ = layout.entryCross.bounds.zMax + 0.09;
+      const endZ = auditorium.bounds.zMax - 0.18;
+      const depth = endZ - startZ;
+      // Enclose the exposed underside of the raised approach slab. Without
+      // this vertical face, the gap beside the lowered front bank reveals sky.
+      addWallZ(`${auditorium.id}-front-bank-drop-face`, x, layout.entryCross.bounds.zMax,
+        auditorium.bounds.zMax - WALL_THICKNESS / 2, {
+          material: materials.darkWall, baseY: layout.frontElevation - 0.11,
+          // End at the approach slab's underside. Ending at its top would
+          // overlap the last ground-level stair tread and flicker in view.
+          height: layout.entryCross.elevation - layout.frontElevation, parent: interior,
+        });
+      addBox({ id: `${auditorium.id}-front-bank-guard-rail`, x, y: 1.0, z: (startZ + endZ) / 2,
+        width: 0.065, height: 0.065, depth, material: materials.seatMetal, parent: interior });
+      const postCount = Math.ceil(depth / 1.4);
+      for (let index = 0; index <= postCount; index += 1) {
+        addBox({ id: `${auditorium.id}-front-bank-guard-post-${index}`, x, y: 0.5,
+          z: startZ + depth * index / postCount, width: 0.065, height: 1, depth: 0.065,
+          material: materials.seatMetal, parent: interior });
+      }
+      addPlanCollider(`${auditorium.id}-front-bank-guard`, x, 0.5, (startZ + endZ) / 2, 0.09, 1, depth);
+    }
     if (Number.isFinite(layout.rearWallZ)) {
       // Close the room immediately behind the last seat backs. Only the
       // portion above a real lower room stops at the deck; the other portions
@@ -1465,33 +1519,17 @@ export function createTheaterWorld({ scene, materials }) {
   };
 
   const addCounterPolyline = () => {
-    const points = LOBBY_PLAN.customerCounter;
     const counterMaterials = {
+      ...materials,
       wood: materials.wood,
       counterWhite: counterWhiteMaterial,
       concessionBlue: concessionBlueMaterial,
       counterStone: materials.counterStone,
     };
-    for (const section of LOBBY_PLAN.customerCounterSections) {
-      const start = points[section.segmentIndex];
-      const end = points[section.segmentIndex + 1];
-      addPlanSegment(section.id, start, end, {
-        y: 0.65,
-        height: 0.94,
-        depth: 1.08,
-        material: counterMaterials[section.baseMaterialKey] ?? materials.wood,
-      });
-      addPlanSegment(`${section.id}-stainless-base`, start, end, {
-        y: 0.09, height: 0.18, depth: 1.08, material: materials.stainless,
-      });
-      addPlanSegment(`${section.id}-top`, start, end, {
-        y: 1.16,
-        height: 0.1,
-        depth: 1.3,
-        material: counterMaterials[section.topMaterialKey] ?? materials.counterStone,
-        collide: true,
-      });
-    }
+    const counters = createCounterBuilder({ root, colliders });
+    counters.customer(LOBBY_PLAN, CONCESSION_SERVICE_SEQUENCE, counterMaterials);
+    disposableGeometries.push(...counters.geometries);
+    sourceMeshCount += counters.meshes.length;
     let candyDisplayIndex = 0;
     for (const servicePoint of CONCESSION_SERVICE_SEQUENCE) {
       if (servicePoint.type === "pos") addPOSStation(servicePoint);
@@ -1499,15 +1537,18 @@ export function createTheaterWorld({ scene, materials }) {
     }
     addLabel({ id: "concession-header", text: "CONCESSIONS", position: [lobbyX(-20.9), 3.72, frontZ(11.5)], rotationY: Math.PI / 2, width: 5.5, height: 0.62 });
     addLabel({ id: "bar-header", text: "THE LANAI BAR", position: [lobbyX(-12.45), 3.28, frontZ(20.92)], rotationY: Math.PI, width: 3.8, height: 0.52, accent: "#f0c36f" });
+    const expo = LOBBY_PLAN.expo;
+    addLabel({ id: "expo-counter-label", text: "EXPO / PICKUP", position: [expo.position.x + expo.guestNormal.x * .548, .79, expo.position.z + expo.guestNormal.z * .548],
+      rotationY: Math.atan2(expo.guestNormal.x, expo.guestNormal.z), width: 1.5, height: .23, small: true, accent: "#f0c36f" });
+    return createServiceGate({ root, materials, plan: LOBBY_PLAN.counterServiceGate });
   };
 
   const addBoxOfficeAndKiosks = () => {
-    const vertical = LOBBY_PLAN.boxOfficeVertical;
     const horizontal = LOBBY_PLAN.boxOfficeReturn;
-    addBox({ id: "box-office-vertical", x: (vertical.xMin + vertical.xMax) / 2, y: 0.56, z: (vertical.zMin + vertical.zMax) / 2, width: vertical.xMax - vertical.xMin, height: 1.12, depth: vertical.zMax - vertical.zMin, material: [counterWhiteMaterial, counterWhiteMaterial, materials.wood, materials.wood, materials.wood, materials.wood], collide: true });
-    addBox({ id: "box-office-vertical-top", x: (vertical.xMin + vertical.xMax) / 2, y: 1.16, z: (vertical.zMin + vertical.zMax) / 2, width: vertical.xMax - vertical.xMin + 0.18, height: 0.1, depth: vertical.zMax - vertical.zMin + 0.18, material: materials.counterStone });
-    addBox({ id: "box-office-return", x: (horizontal.xMin + horizontal.xMax) / 2, y: 0.56, z: (horizontal.zMin + horizontal.zMax) / 2, width: horizontal.xMax - horizontal.xMin, height: 1.12, depth: horizontal.zMax - horizontal.zMin, material: [materials.wood, materials.wood, materials.wood, materials.wood, counterWhiteMaterial, counterWhiteMaterial], collide: true });
-    addBox({ id: "box-office-return-top", x: (horizontal.xMin + horizontal.xMax) / 2, y: 1.16, z: (horizontal.zMin + horizontal.zMax) / 2, width: horizontal.xMax - horizontal.xMin + 0.18, height: 0.1, depth: horizontal.zMax - horizontal.zMin + 0.18, material: materials.counterStone });
+    const counters = createCounterBuilder({ root, colliders });
+    counters.boxOffice(LOBBY_PLAN, { ...materials, counterWhite: counterWhiteMaterial });
+    disposableGeometries.push(...counters.geometries);
+    sourceMeshCount += counters.meshes.length;
     addPOSStation(LOBBY_PLAN.boxOfficePos);
     addLabel({ id: "box-office-sign", text: "BOX OFFICE", position: [(horizontal.xMin + horizontal.xMax) / 2, 2.65, horizontal.zMin - 0.58], rotationY: Math.PI, width: 2.8, height: 0.48 });
     const kioskTexture = createKioskTouchscreenTexture();
@@ -1855,7 +1896,8 @@ export function createTheaterWorld({ scene, materials }) {
   addWallX("lobby-front-service", LOBBY_PLAN.envelope.xMin, lobby.bounds.xMin, lobbyFrontZ, { height: LOBBY_PUBLIC_HEIGHT, material: materials.wall });
   // V17 is one literal storefront plane. Fixed glazing occupies every span
   // around the six door assemblies; there is no inferred inner row or deep
-  // vestibule. The opaque public wall starts only above the common glass head.
+  // vestibule. The upper storefront continues in transparent glazing to the
+  // lobby roof, with slim mullions instead of an opaque plaster header.
   addWallXWithOpenings(
     "lobby-front-door-zone-fixed-glass",
     frontEntrance.boundaryPillar.xMax,
@@ -1871,12 +1913,14 @@ export function createTheaterWorld({ scene, materials }) {
   addWallX("lobby-front-public-header-window-side", lobby.bounds.xMin, frontEntrance.boundaryPillar.xMin, frontEntrance.facadeZ, {
     baseY: frontEntrance.windowTopY,
     height: LOBBY_PUBLIC_HEIGHT - frontEntrance.windowTopY,
-    material: materials.wall,
+    material: materials.glass,
+    thickness: 0.055,
   });
   addWallX("lobby-front-public-header-door-side", frontEntrance.boundaryPillar.xMax, LOBBY_PLAN.envelope.xMax, frontEntrance.facadeZ, {
     baseY: frontEntrance.windowTopY,
     height: LOBBY_PUBLIC_HEIGHT - frontEntrance.windowTopY,
-    material: materials.wall,
+    material: materials.glass,
+    thickness: 0.055,
   });
   addBox({
     id: frontEntrance.boundaryPillar.id,
@@ -1897,9 +1941,25 @@ export function createTheaterWorld({ scene, materials }) {
     {
       baseY: LOBBY_SERVICE_HEIGHT,
       height: LOBBY_PUBLIC_HEIGHT - LOBBY_SERVICE_HEIGHT,
-      material: materials.wall,
+      material: materials.glass,
+      thickness: 0.055,
     },
   );
+  const glassBottom = frontEntrance.windowTopY;
+  const glassTop = frontEntrance.upperGlassTopY;
+  const glassHeight = glassTop - glassBottom;
+  const facadeXs = [lobby.bounds.xMin, ...frontEntrance.windows.map(window => window.xMax),
+    frontEntrance.boundaryPillar.xMax, ...frontEntrance.doors.map(door => door.center + frontEntrance.doorWidth / 2),
+    LOBBY_PLAN.envelope.xMax];
+  for (const [index, x] of facadeXs.entries()) {
+    addBox({ id: `lobby-upper-glass-mullion-${index}`, x, y: glassBottom + glassHeight / 2,
+      z: frontEntrance.facadeZ, width: 0.075, height: glassHeight, depth: 0.12, material: materials.black });
+  }
+  for (const [index, y] of [glassBottom, frontEntrance.upperGlassRailY, glassTop - 0.05].entries()) {
+    addBox({ id: `lobby-upper-glass-rail-${index}`, x: (lobby.bounds.xMin + LOBBY_PLAN.envelope.xMax) / 2,
+      y, z: frontEntrance.facadeZ, width: LOBBY_PLAN.envelope.xMax - lobby.bounds.xMin,
+      height: 0.09, depth: 0.12, material: materials.black });
+  }
   for (const window of frontEntrance.windows) {
     const center = (window.xMin + window.xMax) / 2;
     const width = window.xMax - window.xMin;
@@ -2029,6 +2089,10 @@ export function createTheaterWorld({ scene, materials }) {
     addFloor(id, bounds, materials.floorDark);
     addCeiling(id, bounds, LOBBY_SERVICE_HEIGHT);
   }
+  // The office starts 40 cm behind the storefront. Close that exposed return
+  // from floor to roof so the window jamb cannot reveal a black side slit.
+  addWallZ("office-front-jamb-return", overflow.bounds.xMax, lobbyFrontZ, overflow.bounds.zMin,
+    { height: LOBBY_PUBLIC_HEIGHT, material: materials.wall });
   addSimpleRoomShell(overflow, { floorMaterial: materials.floorDark, skipSides: ["north"], ceiling: false });
   addSimpleRoomShell(office, { floorMaterial: materials.floorDark, ceiling: false });
   addLabel({ id: "overflow-label", text: "OFFICE / CANDY OVERFLOW", position: [overflow.bounds.xMax + 0.12, 2.9, overflow.doorCenter], rotationY: Math.PI / 2, width: 2.7, height: 0.4, small: true, accent: "#f0c36f" });
@@ -2182,7 +2246,7 @@ export function createTheaterWorld({ scene, materials }) {
   addLabel({ id: "kitchen-storage-label", text: "KITCHEN STORAGE", position: [kitchenStorage.bounds.xMax + 0.1, 3, frontZ(13)], rotationY: Math.PI / 2, width: 2.5, height: 0.42, small: true, accent: "#f0c36f" });
 
   const concession = roomById("concession-boh");
-  addCounterPolyline();
+  const serviceGate = addCounterPolyline();
   const backBar = LOBBY_PLAN.backBar;
   addBox({ id: "back-bar-cabinet", x: (backBar.xMin + backBar.xMax) / 2, y: 0.52, z: (backBar.zMin + backBar.zMax) / 2, width: backBar.xMax - backBar.xMin, height: 1.04, depth: backBar.zMax - backBar.zMin, material: materials.wood, collide: true });
   addBox({ id: "back-bar-top", x: (backBar.xMin + backBar.xMax) / 2, y: 1.08, z: (backBar.zMin + backBar.zMax) / 2, width: backBar.xMax - backBar.xMin + 0.2, height: 0.1, depth: backBar.zMax - backBar.zMin + 0.16, material: materials.counterStone });
@@ -2715,11 +2779,11 @@ export function createTheaterWorld({ scene, materials }) {
   const storage6 = roomById("under-storage-6");
   const lowCeilingRegions = [
     { bounds: storage3.bounds, underside: storage3.ceilingHeight - 0.1 },
-    { bounds: storage3.accessHall, underside: storage3.ceilingHeight - 0.1 },
+    { bounds: storage3.accessHall, underside: (storage3.accessHallCeilingHeight ?? storage3.ceilingHeight) - 0.1 },
     { bounds: storage6.bounds, underside: storage6.ceilingHeight - 0.1 },
-    { bounds: theater6.entry.vestibuleBounds, underside: storage6.ceilingHeight - 0.1 },
-    { bounds: theater6.entry.transverseBounds, underside: storage6.ceilingHeight - 0.1 },
-    { bounds: theater6.entry.longRouteBounds, underside: storage6.ceilingHeight - 0.1 },
+    { bounds: theater6.entry.vestibuleBounds, underside: theater6.entry.ceilingHeight - 0.1 },
+    { bounds: theater6.entry.transverseBounds, underside: theater6.entry.ceilingHeight - 0.1 },
+    { bounds: theater6.entry.longRouteBounds, underside: theater6.entry.ceilingHeight - 0.1 },
   ];
   const groundHeight = (worldX, z, feetY = 0) => {
     const planX = worldToPlanX(worldX);
@@ -2812,6 +2876,7 @@ export function createTheaterWorld({ scene, materials }) {
   };
 
   const update = (delta = 0, player = null) => {
+    serviceGate.update(delta, player);
     entranceDoors.update(delta, player);
     if (!barScreenMaterial || barScreenTextures.length < 2 || !Number.isFinite(delta) || delta <= 0) return;
     barScreenElapsed += delta;
@@ -2845,8 +2910,9 @@ export function createTheaterWorld({ scene, materials }) {
   return {
     root,
     colliders,
-    dynamicColliders: entranceDoors.colliders,
+    dynamicColliders: [...entranceDoors.colliders, ...serviceGate.colliders],
     entranceDoors,
+    serviceGate,
     equipment,
     auditoriumGroups,
     auditoriumLayouts,
@@ -2872,6 +2938,7 @@ export function createTheaterWorld({ scene, materials }) {
       kioskAssets?.dispose();
       propAssets?.dispose();
       entranceDoors.dispose();
+      serviceGate.dispose();
       const disposedTextures = new Set();
       const disposeTexture = (texture) => {
         if (!texture || disposedTextures.has(texture)) return;
@@ -2899,7 +2966,7 @@ export function createTheaterWorld({ scene, materials }) {
       sourceMeshCount,
       colliderCount: colliders.length,
       lightCount: hallLights.length + 3,
-      layoutVersion: "mililani-sketch-v18",
+      layoutVersion: "mililani-sketch-v20",
     }),
   };
 }

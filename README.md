@@ -6,7 +6,20 @@ A first-person browser recreation of Consolidated Theatres Mililani 14, built fr
 
 This is an independent recreation with approximate dimensions, not an official architectural survey or ticket service.
 
-## Version 0.19
+The intended game follows an employee starting as an usher, with physical cleaning, equipment and service tasks. The current build is a spatial walkthrough with an older visitor ticket/order prototype. The [employee gameplay direction](docs/gameplay-direction.md) records the planned progression, hands-on interactions and minimal-menu approach; those job systems are future work.
+
+## Version 0.20
+
+This update addresses the ten marked walkthrough screenshots and enlarges all fourteen auditorium screens.
+
+- **Counters and access:** the concession counter has continuous joined surfaces, a 1.7 m opening with two swinging service-gate leaves at the office end, and Expo on the white counter near the kitchen. The box-office L corner also meets cleanly. Counter shells are generated as continuous architecture; Blender appliances, displays and other furnishings remain in use.
+- **Storage and entrance ceilings:** Theater 3's entry wall closes above the storage doorway and its anteroom has a regular 4.6 m ceiling. The smaller room behind its inner doors deliberately keeps the lower 2.32 m ceiling, as confirmed by the user. Theater 6's public entrance passages rise from 2.32 to 3.48 m, with the inner storage ceiling retained.
+- **Seating and screens:** Theaters 3, 6, 7 and 8 now step down separately to rows B and A, while C and the B/C walkway stay at hall level. The last-row-to-cubby clearance doubles in Theaters 1, 2 and 9–14. All screens fill more than 90% of their room width while keeping a 2.08:1 aspect ratio. Seat counts and auditorium footprints are preserved.
+- **Lobby enclosure:** a missing low roof over the kitchen service strip and the narrow office/window-jamb slit are closed. Upper storefront glazing continues above the front doors and windows to the high lobby roof, allowing views outside.
+
+See the [ten-image correction notes](docs/v20-notes.md) and [seating dimensions](docs/seating-update.md).
+
+## Version 0.19 (historical)
 
 This release adds original Blender props and people, shorter hallways, and the revised seating arrangement described below.
 
@@ -17,7 +30,7 @@ This release adds original Blender props and people, shorter hallways, and the r
 
 See the [prop library and runtime contract](docs/prop-library.md), [NPC asset notes](docs/npc-assets.md), [seating reference interpretation](docs/seating-update.md), and [Blender source and rebuild commands](assets-source/README.md). Existing colliders and interactions remain authoritative while visual assets load; a failed download retains the playable fallback models.
 
-## Walkthrough fixes and Blender assets
+## Earlier walkthrough fixes and Blender assets
 
 The walkthrough fixes close the raised auditorium edges and upper exterior wall gaps in theaters 3 and 6, fit seat bodies and shared armrests to the actual row spacing, distinguish upper auditoriums from storage below in the location display, correct buried and reversed signs, and restore structural shadows in the office and kitchen. All 14 auditoriums and 1,093 seats are retained.
 
@@ -65,25 +78,27 @@ npm test
 npm run build
 ```
 
-`npm test` runs twelve suites:
+The regression suites cover:
 
 | Suite | Coverage |
 |---|---|
 | [Layout](scripts/validate-layout.mjs) | Room geometry, counts, adjacencies, door stations, fixture layouts and preserved lobby details. |
 | [World](scripts/smoke-world.mjs) | Rendered floors, ceilings, walls, thresholds, fixture geometry and reflected coordinates. |
 | [Player](scripts/smoke-player.mjs) | Collision stopping/sliding, stairs, jumping, headroom and recovery. |
-| [Navigation](scripts/smoke-navigation.mjs) | All 14 bowls and 164 other route targets, rendered floor/ceiling support, containment and structural overlaps. |
+| [Navigation](scripts/smoke-navigation.mjs) | All 14 bowls and the retained route targets, rendered floor/ceiling support, containment and structural overlaps. |
 | [Visit](scripts/smoke-visit.mjs) | Six moving entrance assemblies, six safe actors, 19 interaction points and ticket/order/pickup/drink interface flows. |
 | [Kiosk assets](scripts/smoke-kiosk-assets.mjs) | Shared models, live screen materials, failed loads and asynchronous disposal. |
 | [Enclosure](scripts/smoke-enclosure.mjs) | Raised edges, close rear walls, seat spacing, stacked zones, visible signs and structural shadows. |
 | [Prop assets](scripts/smoke-prop-assets.mjs) | Real GLB bounds, normals, budgets, shared instances, visibility, fitting and resource ownership. |
 | [NPC assets](scripts/smoke-npc-assets.mjs) | Six real GLB characters, animation pivots, retained avoidance/colliders, atomic fallback and disposal. |
-| [Seating](scripts/smoke-seating.mjs) | Selected-room profiles, level A/B/C rows, B/C crosswalks, stair climbing, rear walls and lower-storage clearance. |
+| [Seating](scripts/smoke-seating.mjs) | Separate A/B drops, C at hall level, B/C crosswalks, stair climbing, doubled small-room rear clearances, screen bounds and lower-storage clearance. |
 | [Compaction](scripts/smoke-compaction.mjs) | Original room footprints, exact rigid translations, moved fixtures, hall reductions and smaller ticket nooks. |
 | [Integrated assets](scripts/smoke-integrated-assets.mjs) | Actual props loaded into the complete theater, all 1,093 chairs and shared armrests, row clearance, display orientation, fitted bounds and unchanged collision data. |
+| [Lobby repairs](scripts/smoke-lobby-repair.mjs) | Rendered service-roof coverage and overlap, transparent upper glazing, full-height office-jamb closure and preserved door apertures. |
+| [Counter geometry](scripts/smoke-counter-geometry.mjs) | Continuous counter joins, the box-office L corner, display openings, 1.7 m service-gate clearance and kitchen-side Expo. |
 
 GitHub Actions runs the same tests and production build for pull requests and deploys `dist` to GitHub Pages on updates to `main`.
 
 ## Current scope
 
-The game provides a small single-player visit to the spatial recreation. It does not implement employee shifts, cleaning tasks, persistent saves, real cinema listings, or multiplayer networking. Materials, characters and dimensions remain an approximation. The reference photographs are documented but are not bundled into the game; models, artwork, programming and sounds are original.
+The playable build remains a spatial walkthrough with a visitor ticket/order prototype. Employee progression, physical cleaning, BIB and ICEE servicing, cooking, and an in-world POS workflow are not implemented yet. The intended register layout will come from the user. See the [gameplay direction](docs/gameplay-direction.md) before adding job mechanics. Persistent saves, real cinema listings and multiplayer networking are also outside the current implementation. Materials, characters and dimensions remain an approximation. The reference photographs are documented but are not bundled into the game; models, artwork, programming and sounds are original.

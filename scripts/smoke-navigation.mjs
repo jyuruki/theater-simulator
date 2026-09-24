@@ -627,8 +627,8 @@ assert.equal(T12_TICKET_SHIFT_X, 1, "V15 T1/T2 ticket-ward translation");
 const westShift = HALL_COMPACTION.westShift;
 assert.deepEqual(theater1.bounds, { xMin: -24.5 + westShift, xMax: -15 + westShift, zMin: 42.5, zMax: 55.5 });
 assert.deepEqual(theater2.bounds, { xMin: -34 + westShift, xMax: -24.5 + westShift, zMin: 42.5, zMax: 55.5 });
-assert.deepEqual(theater1.entry.cubbyBounds, { xMin: -24.5 + westShift, xMax: -21.3 + westShift, zMin: 51.9, zMax: 55.5 });
-assert.deepEqual(theater2.entry.cubbyBounds, { xMin: -27.7 + westShift, xMax: -24.5 + westShift, zMin: 51.9, zMax: 55.5 });
+assert.deepEqual(theater1.entry.cubbyBounds, { xMin: -24.5 + westShift, xMax: -21.3 + westShift, zMin: 52.77, zMax: 55.5 });
+assert.deepEqual(theater2.entry.cubbyBounds, { xMin: -27.7 + westShift, xMax: -24.5 + westShift, zMin: 52.77, zMax: 55.5 });
 assert.equal(theater1.bounds.xMin, theater2.bounds.xMax, "Translated T1/T2 bowls must retain one shared wall.");
 assert.equal(theater1.entry.cubbyBounds.xMin, theater2.entry.cubbyBounds.xMax, "Translated T1/T2 cubbies must remain back-to-back.");
 
@@ -908,10 +908,10 @@ const theater9Cubby = cubbyBoundsFor(theater9);
 assert.deepEqual(theater9.bounds, { xMin: 99.6 + AUDITORIUM_SHIFT_X[9], xMax: 110.1 + AUDITORIUM_SHIFT_X[9], zMin: 42, zMax: 55.5 });
 assert.equal(theater9.entry.center, 102.7 + AUDITORIUM_SHIFT_X[9]);
 assert.equal(theater9.entry.turnSide, "east");
-assert.equal(theater9.entry.innerDoorCenter, 53.25);
+assertNear(theater9.entry.innerDoorCenter, 54.245, "T9 inner door centered in shallower cubby");
 assertNear(theater9Cubby.xMin, 101.1 + AUDITORIUM_SHIFT_X[9], "T9 cubby xMin");
 assertNear(theater9Cubby.xMax, 104.3 + AUDITORIUM_SHIFT_X[9], "T9 cubby xMax");
-assertNear(theater9Cubby.zMin, 52.1, "T9 cubby zMin");
+assertNear(theater9Cubby.zMin, 52.99, "T9 cubby zMin");
 assertNear(theater9Cubby.zMax, 55.5, "T9 cubby zMax");
 assertOpenPlanPoint("T9 hall door", theater9.entry.center, theater9.bounds.zMax);
 assertOpenPlanPoint("T9 inner door", theater9Cubby.xMax, theater9.entry.innerDoorCenter);
@@ -1377,7 +1377,7 @@ assert.deepEqual(
 assert.equal(Object.hasOwn(LOBBY_PLAN.kitchenCeiling, "bounds"), false, "The obsolete rectangular kitchen roof must not remain active.");
 assert.deepEqual(
   LOBBY_PLAN.kitchenCeiling.surfaces.map(({ id }) => id),
-  ["kitchen-complete-ceiling", "kitchen-connector-nook-ceiling"],
+  ["kitchen-complete-ceiling", "kitchen-connector-nook-ceiling", "kitchen-service-strip-ceiling"],
   "The kitchen and connector nook need separate traced roof owners.",
 );
 assert.deepEqual(LOBBY_PLAN.kitchenCeiling.surfaces[1], connectorNook.ceiling);
@@ -1388,6 +1388,7 @@ assert.deepEqual(
     "kitchen-connector-nook-ceiling",
     "kitchen-dead-wedge-ceiling",
     LOBBY_PLAN.muralFacade.soffit.id,
+    "kitchen-service-strip-ceiling",
   ],
   "Four edge-sharing, non-overlapping surfaces must close the kitchen, connector nook, tiny wedge, and mural underside.",
 );

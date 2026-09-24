@@ -27,48 +27,7 @@ export function createPropPlacements({ root, auditoriumLayouts, furnishings = []
       [width ?? object.scale.x, height ?? object.scale.y, depth ?? object.scale.z],
       rotationY ?? object.rotation.y, fallback ?? object);
   };
-  // Keep counter runs continuous and at their authored angles, with cabinets
-  // repeated at normal furniture widths instead of one stretched cupboard.
-  const counter = (baseId, topId, model, extras = []) => {
-    const base = named(baseId), top = named(topId);
-    if (!base || !top) return;
-    const hasDisplayBays = model === "counter_blue";
-    const length = hasDisplayBays ? base.scale.x : top.scale.x;
-    const depth = hasDisplayBays ? base.scale.z : top.scale.z;
-    const height = hasDisplayBays ? top.position.y - top.scale.y / 2 : top.position.y + top.scale.y / 2;
-    const spans = [];
-    // These are actual openings in the cabinetry. Placing a display in front
-    // of an unbroken cabinet face would bury its candy and water bottles.
-    const cuts = hasDisplayBays ? CONCESSION_SERVICE_SEQUENCE.filter(p => p.type === "candy").map(p => {
-      const offset = (planToWorldX(p.position[0]) - top.position.x) * Math.cos(top.rotation.y)
-        - (p.position[2] - top.position.z) * Math.sin(top.rotation.y);
-      return [offset - p.footprint[0] / 2 - 0.025, offset + p.footprint[0] / 2 + 0.025];
-    }).sort((a, b) => a[0] - b[0]) : [];
-    let cursor = -length / 2;
-    for (const [start, end] of cuts) { if (start > cursor) spans.push([cursor, start]); cursor = end; }
-    if (cursor < length / 2) spans.push([cursor, length / 2]);
-    if (hasDisplayBays) top.userData.propFallback = true; // Keep the continuous countertop above both open bays.
-    for (const [spanIndex, [start, end]] of spans.entries()) {
-      const count = Math.max(1, Math.ceil((end - start) / 1.5));
-      for (let index = 0; index < count; index++) {
-        const offset = start + (index + 0.5) * (end - start) / count;
-        const position = new THREE.Vector3(offset, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), top.rotation.y);
-        position.add(new THREE.Vector3(top.position.x, 0, top.position.z));
-        put(`${baseId}-cabinet-${spanIndex}-${index}`, model, position.toArray(), [(end - start) / count, height, depth], top.rotation.y,
-          [base, ...(hasDisplayBays ? [] : [top]), ...extras.map(named)]);
-      }
-    }
-  };
-  for (const section of LOBBY_PLAN.customerCounterSections) {
-    const material = section.baseMaterialKey;
-    counter(section.id, `${section.id}-top`, material === "concessionBlue" ? "counter_blue" : material === "counterWhite" ? "counter_white" : "counter_wood", [`${section.id}-stainless-base`]);
-  }
-  counter("box-office-vertical", "box-office-vertical-top", "counter_white");
-  counter("box-office-return", "box-office-return-top", "counter_wood");
-  counter("soda-island", "soda-island-top", "counter_wood");
-  counter("soda-rear-counter", "soda-rear-counter-top", "counter_wood");
-  counter("back-bar-cabinet", "back-bar-top", "counter_wood");
-  counter("kitchen-hot-line-base", "kitchen-hot-line-top", "counter_white");
+  // Counters are continuous architectural solids; Blender models furnish them.
 
   for (const object of objects) {
     if (object.isGroup && object.children.some(child => child.name === `${object.name}-rim`)) {

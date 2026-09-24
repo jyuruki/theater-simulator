@@ -1,13 +1,13 @@
 {
   "name": "mililani-theater-simulator",
-  "version": "0.19.0",
+  "version": "0.20.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "node scripts/validate-layout.mjs && node scripts/smoke-world.mjs && node scripts/smoke-player.mjs && node scripts/smoke-navigation.mjs && node scripts/smoke-visit.mjs && node scripts/smoke-kiosk-assets.mjs && node scripts/smoke-enclosure.mjs && node scripts/smoke-prop-assets.mjs && node scripts/smoke-npc-assets.mjs && node scripts/smoke-seating.mjs && node scripts/smoke-compaction.mjs && node scripts/smoke-integrated-assets.mjs"
+    "test": "node scripts/validate-layout.mjs && node scripts/smoke-world.mjs && node scripts/smoke-player.mjs && node scripts/smoke-navigation.mjs && node scripts/smoke-visit.mjs && node scripts/smoke-kiosk-assets.mjs && node scripts/smoke-enclosure.mjs && node scripts/smoke-prop-assets.mjs && node scripts/smoke-npc-assets.mjs && node scripts/smoke-seating.mjs && node scripts/smoke-compaction.mjs && node scripts/smoke-integrated-assets.mjs && node scripts/smoke-lobby-repair.mjs && node scripts/smoke-counter-geometry.mjs"
   },
   "dependencies": {
     "three": "0.185.1"

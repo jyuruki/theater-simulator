@@ -61,7 +61,9 @@ try {
   renderer.shadowMap.needsUpdate = true;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x08080b);
+  // A visible exterior sky lets the tall transparent storefront read as
+  // glazing instead of a black wall. Enclosed rooms retain their materials.
+  scene.background = new THREE.Color(0x88a4b5);
   // Keep atmospheric depth without making the far end of the authored
   // complex look as if it is loading in by proximity.
   scene.fog = new THREE.Fog(0x08080b, 220, 320);
@@ -265,7 +267,7 @@ try {
     enumerable: false,
     writable: false,
     value: Object.freeze({
-      layoutVersion: "mililani-sketch-v19",
+      layoutVersion: "mililani-sketch-v20",
       validation: Object.freeze(validation),
       stats: world.stats,
       controller,

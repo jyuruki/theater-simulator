@@ -1,3 +1,5 @@
+import { withRearEntryClearance } from "./seating-profiles.js";
+
 export const EXPECTED_SEAT_TOTAL = 1093;
 
 const rect = (xMin, xMax, zMin, zMax) => ({ xMin, xMax, zMin, zMax });
@@ -321,6 +323,7 @@ export const AUDITORIUMS = Object.freeze([
     underStorage: true, stadium: bottomEntryStadium(0),
     entry: {
       type: "right-then-left", center: 31.2, routeSide: "east", routeWidth: 2.5, storageId: "under-storage-6",
+      ceilingHeight: 3.48,
       vestibuleBounds: rect(29.7, 32.55, 62.2, 65.5),
       transverseBounds: rect(29.7, 47.2, 65.5, 68.5),
       longRouteBounds: rect(44.7, 47.2, 68.5, 85.5), arrivalZ: 84.7,
@@ -384,7 +387,7 @@ export const AUDITORIUMS = Object.freeze([
       sharedBoundarySide: "east", sharedPair: "theaters-13-14", sharedWallOwner: true,
     },
   },
-].map(room => translateModuleX(
+].map(room => withRearEntryClearance(room, AUDITORIUM_PRESETS[room.preset])).map(room => translateModuleX(
   [3, 6, 7, 8].includes(room.number)
     ? { ...room,
         stadium: { ...room.stadium, corridorRise: 0, seatingProfile: "front-cross-aisle" },
@@ -475,17 +478,35 @@ export const SERVICE_ROOMS = Object.freeze([
   },
   { id: "future-task-room", name: "Future Task Room", short: "TASK", detail: "Empty gameplay room directly behind the fountain counters on the shared courtyard door plane", bounds: rect(-3.2, 7.3, COURTYARD_BACK_WALL_Z, 74.8), kind: "storage", entrySide: "south", doorCenter: -1.7, courtyardId: COURTYARD_PLAN.id },
   { id: "candy-storage", name: "Candy Storage", short: "CANDY", detail: "Wide, shallow bulk-candy room with one left-side hall door", bounds: rect(101, 111, 62.2, 67.2), kind: "storage", entrySide: "south", doorCenter: 102.7 },
-  { id: "under-storage-3", name: "Under-Seat Storage 3", short: "U/S 3", detail: "One-door horizontal anteroom leading to a two-door under-tier room", bounds: rect(-21.5, -9.9, 72, 82.5), kind: "storage-lower", orientation: "horizontal", ceilingHeight: 2.32, doorSide: "south", doorCenters: [-18.6, -12.3], accessHall: rect(-21.5, -9.9, 68.2, 72), outerDoorSide: "east", outerDoorCenter: 70.1 },
+  { id: "under-storage-3", name: "Under-Seat Storage 3", short: "U/S 3", detail: "One-door horizontal anteroom leading to a two-door under-tier room", bounds: rect(-21.5, -9.9, 72, 82.5), kind: "storage-lower", orientation: "horizontal", ceilingHeight: 2.32, accessHallCeilingHeight: 4.6, doorSide: "south", doorCenters: [-18.6, -12.3], accessHall: rect(-21.5, -9.9, 68.2, 72), outerDoorSide: "east", outerDoorCenter: 70.1 },
   { id: "under-storage-6", name: "Under-Seat Storage 6", short: "U/S 6", detail: "Shared two-door room below Theater 6's upper tiers", bounds: rect(31.7, 44.7, 68.5, 71.8), kind: "storage-lower", ceilingHeight: 2.32, doorSide: "south", doorCenters: [35.2, 41.7] },
 ].map(room => translateModuleX(room, SERVICE_SHIFT_X[room.id])));
 
+// The free service end leaves a 1.70m opening measured from the wall face to
+// the actual stone edge, including the countertop's 0.65m half depth.
+const COUNTER_GATE_WIDTH = 1.7;
+const COUNTER_GATE_WALL_X = shiftedLobbyX(-24.5) + .09;
+const COUNTER_END_Z = shiftedZ(4.9);
+let counterEndX = COUNTER_GATE_WALL_X + COUNTER_GATE_WIDTH + .65;
+for (let iteration = 0; iteration < 24; iteration++) {
+  const dx = counterEndX - shiftedLobbyX(-20.5), dz = COUNTER_END_Z - shiftedZ(8.2);
+  counterEndX = COUNTER_GATE_WALL_X + COUNTER_GATE_WIDTH + .65 * -dz / Math.hypot(dx, dz);
+}
 const CUSTOMER_COUNTER = Object.freeze([
   { x: shiftedLobbyX(-8.8), z: shiftedZ(20.4) },
   { x: shiftedLobbyX(-16.1), z: shiftedZ(20.4) },
   { x: shiftedLobbyX(-16.8), z: shiftedZ(17.8) },
   { x: shiftedLobbyX(-20.5), z: shiftedZ(8.2) },
-  { x: shiftedLobbyX(-20.1), z: shiftedZ(4.9) },
+  { x: counterEndX, z: COUNTER_END_Z },
 ].map((point) => Object.freeze(point)));
+const counterEndDx = CUSTOMER_COUNTER[4].x - CUSTOMER_COUNTER[3].x;
+const counterEndDz = CUSTOMER_COUNTER[4].z - CUSTOMER_COUNTER[3].z;
+const counterEndLength = Math.hypot(counterEndDx, counterEndDz);
+const COUNTER_SERVICE_GATE = Object.freeze({
+  id: "counter-service-gate", clearWidth: COUNTER_GATE_WIDTH, height: 1.24,
+  wall: Object.freeze({ x: COUNTER_GATE_WALL_X, z: COUNTER_END_Z - .65 * counterEndDx / counterEndLength }),
+  counter: Object.freeze({ x: COUNTER_GATE_WALL_X + COUNTER_GATE_WIDTH, z: COUNTER_END_Z - .65 * counterEndDx / counterEndLength }),
+});
 
 // After the public kitchen door, the back wall follows the concession face
 // for exactly two-thirds of its diagonal run. The midpoint preserves the
@@ -532,7 +553,7 @@ const CUSTOMER_COUNTER_SECTIONS = Object.freeze([
     baseMaterialKey: "wood", topMaterialKey: "counterStone",
   }),
   Object.freeze({
-    id: "customer-counter-white-service", segmentIndex: 1, role: "service-white",
+    id: "customer-counter-expo", segmentIndex: 1, role: "expo",
     baseMaterialKey: "counterWhite", topMaterialKey: "counterStone",
   }),
   Object.freeze({
@@ -540,7 +561,7 @@ const CUSTOMER_COUNTER_SECTIONS = Object.freeze([
     baseMaterialKey: "concessionBlue", topMaterialKey: "counterStone",
   }),
   Object.freeze({
-    id: "customer-counter-expo", segmentIndex: 3, role: "expo",
+    id: "customer-counter-white-service", segmentIndex: 3, role: "service-white",
     baseMaterialKey: "counterWhite", topMaterialKey: "counterStone",
   }),
 ]);
@@ -707,6 +728,15 @@ const KITCHEN_MAIN_CEILING_VERTICES = Object.freeze([
   KITCHEN_PARTITION[1],
 ]);
 
+// The storage rectangle stops at x=-20.7. This service strip between it
+// and the kitchen partition also needs a roof; the main/nook slabs only
+// covered its far end, leaving the service door open to the high lobby.
+const KITCHEN_SERVICE_CEILING_VERTICES = Object.freeze([
+  Object.freeze({ x: KITCHEN_PARTITION[0].x, z: KITCHEN_PARTITION[7].z }),
+  KITCHEN_PARTITION[7], KITCHEN_PARTITION[5],
+  KITCHEN_PARTITION[2], KITCHEN_PARTITION[1],
+]);
+
 // Two abutting floor polygons replace the rectangular lobby finish where
 // it used to spill into the main kitchen. Both finish tops are at y=0;
 // neither overlays the other or covers the preserved dark service strip.
@@ -795,10 +825,18 @@ export const LOBBY_PLAN = Object.freeze({
     windowSillY: 1.05,
     windowTopY: 3.25,
     transomTopY: 3.25,
+    upperGlassTopY: LOBBY_CEILING_PLAN.highHeight,
+    upperGlassRailY: 6.8,
   }),
   frontDoorCenters: Object.freeze(FRONT_ENTRANCE_DOORS.map(({ center }) => center)),
   customerCounter: CUSTOMER_COUNTER,
   customerCounterSections: CUSTOMER_COUNTER_SECTIONS,
+  counterServiceGate: COUNTER_SERVICE_GATE,
+  expo: Object.freeze({
+    sectionId: "customer-counter-expo", segmentIndex: 1,
+    position: Object.freeze({ x: (CUSTOMER_COUNTER[1].x + CUSTOMER_COUNTER[2].x) / 2, z: (CUSTOMER_COUNTER[1].z + CUSTOMER_COUNTER[2].z) / 2 }),
+    guestNormal: Object.freeze({ x: 2.6 / Math.hypot(.7, 2.6), z: -.7 / Math.hypot(.7, 2.6) }),
+  }),
   concessionRun: CONCESSION_RUN,
   backBar: BACK_BAR_BOUNDS,
   barScreen: Object.freeze({
@@ -901,12 +939,19 @@ export const LOBBY_PLAN = Object.freeze({
         thickness: 0.1,
         vertices: KITCHEN_CONNECTOR_NOOK_VERTICES,
       }),
+      Object.freeze({
+        id: "kitchen-service-strip-ceiling",
+        elevation: LOBBY_CEILING_PLAN.baseHeight,
+        thickness: 0.1,
+        vertices: KITCHEN_SERVICE_CEILING_VERTICES,
+      }),
     ]),
     closureSurfaceIds: Object.freeze([
       "kitchen-complete-ceiling",
       "kitchen-connector-nook-ceiling",
       "kitchen-dead-wedge-ceiling",
       "concession-mural-soffit",
+      "kitchen-service-strip-ceiling",
     ]),
   }),
   officeAttic: Object.freeze({
@@ -1359,9 +1404,9 @@ export function validateLayoutData() {
     || !sameRect(theater2?.bounds, rect(-34 + HALL_COMPACTION.westShift, -24.5 + HALL_COMPACTION.westShift, 42.5, 55.5))
     || Math.abs(theater1?.entry?.center - (-22.9 + HALL_COMPACTION.westShift)) > 1e-9
     || Math.abs(theater2?.entry?.center - (-26.1 + HALL_COMPACTION.westShift)) > 1e-9
-    || !sameRect(theater1?.entry?.cubbyBounds, rect(-24.5 + HALL_COMPACTION.westShift, -21.3 + HALL_COMPACTION.westShift, 51.9, 55.5))
-    || !sameRect(theater2?.entry?.cubbyBounds, rect(-27.7 + HALL_COMPACTION.westShift, -24.5 + HALL_COMPACTION.westShift, 51.9, 55.5))) {
-    errors.push("The Theater 1/2 pair must move rigidly toward ticket check with the shortened west hall.");
+    || !sameRect(theater1?.entry?.cubbyBounds, rect(-24.5 + HALL_COMPACTION.westShift, -21.3 + HALL_COMPACTION.westShift, 52.77, 55.5))
+    || !sameRect(theater2?.entry?.cubbyBounds, rect(-27.7 + HALL_COMPACTION.westShift, -24.5 + HALL_COMPACTION.westShift, 52.77, 55.5))) {
+    errors.push("The Theater 1/2 pair must retain its compacted hall position and widened rear-entry clearance.");
   }
   const courtyardDoorCenters = COURTYARD_PLAN.doors.map(({ center }) => center);
   if (COURTYARD_PLAN.floorFinish !== "dark-gray-tile") errors.push("The fountain / T3–5 courtyard must use dark-gray tile.");
@@ -1411,9 +1456,9 @@ export function validateLayoutData() {
   const nearlyEqual = (first, second) => Math.abs(first - second) <= 1e-9;
   const expectedCounterSections = [
     ["customer-counter-bar", "bar", "wood"],
-    ["customer-counter-white-service", "service-white", "counterWhite"],
-    ["customer-counter-concession", "concession", "concessionBlue"],
     ["customer-counter-expo", "expo", "counterWhite"],
+    ["customer-counter-concession", "concession", "concessionBlue"],
+    ["customer-counter-white-service", "service-white", "counterWhite"],
   ];
   if (LOBBY_PLAN.customerCounterSections?.length !== expectedCounterSections.length
     || LOBBY_PLAN.customerCounterSections.some((section, index) => {
@@ -1424,7 +1469,7 @@ export function validateLayoutData() {
         || section.baseMaterialKey !== baseMaterialKey
         || section.topMaterialKey !== "counterStone";
     })) {
-    errors.push("V12 counter sections must run wood bar, white service, blue concession, then white Expo.");
+    errors.push("Counter sections must run wood bar, kitchen-side white Expo, blue concession, then the white service-gate end.");
   }
 
   const partition = LOBBY_PLAN.kitchenPartition ?? [];
@@ -1741,6 +1786,7 @@ export function validateLayoutData() {
     "kitchen-connector-nook-ceiling",
     "kitchen-dead-wedge-ceiling",
     "concession-mural-soffit",
+    "kitchen-service-strip-ceiling",
   ];
   if (deadSpace?.id !== "kitchen-dead-wedge"
     || deadSpace.vertices?.length !== 3
@@ -1783,7 +1829,8 @@ export function validateLayoutData() {
     || kitchenCeiling?.legacyBounds !== KITCHEN_CEILING_BOUNDS
     || kitchenCeiling?.replacementForRoomId !== "kitchen"
     || !nearlyEqual(kitchenCeiling?.elevation, LOBBY_CEILING_PLAN.baseHeight)
-    || kitchenCeiling?.surfaces?.length !== 2
+    || kitchenCeiling?.surfaces?.length !== 3
+    || kitchenCeiling?.surfaces?.[2]?.vertices !== KITCHEN_SERVICE_CEILING_VERTICES
     || kitchenMainCeiling?.id !== "kitchen-complete-ceiling"
     || kitchenMainCeiling?.vertices?.length !== 7
     || kitchenMainCeiling.vertices?.[0] !== partition[2]

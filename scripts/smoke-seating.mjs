@@ -25,10 +25,25 @@ for (const room of AUDITORIUMS) {
     `${room.id}: unavailable seats in the screenshot must not silently remove capacity`);
   if (!revisedNumbers.includes(room.number)) {
     assert.equal(layout.entryCross, null, `${room.id}: preserve the existing seating shape`);
+    if (room.entry.type === "trash-cubby") {
+      const cubbyFront = room.entry.cubbyBounds?.zMin ?? room.bounds.zMax - room.entry.cubbyDepth;
+      const actualGap = cubbyFront - 0.09 - (layout.backRowZ + 0.39);
+      close(actualGap, layout.rearEntryClearance.original * 2, `${room.id} doubled rear entry clearance`);
+      close(layout.rowPitch, layout.preset.rowPitch, `${room.id} preserved row pitch`);
+      close(layout.frontRowZ, room.bounds.zMin + room.stadium.screenApronDepth, `${room.id} original screen apron retained`);
+      close(layout.rearEntryClearance.seatBankShift, 0, `${room.id} seat bank stays fixed`);
+      assert.ok(room.entry.innerDoorCenter - 1.025 >= cubbyFront + 0.2 - 1e-6,
+        `${room.id} inner door front jamb fits inside the shallower cubby`);
+      assert.ok(room.entry.innerDoorCenter + 1.025 <= room.bounds.zMax - 0.2 + 1e-6,
+        `${room.id} inner door rear jamb fits inside the shallower cubby`);
+      assert.ok(layout.rows[0].floorBounds.zMin >= room.bounds.zMin + 0.1, `${room.id} front tier still fits behind screen wall`);
+    } else {
+      assert.equal(layout.rearEntryClearance, null, `${room.id}: front-entry rooms retain their existing rows`);
+    }
     continue;
   }
   assert.equal(layout.rows.map((row) => row.label).join(""), "ABCDEFGH");
-  for (const row of layout.rows.slice(0, 3)) close(row.elevation, 0, `${room.id} row ${row.label} at hall ground`);
+  for (const row of layout.rows.slice(0, 3)) close(row.elevation, (row.index - 2) * 0.44, `${room.id} distinct lowered row ${row.label}`);
   for (const row of layout.rows.slice(3)) close(row.elevation, (row.index - 2) * 0.66, `${room.id} row ${row.label} rise`);
   close(Math.abs(layout.rows[2].z - layout.rows[1].z), layout.rowPitch + 1.3, `${room.id} B/C separation`);
   close(Math.abs(layout.rows[0].z - layout.rows[1].z), layout.rowPitch, `${room.id} A/B separation`);
@@ -38,19 +53,19 @@ for (const room of AUDITORIUMS) {
     `${room.id}: crosswalk must clear row C and a player's radius`);
   assert.ok(layout.entryCross.bounds.zMax < layout.rows[1].z - 0.39 - 0.34,
     `${room.id}: crosswalk must clear row B and a player's radius`);
-  close(layout.rows[1].floorBounds.zMin, layout.entryCross.floorBounds.zMax, `${room.id} B floor joins crosswalk`);
+  close(layout.rows[1].floorBounds.zMin, layout.entryCross.floorBounds.zMax + 0.08, `${room.id} B riser closes the edge below the crosswalk`);
   close(layout.rows[2].floorBounds.zMax, layout.entryCross.floorBounds.zMin, `${room.id} C floor joins crosswalk`);
-  assert.equal(layout.sideStairTreads.length, 30, `${room.id}: only C→D through G→H have stairs`);
+  assert.equal(layout.sideStairTreads.length, 38, `${room.id}: two front drops and five upper rises need complete side stairs`);
   for (const tread of layout.sideStairTreads) {
-    assert.ok(tread.transition >= 2, `${room.id}: no stairs in front of C`);
     close(tread.stepRise, 0.22, `${room.id} safe individual step rise`);
     const z = (tread.bounds.zMin + tread.bounds.zMax) / 2;
     close(sampleSideStairHeight(layout, z), tread.elevation, `${tread.id} renderer/sampler agreement`);
   }
-  for (let z = layout.rows[2].z; z <= layout.rows[0].z; z += 0.07) {
-    close(sampleTierHeight(layout, z), 0, `${room.id} front tier level`);
-    close(sampleSideStairHeight(layout, z), 0, `${room.id} front aisle level`);
+  for (let z = layout.rows[2].z; z <= layout.entryCross.bounds.zMax; z += 0.07) {
+    close(sampleTierHeight(layout, z), 0, `${room.id} C/crosswalk stays at ground level`);
+    close(sampleSideStairHeight(layout, z), 0, `${room.id} C/crosswalk aisle stays level`);
   }
+  for (const row of layout.rows.slice(0, 2)) close(sampleTierHeight(layout, row.z), row.elevation, `${room.id} lowered ${row.label} ground sampler`);
   close(Math.abs(layout.rearWallZ - layout.backRowZ), 0.72, `${room.id} wall directly behind H`);
   assert.equal(layout.rearCross.walkableCrossing, false, `${room.id}: do not invent a rear circulation passage`);
   assert.equal(sampleBowlFloorCandidate(layout, layout.centerX, layout.rearWallZ - 0.2), null,
@@ -111,20 +126,22 @@ collision.addBoxes(world.colliders);
 const dom = { ownerDocument: { defaultView: { addEventListener() {}, removeEventListener() {} },
   addEventListener() {}, removeEventListener() {}, getElementById() { return null; } },
   addEventListener() {}, removeEventListener() {} };
-function walk(x, z, yaw, frames) {
+function walk(x, z, yaw, frames, feetY = 0) {
   const player = new FirstPersonController({ camera: new THREE.PerspectiveCamera(), domElement: dom,
-    collisionWorld: collision, spawn: [planToWorldX(x), 0, z], initialYaw: yaw,
+    collisionWorld: collision, spawn: [planToWorldX(x), feetY, z], initialYaw: yaw,
     groundSampler: world.groundHeight, ceilingSampler: world.ceilingHeight, touchMode: false });
-  assert.equal(collision.isOverlapping(player.position, 0.34, 0, 1.78), false, `Clear walk start at ${x},${z}`);
+  assert.equal(collision.isOverlapping(player.position, 0.34, feetY, 1.78), false, `Clear walk start at ${x},${z}`);
   player.active = true;
   player._keys.add("KeyW");
   let maximumStep = 0;
+  let maximumDrop = 0;
   for (let frame = 0; frame < frames; frame += 1) {
     const previousY = player.position.y;
     player.update(1 / 60);
     maximumStep = Math.max(maximumStep, player.position.y - previousY);
+    maximumDrop = Math.max(maximumDrop, previousY - player.position.y);
   }
-  const result = { x: worldToPlanX(player.position.x), z: player.position.z, y: player.position.y, maximumStep };
+  const result = { x: worldToPlanX(player.position.x), z: player.position.z, y: player.position.y, maximumStep, maximumDrop };
   player.dispose();
   return result;
 }
@@ -147,9 +164,25 @@ for (const number of revisedNumbers) {
     assertRenderedFloor((tread.bounds.xMin + tread.bounds.xMax) / 2,
       (tread.bounds.zMin + tread.bounds.zMax) / 2, tread.elevation, tread.id);
   }
+  const routeOnEast = layout.routeReserve.side === "east";
+  const borderX = routeOnEast ? layout.bowlBounds.xMax : layout.bowlBounds.xMin;
+  const dropFace = world.colliders.find((box) => box.id === `${layout.id}-front-bank-drop-face`);
+  close(dropFace.maxY, layout.entryCross.elevation - 0.11,
+    `${layout.id}: side closure meets the route slab underside without a coplanar ground-step overlap`);
+  for (const row of layout.rows.slice(0, 2)) {
+    ray.set(new THREE.Vector3(planToWorldX(borderX + (routeOnEast ? -0.25 : 0.25)), row.elevation / 2, row.z),
+      new THREE.Vector3(routeOnEast ? -1 : 1, 0, 0));
+    ray.near = 0.001;
+    ray.far = 0.4;
+    assert.ok(ray.intersectObject(world.root, true).length,
+      `${layout.id} lowered row ${row.label}: raised side-route edge must not expose the outside void`);
+  }
   for (const aisle of Object.values(layout.sideAisles)) {
-    const end = walk(aisle.centerX, layout.rows[2].z + 0.4, 0, 400);
-    close(end.y, layout.backElevation, `${layout.id} ${aisle.side}: walk C to H`, 0.001);
+    const descent = walk(aisle.centerX, layout.entryCross.centerZ, Math.PI, 170);
+    close(descent.y, layout.frontElevation, `${layout.id} ${aisle.side}: descend C through B to A`, 0.001);
+    assert.ok(descent.maximumDrop <= 0.22 + 1e-6, `${layout.id}: lowered front bank must have steps rather than sudden drops`);
+    const end = walk(aisle.centerX, layout.rows[0].z + 0.2, 0, 460, layout.frontElevation);
+    close(end.y, layout.backElevation, `${layout.id} ${aisle.side}: walk A to H`, 0.001);
     assert.ok(end.z > layout.rearWallZ + 0.4 && end.z < layout.backRowZ,
       `${layout.id} ${aisle.side}: the close rear wall stops the player`);
     assert.ok(end.maximumStep <= 0.22 + 1e-6, `${layout.id}: no sudden inaccessible elevation jump`);
@@ -160,6 +193,33 @@ for (const number of revisedNumbers) {
   close(crossing.y, 0, `${layout.id}: crossing remains at ground level`);
   assert.ok(world.colliders.some((box) => box.id === `${layout.id}-close-rear-wall`), `${layout.id}: rear wall must collide`);
 }
+for (const room of AUDITORIUMS) {
+  const layout = world.auditoriumLayouts.get(room.id);
+  if (layout.rearEntryClearance) {
+    const rearWalkZ = layout.backRowZ + 0.39 + layout.rearEntryClearance.current / 2;
+    const crossing = walk(layout.sideAisles.west.centerX, rearWalkZ, Math.PI / 2, 210);
+    assert.ok(crossing.x >= layout.sideAisles.east.centerX - 0.15, `${room.id}: widened rear entry must allow a full cross-aisle walk`);
+    close(crossing.y, 0, `${room.id}: widened rear entry stays at hall level`);
+    const fromHall = walk(room.entry.center, room.bounds.zMax + 0.7, 0, 35);
+    assert.ok(fromHall.z < room.bounds.zMax - 0.5, `${room.id}: fixed outer door still admits the player`);
+    const halfWidth = room.entry.cubbyHalfWidth ?? 1.6;
+    const cubby = room.entry.cubbyBounds ?? { xMin: room.entry.center - halfWidth, xMax: room.entry.center + halfWidth };
+    const exitsEast = room.entry.turnSide === "east";
+    const doorX = exitsEast ? cubby.xMax : cubby.xMin;
+    const throughSide = walk(doorX + (exitsEast ? -0.65 : 0.65), room.entry.innerDoorCenter,
+      exitsEast ? Math.PI / 2 : -Math.PI / 2, 45);
+    assert.ok(exitsEast ? throughSide.x > doorX + 0.4 : throughSide.x < doorX - 0.4,
+      `${room.id}: recentered cubby side door must admit the player`);
+  }
+  const screen = world.root.getObjectByName(`${room.id}-screen`);
+  const roomWidth = room.bounds.xMax - room.bounds.xMin;
+  const ceilingY = { large150: 7.55, medium58: 6.25, standard50: 5.6, compact38: 5.45 }[room.preset];
+  assert.ok(screen.scale.x > roomWidth * 0.9, `${room.id} screen should fill its wall`);
+  close(screen.scale.x / screen.scale.y, 2.08, `${room.id} screen keeps the presentation aspect ratio`);
+  close(screen.position.x, planToWorldX((room.bounds.xMin + room.bounds.xMax) / 2), `${room.id} screen centered on full wall`);
+  assert.ok(screen.position.y + screen.scale.y / 2 + 0.17 < ceilingY - 0.05, `${room.id} screen frame clears roof`);
+  assert.ok(screen.position.y - screen.scale.y / 2 - 0.17 >= layout.frontElevation - 1e-6, `${room.id} screen frame clears front floor`);
+}
 world.dispose();
 materials.dispose();
-console.log(`Seating valid: four A–H rooms · A/B/C ground level · four clear B/C crosswalks · ${stairWalks} complete stair climbs · close rear walls · ${storageSamples} storage-clearance samples · all 1,093 seats retained.`);
+console.log(`Seating valid: A/B separately lowered, C at ground · eight doubled rear-entry gaps with fixed seat banks and working outer/side portals · 14 larger screens · four clear B/C crosswalks · ${stairWalks} complete A–H stair climbs and C–A descents · ${storageSamples} storage-clearance samples · all 1,093 seats retained.`);
