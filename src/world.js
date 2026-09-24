@@ -73,7 +73,7 @@ const publicById = (id) => PUBLIC_SPACES.find((space) => space.id === id);
 
 export function createTheaterWorld({ scene, materials }) {
   const root = new THREE.Group();
-  root.name = "Mililani 14 theater floor v21";
+  root.name = "Mililani 14 theater floor v22";
   scene.add(root);
 
   const colliders = [];
@@ -81,6 +81,7 @@ export function createTheaterWorld({ scene, materials }) {
   const kioskVisuals = [];
   let kioskAssets = null;
   let propAssets = null;
+  let cleaningSeatTrays = new Set();
   let disposed = false;
   const auditoriumGroups = new Map();
   const auditoriumLayouts = buildAuditoriumLayouts(AUDITORIUMS);
@@ -2885,6 +2886,22 @@ export function createTheaterWorld({ scene, materials }) {
   const furnishings = addTheaterFurnishings({ root, materials, colliders });
   furnishings.forEach(({ fallback }) => disposableGeometries.push(fallback.geometry));
   const propPlacements = createPropPlacements({ root, auditoriumLayouts, furnishings });
+  const fallbackTrayBatches = AUDITORIUMS.map(room => {
+    const mesh = root.getObjectByName(`${room.id}-seat-trays`);
+    const ids = propPlacements.filter(p => p.model === "recliner" && p.id.startsWith(`${room.id}-`)).map(p => p.id);
+    const transforms = ids.map((_, index) => { const matrix = new THREE.Matrix4(); mesh.getMatrixAt(index, matrix); return matrix; });
+    return { mesh, ids, transforms };
+  });
+  const setCleaningSeatTrays = ids => {
+    cleaningSeatTrays = new Set(ids);
+    const hidden = new THREE.Matrix4().makeScale(0, 0, 0);
+    for (const { mesh, ids: placements, transforms } of fallbackTrayBatches) {
+      placements.forEach((id, index) => mesh.setMatrixAt(index, cleaningSeatTrays.has(id) ? hidden : transforms[index]));
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.computeBoundingBox(); mesh.computeBoundingSphere();
+    }
+    propAssets?.setHiddenSeatTrays(cleaningSeatTrays);
+  };
   batchBoxMeshes(root);
   let runtimeMeshCount = 0;
   let instancedMeshCount = 0;
@@ -2906,6 +2923,7 @@ export function createTheaterWorld({ scene, materials }) {
     auditoriumGroups,
     auditoriumLayouts,
     propPlacements,
+    setCleaningSeatTrays,
     worldBounds,
     groundHeight,
     ceilingHeight,
@@ -2919,6 +2937,7 @@ export function createTheaterWorld({ scene, materials }) {
     loadPropAssets(options) {
       if (disposed) return Promise.resolve(false);
       propAssets ??= createPropAssets({ ...options, root, placements: propPlacements });
+      propAssets.setHiddenSeatTrays(cleaningSeatTrays);
       return propAssets.ready;
     },
     dispose() {
@@ -2956,7 +2975,7 @@ export function createTheaterWorld({ scene, materials }) {
       sourceMeshCount,
       colliderCount: colliders.length,
       lightCount: hallLightPools.lights.length + 3,
-      layoutVersion: "mililani-sketch-v21",
+      layoutVersion: "mililani-sketch-v22",
     }),
   };
 }

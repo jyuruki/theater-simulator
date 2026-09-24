@@ -10,7 +10,8 @@ import { createMinimap } from "./minimap.js";
 import { AABBCollisionWorld, FirstPersonController } from "./player.js";
 import { createTheaterWorld } from "./world.js";
 import { createTheaterLighting } from "./lighting.js";
-import { createUsherGameplay, USHER_SPAWN } from "./usher-gameplay.js";
+import { USHER_SPAWN } from "./usher-gameplay.js";
+import { createUsherShift } from "./usher-shift.js";
 import { createUsherUI } from "./usher-ui.js";
 
 const canvas = document.querySelector("#game-canvas");
@@ -174,7 +175,7 @@ try {
     onSound: (kind) => audio.play(kind), audio, crowd, toggleMap, employeeMode: true });
   let shiftStorage;
   try { shiftStorage = window.localStorage; } catch { /* The shift also works without browser storage. */ }
-  const usher = createUsherGameplay({ scene, world, camera, collisionWorld, showToast,
+  const usher = createUsherShift({ scene, world, camera, collisionWorld, showToast,
     onSound: (kind) => audio.play(kind), storage: shiftStorage });
   const usherUI = createUsherUI({ gameplay: usher, controller, canvas,
     isBlocked: () => interactions.isOpen });
@@ -275,7 +276,7 @@ try {
     enumerable: false,
     writable: false,
     value: Object.freeze({
-      layoutVersion: "mililani-sketch-v21",
+      layoutVersion: "mililani-sketch-v22",
       validation: Object.freeze(validation),
       stats: world.stats,
       controller,

@@ -54,6 +54,16 @@ export function createPropAssets({
   let releaseResources = () => {};
   const instances = [];
   const previousVisibility = new Map();
+  let hiddenSeatTrays = new Set();
+  const trayBatches = [];
+  const hiddenMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
+  const applyTrayMask = () => {
+    for (const { batch, transforms, ids } of trayBatches) {
+      ids.forEach((id, index) => batch.setMatrixAt(index, hiddenSeatTrays.has(id) ? hiddenMatrix : transforms[index]));
+      batch.instanceMatrix.needsUpdate = true;
+      batch.computeBoundingBox(); batch.computeBoundingSphere();
+    }
+  };
 
   const restoreFallbacks = () => {
     previousVisibility.forEach((visible, object) => { object.visible = visible; });
@@ -65,6 +75,7 @@ export function createPropAssets({
       mesh.dispose(); // Instancing buffers only; shared geometry belongs to the library.
     }
     instances.length = 0;
+    trayBatches.length = 0;
   };
 
   const ready = (async () => {
@@ -134,7 +145,14 @@ export function createPropAssets({
         batch.computeBoundingSphere();
         parent.add(batch);
         instances.push(batch);
+        // The Blender espresso component is the snack tray. Its swivel post
+        // remains in the metal component when a working tray is articulated.
+        if (model === "recliner" && /espresso/i.test(component.mesh.name)) {
+          batch.castShadow = false;
+          trayBatches.push({ batch, transforms, ids });
+        }
       }
+      applyTrayMask();
       // Transactional replacement: hide nothing until every model/transform validated.
       for (const placement of placements) {
         const fallbacks = Array.isArray(placement.fallback) ? placement.fallback : [placement.fallback];
@@ -158,6 +176,7 @@ export function createPropAssets({
   return {
     ready,
     instances,
+    setHiddenSeatTrays(ids) { hiddenSeatTrays = new Set(ids); applyTrayMask(); },
     dispose() {
       if (disposed) return;
       disposed = true;

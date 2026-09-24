@@ -218,7 +218,7 @@ const auditoriumByNumber = new Map(AUDITORIUMS.map((auditorium) => [auditorium.n
 assert.equal(world.stats.auditoriumCount, 14);
 assert.equal(world.stats.seatCount, 1093);
 assert.equal(world.stats.equipmentAnchors, 13);
-assert.equal(world.stats.layoutVersion, "mililani-sketch-v21");
+assert.equal(world.stats.layoutVersion, "mililani-sketch-v22");
 assert.ok(world.stats.meshCount > 0);
 assert.ok(world.stats.colliderCount > 0);
 assert.equal(world.auditoriumGroups.size, 14);
