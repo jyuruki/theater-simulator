@@ -16,12 +16,7 @@ export function createInteractionTargets() {
     label,
     position: new THREE.Vector3(planToWorldX(x), y, z),
   });
-  const expoSection = LOBBY_PLAN.customerCounterSections.find(
-    (section) =>
-      section.role === "expo" || section.id === "customer-counter-expo",
-  );
-  const expoA = LOBBY_PLAN.customerCounter[expoSection.segmentIndex];
-  const expoB = LOBBY_PLAN.customerCounter[expoSection.segmentIndex + 1];
+  const expo = LOBBY_PLAN.expo;
   return [
     ...LOBBY_PLAN.kiosks.map((kiosk) =>
       target(
@@ -57,9 +52,9 @@ export function createInteractionTargets() {
       "expo",
       "expo",
       "Collect at Expo",
-      (expoA.x + expoB.x) / 2,
+      expo.position.x,
       1.4,
-      (expoA.z + expoB.z) / 2,
+      expo.position.z,
     ),
     target(
       "ticket-check",

@@ -43,8 +43,8 @@ for (const [number, xMin, xMax, zMin, zMax, door, screen, shift] of originalRoom
 }
 
 for (const [number, bounds] of [
-  [1, rect(-24.5, -21.3, 51.9, 55.5)], [2, rect(-27.7, -24.5, 51.9, 55.5)],
-  [13, rect(28.5, 31.7, 52.1, 55.5)], [14, rect(25.3, 28.5, 52.1, 55.5)],
+  [1, rect(-24.5, -21.3, 52.77, 55.5)], [2, rect(-27.7, -24.5, 52.77, 55.5)],
+  [13, rect(28.5, 31.7, 52.99, 55.5)], [14, rect(25.3, 28.5, 52.99, 55.5)],
 ]) moved(auditoriums.get(number).entry.cubbyBounds, bounds, AUDITORIUM_SHIFT_X[number], `T${number} trash cubby`);
 for (const [number, turn] of [[1, "east"], [2, "west"], [9, "east"], [10, "east"], [11, "east"], [12, "east"], [13, "east"], [14, "west"]])
   assert.equal(auditoriums.get(number).entry.turnSide, turn, `T${number} retains entrance handedness`);

@@ -11,7 +11,7 @@ const renderer = new THREE.WebGLRenderer({canvas:document.querySelector("canvas"
 renderer.setPixelRatio(1);
 renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.12;
 renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFShadowMap;renderer.shadowMap.autoUpdate=false;
-const scene=new THREE.Scene();scene.background=new THREE.Color(0x08080b);
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x88a4b5);
 const pmrem=new THREE.PMREMGenerator(renderer),environment=new RoomEnvironment(),environmentTarget=pmrem.fromScene(environment,.04);
 scene.environment=environmentTarget.texture;scene.environmentIntensity=.22;environment.dispose();pmrem.dispose();
 scene.add(new THREE.HemisphereLight(0xdce8ff,0x241414,1.65));
@@ -24,6 +24,14 @@ const camera=new THREE.PerspectiveCamera(67,1,.04,260),controls=new OrbitControl
 const plan=(x,y,z)=>[planToWorldX(x),y,z],views=[];
 const add=(id,label,position,target,caption="")=>views.push({id,label,position,target,caption});
 add("lobby","Lobby and concessions",plan(1,1.68,7),plan(-10,1.4,11));
+add("facade-glass","Tall lobby glazing",plan(1,1.68,11),plan(1,5.8,-2.5),"Transparent upper storefront from the door heads to the lobby roof");
+add("office-jamb","Office / storefront join",plan(-14.8,1.68,1.2),plan(-16.2,2.3,-2.3),"Closed return between the office wall and storefront");
+add("kitchen-roof","Kitchen service ceiling",plan(-18.5,1.68,9),plan(-18.5,4.6,11.4),"Continuous low ceiling over the full service strip");
+add("box-office-join","Continuous box-office counter",plan(5.4,1.68,3),plan(10.5,1.1,5),"One joined L-shaped countertop without overlapping corner faces");
+add("front-service-gap","Counter service gate",plan(-13.8,1.68,1.5),plan(-14.5,1.1,4.4),"Narrow two-leaf service opening at the end of the counter");
+add("t3-storage-entry","Theater 3 storage entrance",plan(-8.6,1.68,70.1),plan(-10.4,3.2,70.1),"Full-height anteroom header; low inner storage retained behind its doors");
+add("t3-anteroom","Theater 3 full-height anteroom",plan(-11.3,1.68,70),plan(-18.2,3.8,70.1));
+add("t6-entry-hall","Theater 6 raised entrance ceiling",plan(25.3,1.68,66.9),plan(35,3,66.9),"Entrance passage ceiling raised by 50% to 3.48 m");
 for(const id of ["concession-candy-1","concession-candy-2","concession-popper-1","soda-fountain-1","soda-icee-left","ticket-podium-center","manager-desk","kiosk-bank-sanitizer"]){
  const p=world.propPlacements.find(p=>p.id===id);if(!p)continue;
  const distance=id.includes("candy")?1.7:id.includes("popper")?3:2.4;
@@ -33,10 +41,13 @@ for(const id of ["concession-candy-1","concession-candy-2","concession-popper-1"
 }
 for(const room of AUDITORIUMS){
  const l=world.auditoriumLayouts.get(room.id);
+ add(`${room.id}-screen`,`Theater ${room.number} · enlarged screen`,plan(l.centerX,l.backElevation+1.68,l.backRowZ-l.direction*.7),plan((room.bounds.xMin+room.bounds.xMax)/2,l.frontElevation+3,room.screenSide==="north"?room.bounds.zMax:room.bounds.zMin),"Larger screen fitted to the room with its cinema aspect ratio preserved");
+ if(room.stadium.access==="top")add(`${room.id}-cubby`,`Theater ${room.number} · wider cubby clearance`,plan(l.sideAisles.east.centerX,1.68,l.backRowZ+1.7),plan(l.centerX,.9,l.backRowZ+.6));
  add(`${room.id}-overview`,`Theater ${room.number} · seating`,plan(l.centerX,l.frontElevation+2.1,l.frontRowZ-l.direction*(l.seatingProfile?1.9:1.1)),plan(l.centerX,l.backElevation*.5+1,(l.frontRowZ+l.backRowZ)/2),l.seatingProfile?"A/B in front · B–C walkway · C at ground level · D–H rise":"Established small-room arrangement retained");
  if(l.entryCross){
   const side=l.routeReserve.side,aisle=l.sideAisles[side];
   add(`${room.id}-crosswalk`,`Theater ${room.number} · B/C walkway`,plan(aisle.centerX,1.68,l.entryCross.centerZ),plan(l.centerX,1.3,l.entryCross.centerZ));
+  add(`${room.id}-front-steps`,`Theater ${room.number} · A/B descending steps`,plan(aisle.centerX,1.68,l.entryCross.centerZ),plan(aisle.centerX,l.frontElevation+.3,l.frontRowZ),"C and the crosswalk stay at ground level; B and A step down toward the screen");
   add(`${room.id}-rear`,`Theater ${room.number} · top-row wall`,plan(aisle.centerX,l.backElevation+1.68,l.backRowZ+.6),plan(l.centerX,l.backElevation+1.1,l.rearWallZ));
   add(`${room.id}-stairs`,`Theater ${room.number} · C to H side stairs`,plan(aisle.centerX,1.68,l.rows[2].z-l.direction*.7),plan(aisle.centerX,l.backElevation+.4,l.backRowZ),"Level row C; three 22 cm treads per row from D upward");
  }
