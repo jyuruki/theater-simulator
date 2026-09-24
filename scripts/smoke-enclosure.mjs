@@ -80,7 +80,7 @@ for (const x of [-20, -15, -10.4, -8.4, -5.5]) {
 
 // Seat-cleaning views look upward from below the next tread. Vertical floor
 // rays alone miss the open risers and the margin between stairs and sidewalls.
-let stairClosureRays = 0, wallMarginRays = 0;
+let stairClosureRays = 0, wallMarginRays = 0, wallHugChecks = 0;
 for (const room of AUDITORIUMS) {
   const layout = world.auditoriumLayouts.get(room.id);
   for (const tread of layout.sideStairTreads) {
@@ -100,6 +100,17 @@ for (const room of AUDITORIUMS) {
     assert.ok(floorHit && Math.abs(floorHit.point.y - tread.elevation) < .001,
       `${tread.id} leaves an uncovered margin beside the wall`);
     wallMarginRays++;
+    for (const radius of [.28, .34]) {
+      const hugX = wallX + (tread.side === "west" ? 1 : -1) * (radius + .01);
+      if ((hugX - outerX) * (tread.side === "west" ? -1 : 1) <= 0) continue;
+      const position = { x: planToWorldX(hugX), y: tread.elevation, z };
+      if (collision.isOverlapping(position, radius, tread.elevation, 1.78)) continue;
+      assert.ok(Math.abs(world.groundHeight(position.x, z, tread.elevation) - tread.elevation) < .001,
+        `${tread.id} reachable wall margin reports the wrong ground height for radius ${radius}`);
+      const rayHit = cast(hugX, tread.elevation + .12, z, 0, -1, 0, .15)[0];
+      assert.ok(rayHit && Math.abs(rayHit.point.y - tread.elevation) < .001);
+      wallHugChecks++;
+    }
   }
   for (const aisle of Object.values(layout.sideAisles)) {
     if (layout.routeReserve?.side === aisle.side) continue;
@@ -122,6 +133,14 @@ for (const room of AUDITORIUMS) {
     }
   }
 }
+assert.ok(wallHugChecks >= 100, "Exercise the reachable side margin with both player capsule radii");
+// Move the real player sideways from the authored T2 aisle into its narrow
+// outer margin. The lower step must not snap upward to the hall's zero floor.
+const t2 = world.auditoriumLayouts.get("theater-2"), t2Tread = t2.sideStairTreads[0];
+const t2Z = (t2Tread.bounds.zMin + t2Tread.bounds.zMax) / 2;
+const hugged = walk(t2.sideAisles.west.centerX, t2Z, t2Tread.elevation, -Math.PI / 2, 80);
+assert.ok(hugged.x < t2.bowlBounds.xMin && Math.abs(hugged.y - t2Tread.elevation) < .001,
+  `T2 wall-hug movement left the rendered tread: ${JSON.stringify(hugged)}`);
 
 // Reproduce five sky pixels from the real reachable Theater 2 A0 cleaning
 // stance, independent of optional GLB seats or the screenshot capture tool.
@@ -207,4 +226,4 @@ for (const [x, z] of [[-22.2, 2.9], [-24.7, 13], [-22.3, 18.1]]) {
   assert.ok(firstSurface?.object.castShadow, `Light leaks through the room shell at ${x}, ${z}`);
 }
 world.dispose(); materials.dispose();
-console.log(`Enclosure regression valid: ${enclosureApproaches} elevated-edge walks blocked · ${stairClosureRays} solid risers and ${wallMarginRays} closed wall margins · T2 cleaning sky leaks closed · T3 upper shell closed · 1,093 seats without adjacent mesh overlap · stacked zones, visible signs and interior shadow occlusion correct.`);
+console.log(`Enclosure regression valid: ${enclosureApproaches} elevated-edge walks blocked · ${stairClosureRays} solid risers and ${wallMarginRays} closed wall margins · ${wallHugChecks} reachable capsule margins match the floor · T2 cleaning sky leaks closed · T3 upper shell closed · 1,093 seats without adjacent mesh overlap · stacked zones, visible signs and interior shadow occlusion correct.`);
