@@ -2803,7 +2803,18 @@ export function createTheaterWorld({ scene, materials }) {
     let hasAuditoriumSurface = false;
     for (const layout of auditoriumLayouts.values()) {
       if (pointInRect(planX, z, layout.bounds)) insideTopEntryBowl ||= layout.access === "top";
-      const auditoriumCandidates = sampleAuditoriumGround(layout, planX, z);
+      // The renderer closes the outer stair/landing margin to the wall. A
+      // capsule can hug that narrow strip, so sample the adjacent authored
+      // aisle there instead of falling back to the hall's zero datum. Never
+      // clamp an entrance-route side or points beyond the bowl's end walls.
+      let sampleX = planX;
+      if (z >= layout.bowlBounds.zMin && z <= layout.bowlBounds.zMax) {
+        if (layout.routeReserve?.side !== "west" && planX >= layout.bounds.xMin + WALL_THICKNESS / 2
+          && planX < layout.bowlBounds.xMin) sampleX = layout.bowlBounds.xMin;
+        if (layout.routeReserve?.side !== "east" && planX <= layout.bounds.xMax - WALL_THICKNESS / 2
+          && planX > layout.bowlBounds.xMax) sampleX = layout.bowlBounds.xMax;
+      }
+      const auditoriumCandidates = sampleAuditoriumGround(layout, sampleX, z);
       if (auditoriumCandidates.length) hasAuditoriumSurface = true;
       candidates.push(...auditoriumCandidates);
     }
