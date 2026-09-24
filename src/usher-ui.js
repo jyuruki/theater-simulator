@@ -5,15 +5,19 @@ export function createUsherUI({ gameplay, controller, canvas, isBlocked = () => 
   const status = doc.querySelector("#visit-status");
   const actionButton = doc.querySelector("#tool-action-button");
   const returnButton = doc.querySelector("#tool-return-button");
+  const sheetButton = doc.querySelector("#breaksheet-button");
+  const broomButton = doc.querySelector("#broom-button");
+  const clothButton = doc.querySelector("#cloth-button");
   const heldInputs = new Set();
   let toolPointerId = null;
+  let cancelled = false;
   const listeners = [];
   const listen = (target, type, fn) => {
     target.addEventListener(type, fn);
     listeners.push(() => target.removeEventListener(type, fn));
   };
   const available = () => controller.started && controller.active && !doc.hidden && !isBlocked();
-  const clear = () => { heldInputs.clear(); toolPointerId = null; };
+  const clear = () => { heldInputs.clear(); toolPointerId = null; cancelled = true; };
   const interact = () => { if (available()) gameplay.interact(); };
   const returnTool = () => { if (available()) gameplay.returnTool(); };
   listen(win, "keydown", (event) => {
@@ -22,12 +26,16 @@ export function createUsherUI({ gameplay, controller, canvas, isBlocked = () => 
     if (event.repeat) return;
     if (event.code === "KeyE") { event.preventDefault(); interact(); }
     if (event.code === "KeyQ") { event.preventDefault(); returnTool(); }
+    if (event.code === "KeyB") { event.preventDefault(); clear(); gameplay.toggleSheet?.(); }
+    if (event.code === "Digit1") { event.preventDefault(); clear(); gameplay.selectTool?.("broom"); }
+    if (event.code === "Digit2") { event.preventDefault(); clear(); gameplay.selectTool?.("cloth"); }
   });
   listen(win, "keyup", (event) => { if (event.code === "KeyF") heldInputs.delete("keyboard"); });
   listen(canvas, "pointerdown", (event) => {
     if (event.button === 0 && event.pointerType !== "touch" && available()) heldInputs.add("mouse");
   });
   const releasePointer = (event) => {
+    if (event.type !== "pointerup" && ((event.pointerType !== "touch" && heldInputs.has("mouse")) || event.pointerId === toolPointerId)) cancelled = true;
     if (event.pointerType !== "touch") heldInputs.delete("mouse");
     if (event.pointerId === toolPointerId) { heldInputs.delete("touch"); toolPointerId = null; }
   };
@@ -37,6 +45,9 @@ export function createUsherUI({ gameplay, controller, canvas, isBlocked = () => 
   listen(doc, "visibilitychange", () => { if (doc.hidden) clear(); });
   listen(prompt, "click", interact);
   listen(returnButton, "click", returnTool);
+  if (sheetButton) listen(sheetButton, "click", () => { if (available()) { clear(); gameplay.toggleSheet?.(); } });
+  if (broomButton) listen(broomButton, "click", () => { if (available()) { clear(); gameplay.selectTool?.("broom"); } });
+  if (clothButton) listen(clothButton, "click", () => { if (available()) { clear(); gameplay.selectTool?.("cloth"); } });
   listen(actionButton, "pointerdown", (event) => {
     event.preventDefault();
     if (!available()) return;
@@ -53,14 +64,16 @@ export function createUsherUI({ gameplay, controller, canvas, isBlocked = () => 
     update(delta) {
       const active = available();
       if (!active) clear();
-      gameplay.update(delta, { active, action: active && heldInputs.size > 0 });
+      gameplay.update(delta, { active, action: active && heldInputs.size > 0, cancelAction: cancelled });
+      cancelled = false;
       const label = active ? gameplay.focusedPrompt : "";
       prompt.hidden = !label;
       if (label) prompt.textContent = `${controller.isTouchMode ? "Tap" : "E"} · ${label}`;
       const hasTool = Boolean(gameplay.heldTool);
       actionButton.hidden = !(active && controller.isTouchMode && hasTool);
       returnButton.hidden = actionButton.hidden;
-      actionButton.textContent = gameplay.heldTool === "cloth" ? "HOLD TO WIPE" : "HOLD TO SWEEP";
+      actionButton.textContent = gameplay.actionLabel ?? (gameplay.heldTool === "cloth" ? "HOLD TO WIPE" : "HOLD TO SWEEP");
+      returnButton.textContent = "STOW / RELEASE";
       const hint = controller.started ? gameplay.hint : "";
       if (status.textContent !== hint) status.textContent = hint;
     },

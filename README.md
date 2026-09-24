@@ -6,9 +6,18 @@ A first-person browser recreation of Consolidated Theatres Mililani 14, built fr
 
 This is an independent recreation with approximate dimensions, not an official architectural survey or ticket service.
 
-The game now starts with an usher shift in Theater 2. Read the physical schedule sheet, sweep popcorn into a dustpan, empty it in the trash, wipe spills and return the tools. The [employee gameplay direction](docs/gameplay-direction.md) records the broader career and minimal-menu approach; other jobs remain future work.
+The game starts as an usher with a portable cleaning kit and a handheld break sheet. Follow the fivefold shift clock through all fourteen theaters, clean used trays and seats, sweep into a left-hand dustpan, move three rolling trash cans, replace full bags, service soda BIBs, refill supplies and wash kitchen trays. The [employee gameplay direction](docs/gameplay-direction.md) records the broader career and minimal-menu approach.
 
-## Version 0.21
+## Version 0.22
+
+- **Used-seat cleaning:** each break generates different used seats and messes. Wipe the open tray and cushion, sweep chair popcorn down, close the tray, then clean the floor. The right-hand broom pulls toward the left-hand pan.
+- **Physical shift schedule:** a pocket sheet follows the supplied three-column reference. Bold rows start movies; regular rows break. Close auditorium doors at starts. One real minute equals five game minutes.
+- **Three rolling cans:** push cans between upcoming breaks, accept customer rubbish, lift and tie full bags, throw them into the trash-room gondola, and fit opened replacement liners.
+- **BIB and tray-wash room:** exchange keyed syrup cartons and hoses, refill straws/lids/ketchup/salt, and physically wash kitchen trays. Shared hands and local saves connect all tasks.
+
+See [v0.22 controls, behavior and limits](docs/v22-notes.md). Development inspection is available at `/shift-review.html`.
+
+## Version 0.21 (historical)
 
 - **Raised screens:** every screen begins 1.8 m above its front floor, with taller presentation surfaces and ceilings fitted around them. Images fit the unobstructed viewing space, preserving room footprints and entrance routes. All 1,093 seated views are checked across the entire image.
 - **Dimmer halls:** warmer local light pools replace the broad, uniform hall lighting. Ambient light fades smoothly between the halls and lobby.
@@ -63,15 +72,16 @@ See [V18 implementation and reference notes](docs/v18-notes.md) and the [establi
 |---|---|
 | WASD / mouse | Move / look |
 | Shift / Space | Run / jump |
-| E | Read the schedule, take a tool or empty the dustpan while looking at the object |
-| Hold left mouse / F | Sweep, or wipe while moving the cloth over the floor |
-| Q | Return your tool when beside the cart |
+| E | Operate the focused prop: take, place, connect, close, or empty |
+| Hold left mouse / F | Sweep, wipe while moving, refill, wash, tie, or open a liner; release a charged tied bag to throw |
+| B / 1 / 2 | Read the break sheet / select broom and pan / select cloth |
+| Q | Holster cleaning tools, release a rolling can, or set down a carried item |
 | M | Floor plan |
-| O | Sound, volume, and visitor options |
+| O | Sound, volume, and settings |
 | R | Return to the usher cart |
 | Esc | Close a dialog or pause and release the mouse |
 
-On touch devices, use the movement stick, drag to look, tap the interaction prompt, and hold the tool-action button while cleaning. The map and options are also touch-accessible. Cleaning progress is saved locally on this device; after finishing and returning the tools, use the schedule sheet to start another break.
+On touch devices, use the movement stick, drag to look, tap the interaction prompt, and hold the task-action button. Sheet, tool, map and settings shortcuts are touch-accessible. Shift progress saves locally on this device.
 
 ## Development
 
@@ -107,11 +117,15 @@ The regression suites cover:
 | [Counter geometry](scripts/smoke-counter-geometry.mjs) | Continuous counter joins, the box-office L corner, display openings, 1.7 m service-gate clearance and kitchen-side Expo. |
 | [Screens](scripts/smoke-screens.mjs) | Every seated view across the full image, occupied-row clearance, raised ceilings and retained low entrance roofs. |
 | [Lighting](scripts/smoke-lighting.mjs) | Smooth hall transitions, fixture positions and localized light pools. |
-| [Usher task](scripts/smoke-usher.mjs) | Full physical cleanup and disposal loop, tool collision, save/restore, pause and repeat shifts. |
+| [Usher task](scripts/smoke-usher.mjs) | Seeded used seats in all 14 theaters, ordered contact cleaning, inward sweeping, partial disposal, carryover and bounded visuals. |
+| [Shift](scripts/smoke-shift.mjs) | Fivefold clock, reference sheet, all auditorium doors and async GLB tray masking. |
+| [Waste](scripts/smoke-waste.mjs) | Three physical cans, routes, leapfrogging, customer throws and full bag/liner cycle. |
+| [Supplies](scripts/smoke-supplies.mjs) | BIB replacement, keyed refills, tray washing, contact poses, save recovery and route access. |
+| [Combined shift](scripts/smoke-usher-shift.mjs) | Shared hands, paper/tool isolation, timing across all 14 rooms, pause and keyed persistence. |
 | [Usher controls](scripts/smoke-usher-ui.mjs) | Mouse, keyboard and multi-touch actions, cancellation and disabled visitor menus. |
 
 GitHub Actions runs the same tests and production build for pull requests and deploys `dist` to GitHub Pages on updates to `main`.
 
 ## Current scope
 
-The playable build includes the theater walkthrough and a repeatable, locally saved Theater 2 cleaning task. Employee progression, timed show breaks, BIB and ICEE servicing, cooking, and an in-world POS workflow are not implemented yet. The intended register layout will come from the user. See the [gameplay direction](docs/gameplay-direction.md) before adding job mechanics. Cloud saves, real cinema listings and multiplayer networking are outside the current implementation. Materials, characters and dimensions remain an approximation. The reference photographs are documented but are not bundled into the game; models, artwork, programming and sounds are original.
+The playable build includes the theater walkthrough and the locally saved usher tasks described above. Bathroom cleaning, ICEE servicing, sound/picture checks, employee progression, cooking and an in-world POS workflow remain future work. The intended register layout will come from the user. See the [gameplay direction](docs/gameplay-direction.md) before adding job mechanics. Cloud saves, real cinema listings and multiplayer networking are outside the current implementation. Materials, characters and dimensions remain an approximation. The reference photographs are documented but are not bundled into the game; models, artwork, programming and sounds are original.

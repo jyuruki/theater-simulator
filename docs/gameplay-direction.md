@@ -52,17 +52,23 @@ remain accessible with keyboard and touch as well as mouse input.
 
 ## Current implementation boundary
 
-Version 0.21 starts the player as an usher beside a physical cart and schedule
-sheet in Theater 2. Its first repeatable task is playable: sweep loose popcorn
-into a visible dustpan, empty it in the theater trash can, wipe two spills by
-moving a cloth over them, and return the tools. The sheet reflects actual dirt
-and disposal state. Progress saves locally. Cleaning uses constrained contact
-physics within the rear aisle; this is not yet a general rigid-body system.
+Version 0.22 supplies all fourteen theaters with seeded used-seat cleanup,
+a portable kit, an always-available three-column break sheet and a fivefold
+shift clock. Bold start rows mean close the auditorium doors; regular rows mean
+a theater break. Used trays stay open until the usher wipes tray then cushion,
+sweeps chair debris to the floor, closes the tray, and cleans the floor last.
+The broom pulls toward a left-hand dustpan.
 
-The old visitor ticket/order prototype is disabled in the employee experience.
-The broader career, timed theater-break scheduling, other usher duties, food
-preparation and physical POS workflows remain future work. Preserve the minimal
-menu approach while extending this first complete task.
+Three wheeled gray cans leapfrog the next unserved breaks. Customer packaging
+lands in them; full bags are lifted, tied and thrown into the trash-room gondola.
+Spare liners are carried on each can. The fountain service room holds keyed BIB
+exchanges, straw/lid/ketchup/salt stock and the kitchen-tray washing station.
+Keep future furnishings compatible with these physical routes and hand use.
+
+The visitor ticket/order prototype remains disabled. Bathroom cleaning, ICEE
+servicing, sound/picture checks, career progression, food preparation and physical
+POS workflows remain future work. Preserve the minimal-menu approach while
+extending the complete physical tasks. See [v0.22 notes](v22-notes.md).
 
 Theater 3's full-height anteroom leads through doors to legitimately lower
 under-seat storage. The lower inner ceiling is intentional, per the user's

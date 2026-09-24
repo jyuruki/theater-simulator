@@ -476,7 +476,7 @@ export const SERVICE_ROOMS = Object.freeze([
       sinks: Object.freeze([{ side: "north", count: 3, start: 48.5, end: 52.8 }]),
     }),
   },
-  { id: "future-task-room", name: "Future Task Room", short: "TASK", detail: "Empty gameplay room directly behind the fountain counters on the shared courtyard door plane", bounds: rect(-3.2, 7.3, COURTYARD_BACK_WALL_Z, 74.8), kind: "storage", entrySide: "south", doorCenter: -1.7, courtyardId: COURTYARD_PLAN.id },
+  { id: "future-task-room", name: "BIB & Tray Wash", short: "BIB", detail: "Soda syrup connections, service stock and kitchen tray washing behind the fountains", bounds: rect(-3.2, 7.3, COURTYARD_BACK_WALL_Z, 74.8), kind: "storage", entrySide: "south", doorCenter: -1.7, courtyardId: COURTYARD_PLAN.id },
   { id: "candy-storage", name: "Candy Storage", short: "CANDY", detail: "Wide, shallow bulk-candy room with one left-side hall door", bounds: rect(101, 111, 62.2, 67.2), kind: "storage", entrySide: "south", doorCenter: 102.7 },
   { id: "under-storage-3", name: "Under-Seat Storage 3", short: "U/S 3", detail: "One-door horizontal anteroom leading to a two-door under-tier room", bounds: rect(-21.5, -9.9, 72, 82.5), kind: "storage-lower", orientation: "horizontal", ceilingHeight: 2.32, accessHallCeilingHeight: 4.6, doorSide: "south", doorCenters: [-18.6, -12.3], accessHall: rect(-21.5, -9.9, 68.2, 72), outerDoorSide: "east", outerDoorCenter: 70.1 },
   { id: "under-storage-6", name: "Under-Seat Storage 6", short: "U/S 6", detail: "Shared two-door room below Theater 6's upper tiers", bounds: rect(31.7, 44.7, 68.5, 71.8), kind: "storage-lower", ceilingHeight: 2.32, doorSide: "south", doorCenters: [35.2, 41.7] },
