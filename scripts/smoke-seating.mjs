@@ -212,14 +212,15 @@ for (const room of AUDITORIUMS) {
       `${room.id}: recentered cubby side door must admit the player`);
   }
   const screen = world.root.getObjectByName(`${room.id}-screen`);
-  const roomWidth = room.bounds.xMax - room.bounds.xMin;
-  const ceilingY = { large150: 7.55, medium58: 6.25, standard50: 5.6, compact38: 5.45 }[room.preset];
-  assert.ok(screen.scale.x > roomWidth * 0.9, `${room.id} screen should fill its wall`);
-  close(screen.scale.x / screen.scale.y, 2.08, `${room.id} screen keeps the presentation aspect ratio`);
-  close(screen.position.x, planToWorldX((room.bounds.xMin + room.bounds.xMax) / 2), `${room.id} screen centered on full wall`);
+  const bowlWidth = layout.bowlBounds.xMax - layout.bowlBounds.xMin;
+  const ceilingY = layout.presentation.ceilingY;
+  assert.ok(screen.scale.x > bowlWidth * 0.9, `${room.id} screen should fill the unobstructed bowl width`);
+  close(screen.scale.x / screen.scale.y, 1.6, `${room.id} screen keeps the presentation aspect ratio`);
+  close(screen.position.x, planToWorldX(layout.presentation.screen.centerX), `${room.id} screen centered in its unobstructed front-wall area`);
   assert.ok(screen.position.y + screen.scale.y / 2 + 0.17 < ceilingY - 0.05, `${room.id} screen frame clears roof`);
   assert.ok(screen.position.y - screen.scale.y / 2 - 0.17 >= layout.frontElevation - 1e-6, `${room.id} screen frame clears front floor`);
+  close(screen.position.y - screen.scale.y / 2 - layout.frontElevation, 1.8, `${room.id} screen bottom is person-height above front floor`);
 }
 world.dispose();
 materials.dispose();
-console.log(`Seating valid: A/B separately lowered, C at ground · eight doubled rear-entry gaps with fixed seat banks and working outer/side portals · 14 larger screens · four clear B/C crosswalks · ${stairWalks} complete A–H stair climbs and C–A descents · ${storageSamples} storage-clearance samples · all 1,093 seats retained.`);
+console.log(`Seating valid: A/B separately lowered, C at ground · eight doubled rear-entry gaps with fixed seat banks and working outer/side portals · 14 raised, taller screens · four clear B/C crosswalks · ${stairWalks} complete A–H stair climbs and C–A descents · ${storageSamples} storage-clearance samples · all 1,093 seats retained.`);

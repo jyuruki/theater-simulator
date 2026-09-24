@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#09080d" />
     <meta
       name="description"
-      content="A first-person layout prototype of a fourteen-screen neighborhood movie theater."
+      content="Work an usher shift in a fourteen-screen neighborhood movie theater."
     />
     <title>Mililani 14 — Theater Simulator</title>
     <link rel="stylesheet" href="./styles.css" />
@@ -24,26 +24,27 @@
         <div class="eyebrow">BEHIND THE SCENES · 14 SCREENS</div>
         <h1 id="intro-title">MILILANI <span>14</span></h1>
         <p>
-          Step onto the theater floor. Explore the auditoriums, service corridors,
-          concession stations and kitchen—the places that make a shift run.
+          Your first usher shift. Read the schedule at the cleaning station,
+          take your tools, and get Theater 2 ready for its next show.
         </p>
-        <button id="enter-button" type="button">ENTER THE THEATER</button>
+        <button id="enter-button" type="button">START YOUR SHIFT</button>
         <div class="control-list" aria-label="Controls">
           <span><b>WASD</b> Move</span>
           <span><b>Mouse</b> Look</span>
           <span><b>Shift</b> Run</span>
           <span><b>Space</b> Jump</span>
           <span><b>E</b> Interact</span>
-          <span><b>I</b> Your ticket</span>
+          <span><b>Hold click / F</b> Clean</span>
+          <span><b>Q</b> Return tool</span>
           <span><b>M</b> Map</span>
           <span><b>Esc</b> Pause</span>
         </div>
       </section>
 
       <section id="pause-card" class="pause-card" hidden>
-        <div class="eyebrow">WALKTHROUGH PAUSED</div>
+        <div class="eyebrow">SHIFT PAUSED</div>
         <h2>Ready when you are.</h2>
-        <button id="resume-button" type="button">RESUME WALKTHROUGH</button>
+        <button id="resume-button" type="button">RESUME SHIFT</button>
         <button id="pause-settings-button" class="pause-options" type="button">Sound &amp; atmosphere</button>
       </section>
 
@@ -54,11 +55,11 @@
           <small id="location-detail">Public entrance</small>
         </div>
         <div class="build-card">
-          <span>LAYOUT BUILD</span>
-          <strong>v0.20</strong>
+          <span>USHER BUILD</span>
+          <strong>v0.21</strong>
         </div>
-        <nav class="visit-toolbar" aria-label="Visit controls">
-          <button id="ticket-button" type="button">My ticket <kbd>I</kbd></button>
+        <nav class="visit-toolbar" aria-label="Shift controls">
+          <button id="ticket-button" type="button" hidden>My ticket <kbd>I</kbd></button>
           <button id="map-button" type="button">Map <kbd>M</kbd></button>
           <button id="settings-button" type="button" aria-label="Sound and atmosphere settings">Options</button>
         </nav>
@@ -85,6 +86,8 @@
       </div>
 
       <button id="interact-button" type="button" hidden></button>
+      <button id="tool-action-button" type="button" hidden>HOLD TO CLEAN</button>
+      <button id="tool-return-button" type="button" hidden>RETURN TOOL</button>
       <p id="visit-status" aria-live="polite"></p>
       <dialog id="visit-dialog" aria-labelledby="visit-heading"></dialog>
 

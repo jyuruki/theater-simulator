@@ -6,9 +6,17 @@ A first-person browser recreation of Consolidated Theatres Mililani 14, built fr
 
 This is an independent recreation with approximate dimensions, not an official architectural survey or ticket service.
 
-The intended game follows an employee starting as an usher, with physical cleaning, equipment and service tasks. The current build is a spatial walkthrough with an older visitor ticket/order prototype. The [employee gameplay direction](docs/gameplay-direction.md) records the planned progression, hands-on interactions and minimal-menu approach; those job systems are future work.
+The game now starts with an usher shift in Theater 2. Read the physical schedule sheet, sweep popcorn into a dustpan, empty it in the trash, wipe spills and return the tools. The [employee gameplay direction](docs/gameplay-direction.md) records the broader career and minimal-menu approach; other jobs remain future work.
 
-## Version 0.20
+## Version 0.21
+
+- **Raised screens:** every screen begins 1.8 m above its front floor, with taller presentation surfaces and ceilings fitted around them. Images fit the unobstructed viewing space, preserving room footprints and entrance routes. All 1,093 seated views are checked across the entire image.
+- **Dimmer halls:** warmer local light pools replace the broad, uniform hall lighting. Ambient light fades smoothly between the halls and lobby.
+- **First usher task:** a physical clipboard, broom, dustpan and cloth support a complete Theater 2 cleanup loop. Popcorn moves into the pan before disposal; wiping requires cloth movement. The task is repeatable and saves progress on this device. Visitor ticket menus are disabled.
+
+See [v0.21 details and limits](docs/v21-notes.md).
+
+## Version 0.20 (historical)
 
 This update addresses the ten marked walkthrough screenshots and enlarges all fourteen auditorium screens.
 
@@ -55,14 +63,15 @@ See [V18 implementation and reference notes](docs/v18-notes.md) and the [establi
 |---|---|
 | WASD / mouse | Move / look |
 | Shift / Space | Run / jump |
-| E | Use the kiosk, register, podium, Expo or drink machine you are looking at |
-| I | Your ticket and orders |
+| E | Read the schedule, take a tool or empty the dustpan while looking at the object |
+| Hold left mouse / F | Sweep, or wipe while moving the cloth over the floor |
+| Q | Return your tool when beside the cart |
 | M | Floor plan |
 | O | Sound, volume, and visitor options |
-| R | Return to the entrance |
+| R | Return to the usher cart |
 | Esc | Close a dialog or pause and release the mouse |
 
-On touch devices, use the movement stick, drag to look, and tap the interaction prompt. The ticket, map and options buttons are also touch-accessible. Shows, seats and orders are simulated; there is no payment, external reservation, or saved personal information. Reloading starts a fresh visit.
+On touch devices, use the movement stick, drag to look, tap the interaction prompt, and hold the tool-action button while cleaning. The map and options are also touch-accessible. Cleaning progress is saved locally on this device; after finishing and returning the tools, use the schedule sheet to start another break.
 
 ## Development
 
@@ -96,9 +105,13 @@ The regression suites cover:
 | [Integrated assets](scripts/smoke-integrated-assets.mjs) | Actual props loaded into the complete theater, all 1,093 chairs and shared armrests, row clearance, display orientation, fitted bounds and unchanged collision data. |
 | [Lobby repairs](scripts/smoke-lobby-repair.mjs) | Rendered service-roof coverage and overlap, transparent upper glazing, full-height office-jamb closure and preserved door apertures. |
 | [Counter geometry](scripts/smoke-counter-geometry.mjs) | Continuous counter joins, the box-office L corner, display openings, 1.7 m service-gate clearance and kitchen-side Expo. |
+| [Screens](scripts/smoke-screens.mjs) | Every seated view across the full image, occupied-row clearance, raised ceilings and retained low entrance roofs. |
+| [Lighting](scripts/smoke-lighting.mjs) | Smooth hall transitions, fixture positions and localized light pools. |
+| [Usher task](scripts/smoke-usher.mjs) | Full physical cleanup and disposal loop, tool collision, save/restore, pause and repeat shifts. |
+| [Usher controls](scripts/smoke-usher-ui.mjs) | Mouse, keyboard and multi-touch actions, cancellation and disabled visitor menus. |
 
 GitHub Actions runs the same tests and production build for pull requests and deploys `dist` to GitHub Pages on updates to `main`.
 
 ## Current scope
 
-The playable build remains a spatial walkthrough with a visitor ticket/order prototype. Employee progression, physical cleaning, BIB and ICEE servicing, cooking, and an in-world POS workflow are not implemented yet. The intended register layout will come from the user. See the [gameplay direction](docs/gameplay-direction.md) before adding job mechanics. Persistent saves, real cinema listings and multiplayer networking are also outside the current implementation. Materials, characters and dimensions remain an approximation. The reference photographs are documented but are not bundled into the game; models, artwork, programming and sounds are original.
+The playable build includes the theater walkthrough and a repeatable, locally saved Theater 2 cleaning task. Employee progression, timed show breaks, BIB and ICEE servicing, cooking, and an in-world POS workflow are not implemented yet. The intended register layout will come from the user. See the [gameplay direction](docs/gameplay-direction.md) before adding job mechanics. Cloud saves, real cinema listings and multiplayer networking are outside the current implementation. Materials, characters and dimensions remain an approximation. The reference photographs are documented but are not bundled into the game; models, artwork, programming and sounds are original.

@@ -500,3 +500,16 @@ input[type="range"] { width: 100%; accent-color: #e05a74; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
+
+/* Tool actions accompany the touch look/joystick controls, without a job menu. */
+#tool-action-button, #tool-return-button {
+  position: fixed; z-index: 12; right: 24px; border: 1px solid #dcc28b88;
+  border-radius: 8px; color: #fff5dd; background: #242015e8;
+  padding: 14px 18px; font: 700 11px system-ui; touch-action: none;
+}
+#tool-action-button { bottom: 206px; }
+#tool-return-button { bottom: 155px; padding: 10px 14px; }
+@media (max-width: 760px), (pointer: coarse) {
+  #interact-button { max-width: calc(100vw - 36px); white-space: normal; bottom: 270px; }
+  #visit-status { max-width: calc(100vw - 40px); }
+}

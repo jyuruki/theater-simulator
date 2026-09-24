@@ -3,6 +3,7 @@ import { AUDITORIUMS, HALL_PLAN, PUBLIC_SPACES } from "./layout-data.js";
 import { planToWorldX } from "./coordinates.js";
 import { SHOWS } from "./showtimes.js";
 import { createSignTexture } from "./materials.js";
+import { AUDITORIUM_SCREEN_SPEC } from "./layout-geometry.js";
 
 function surface(width, height) {
   if (typeof OffscreenCanvas !== "undefined")
@@ -157,7 +158,9 @@ export function createCinemaMedia({ scene, world, materials }) {
   }
 
   // A modest original animated pre-show, uploaded only while inside a bowl.
-  const projectionCanvas = surface(1024, 512),
+  const projectionHeight = 640;
+  const projectionWidth = Math.round(projectionHeight * AUDITORIUM_SCREEN_SPEC.aspect);
+  const projectionCanvas = surface(projectionWidth, projectionHeight),
     ctx = projectionCanvas.getContext("2d");
   const projection = new THREE.CanvasTexture(projectionCanvas);
   projection.colorSpace = THREE.SRGBColorSpace;
@@ -180,12 +183,17 @@ export function createCinemaMedia({ scene, world, materials }) {
   function paint(roomId) {
     const number = Number(roomId?.replace("theater-", "")) || 1,
       show = SHOWS[number - 1] ?? SHOWS[0];
+    // Keep the artwork's original proportions inside the taller cinema image.
+    // A uniform transform adds background above/below rather than stretching it.
+    const drawingScale = projectionWidth / 1024;
+    const verticalPadding = (projectionHeight / drawingScale - 512) / 2;
+    ctx.setTransform(drawingScale, 0, 0, drawingScale, 0, verticalPadding * drawingScale);
     const gradient = ctx.createLinearGradient(0, 0, 1024, 512);
     gradient.addColorStop(0, "#081329");
     gradient.addColorStop(0.55, "#123548");
     gradient.addColorStop(1, "#100f24");
     ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 1024, 512);
+    ctx.fillRect(0, -verticalPadding, 1024, 512 + verticalPadding * 2);
     for (let star = 0; star < 95; star++) {
       const x =
           ((star * 137.13 + elapsed * ((star % 3) + 1) * 0.7) % 1080) - 28,

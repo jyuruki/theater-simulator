@@ -4,11 +4,14 @@ import { createVisitUI } from "./visit-ui.js";
 import { createTheaterCrowd, createTheaterAudio } from "./atmosphere.js";
 import { createCinemaMedia } from "./cinema-media.js";
 import { PLAYER_SPAWN_PLAN, validateLayoutData, zoneAt } from "./layout-data.js";
-import { planToWorldX, worldToPlanDirection, worldToPlanPoint } from "./coordinates.js";
+import { worldToPlanDirection, worldToPlanPoint } from "./coordinates.js";
 import { createMaterialLibrary } from "./materials.js";
 import { createMinimap } from "./minimap.js";
 import { AABBCollisionWorld, FirstPersonController } from "./player.js";
 import { createTheaterWorld } from "./world.js";
+import { createTheaterLighting } from "./lighting.js";
+import { createUsherGameplay, USHER_SPAWN } from "./usher-gameplay.js";
+import { createUsherUI } from "./usher-ui.js";
 
 const canvas = document.querySelector("#game-canvas");
 const loadingScreen = document.querySelector("#loading-screen");
@@ -78,22 +81,14 @@ try {
 
   const camera = new THREE.PerspectiveCamera(67, window.innerWidth / window.innerHeight, 0.06, 260);
   const spawnWorld = {
-    x: planToWorldX(PLAYER_SPAWN_PLAN.x),
-    y: PLAYER_SPAWN_PLAN.y,
-    z: PLAYER_SPAWN_PLAN.z,
+    x: USHER_SPAWN.position[0],
+    y: USHER_SPAWN.position[1],
+    z: USHER_SPAWN.position[2],
   };
   camera.position.set(spawnWorld.x, 1.68, spawnWorld.z);
 
-  const hemisphere = new THREE.HemisphereLight(0xdce8ff, 0x241414, 1.65);
-  scene.add(hemisphere);
-  const sun = new THREE.DirectionalLight(0xffead4, 1.8);
-  sun.position.set(-18, 28, -16);
-  sun.castShadow = true;
-  sun.shadow.mapSize.set(1024, 1024);
-  Object.assign(sun.shadow.camera, { left:-33, right:33, top:36, bottom:-29, near:0.5, far:100 });
-  sun.shadow.normalBias = 0.025;
-  sun.shadow.bias = -0.00015;
-  scene.add(sun);
+  const lighting = createTheaterLighting({ scene });
+  lighting.update(camera.position);
 
   const materials = createMaterialLibrary(renderer);
   const world = createTheaterWorld({ scene, materials });
@@ -128,14 +123,14 @@ try {
     domElement: canvas,
     collisionWorld,
     spawn: [spawnWorld.x, spawnWorld.y, spawnWorld.z],
-    initialYaw: Math.PI,
+    initialYaw: USHER_SPAWN.yaw,
     groundSampler: world.groundHeight,
     ceilingSampler: world.ceilingHeight,
     onLockChange(active) {
       setPausedUi(!active);
     },
     onLockError() {
-      showToast("Click the walkthrough to resume mouse look.", 2600);
+      showToast("Click the theater to resume mouse look.", 2600);
       setPausedUi(true);
     },
     onStuckRecovered() {
@@ -176,7 +171,13 @@ try {
   };
 
   interactions = createVisitUI({ controller, camera, collisionWorld, showToast,
-    onSound: (kind) => audio.play(kind), audio, crowd, toggleMap });
+    onSound: (kind) => audio.play(kind), audio, crowd, toggleMap, employeeMode: true });
+  let shiftStorage;
+  try { shiftStorage = window.localStorage; } catch { /* The shift also works without browser storage. */ }
+  const usher = createUsherGameplay({ scene, world, camera, collisionWorld, showToast,
+    onSound: (kind) => audio.play(kind), storage: shiftStorage });
+  const usherUI = createUsherUI({ gameplay: usher, controller, canvas,
+    isBlocked: () => interactions.isOpen });
 
   mapClose.addEventListener("click", () => toggleMap(true));
   window.addEventListener("keydown", (event) => {
@@ -184,8 +185,9 @@ try {
     if (event.code === "KeyM" && !event.repeat) toggleMap();
     if (event.code === "KeyR" && !event.repeat && entered) {
       controller.setPosition([spawnWorld.x, spawnWorld.y, spawnWorld.z]);
-      controller.setLook(Math.PI, 0);
-      showToast("Returned to the front entrance.");
+      controller.setLook(USHER_SPAWN.yaw, 0);
+      lighting.update(controller.position);
+      showToast("Returned to the usher station.");
     }
   });
 
@@ -213,6 +215,8 @@ try {
     controller.update(delta);
     updateHud();
     interactions.update(delta);
+    usherUI.update(delta);
+    lighting.update(controller.position, delta);
     audio.update(controller.position, currentZoneId, entered && (controller.active || interactions.isOpen), controller.grounded);
     media.update(delta, currentZoneId, entered && controller.active && !document.hidden);
 
@@ -259,6 +263,10 @@ try {
     audio.dispose();
     crowd.dispose();
     media.dispose();
+    usherUI.dispose();
+    usher.dispose();
+    lighting.dispose();
+    controller.dispose();
     world.dispose();
   });
 
@@ -267,7 +275,7 @@ try {
     enumerable: false,
     writable: false,
     value: Object.freeze({
-      layoutVersion: "mililani-sketch-v20",
+      layoutVersion: "mililani-sketch-v21",
       validation: Object.freeze(validation),
       stats: world.stats,
       controller,
@@ -277,6 +285,7 @@ try {
       equipment: world.equipment,
       interactions,
       crowd,
+      usher,
     }),
   });
 } catch (error) {
