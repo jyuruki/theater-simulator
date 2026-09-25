@@ -1,3 +1,5 @@
+import { createShowAttendance } from "./show-attendance.js";
+import { seatTrayOpenAngle } from "./seat-tray-motion.js";
 export const USHER_STEP = 1 / 120;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export function seededRandom(seed) {
@@ -6,7 +8,7 @@ export function seededRandom(seed) {
   return () => { n += 0x6d2b79f5; let t = n; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 }
 export function createUsherState() {
-  const state = { version: 23, jobs: [], heldTool: null, kit: true, pouring: 0, pourTarget: null, elapsed: 0 };
+  const state = { version: 24, jobs: [], heldTool: null, kit: true, pouring: 0, pourTarget: null, elapsed: 0 };
   Object.defineProperty(state, "particles", { get: () => state.jobs.flatMap(j => j.particles) });
   Object.defineProperty(state, "surfaces", { get: () => state.jobs.flatMap(j => j.surfaces) });
   return state;
@@ -15,13 +17,16 @@ const cells = (width, depth, count = 3) => Array.from({ length: count * count },
   x: ((i % count) / (count - 1) - .5) * width * .72,
   z: (Math.floor(i / count) / (count - 1) - .5) * depth * .72, dirt: 1,
 }));
-export function beginCleaningBreak(state, plan, seed) {
+export function beginCleaningBreak(state, plan, seed, { cycle = 0, seatIds } = {}) {
   const existing = state.jobs.find(j => j.id === plan.id);
   if (existing && (existing.seed === String(seed) || !theaterSummary(existing).complete)) return false;
   const random = seededRandom(`${plan.id}/${seed}`);
-  const job = { id: plan.id, number: plan.number, seed: String(seed), seats: [], surfaces: [], particles: [], completed: false };
+  const occupied = new Set(seatIds ?? createShowAttendance(plan, { cycle }).seatIds);
+  const job = { id: plan.id, number: plan.number, seed: String(seed), cycle, seats: [], surfaces: [], particles: [], completed: false };
   for (const s of plan.seats) {
-    const seat = { ...s, trayOpen: true, trayAngle: -1.8, trayTarget: -1.8 };
+    if (!occupied.has(s.id)) continue;
+    const openAngle = seatTrayOpenAngle(s.width);
+    const seat = { ...s, trayOpen: true, trayAngle: openAngle, trayTarget: openAngle };
     job.seats.push(seat);
     for (const kind of ["tray", "seat"]) job.surfaces.push({ id: `${s.id}-${kind}`, seatId: s.id, kind,
       width: kind === "tray" ? .36 : s.width * .82, depth: kind === "tray" ? .25 : .39,
@@ -39,8 +44,7 @@ export function beginCleaningBreak(state, plan, seed) {
       z: patch.z + (random() - .5) * .4, y: patch.y + .035, floorY: patch.y, vx: 0, vz: 0, vy: 0,
       mode: "floor", bounds: patch.bounds });
   });
-  // Keep lookup tables out of serialized state. Every seat is now inspected,
-  // so repeated linear searches in the 120 Hz contact loop are avoidable work.
+  // Keep lookup tables out of serialized state and the contact loop linear.
   Object.defineProperties(job, {
     surfacesById: { value: new Map(job.surfaces.map(s => [s.id, s])) },
     seatsById: { value: new Map(job.seats.map(s => [s.id, s])) },
@@ -53,7 +57,7 @@ export const surfaceClean = surface => surface.cells.every(c => c.dirt <= .001);
 export function seatStage(job, seat) {
   if (!surfaceClean(job.surfacesById.get(`${seat.id}-tray`))) return "wipe tray";
   if (!surfaceClean(job.surfacesById.get(`${seat.id}-seat`))) return "wipe seat";
-  if (job.chairParticles.get(seat.id).some(p => ["chair", "falling"].includes(p.mode))) return "sweep seat";
+  if (job.chairParticles.get(seat.id).some(p => ["chair", "falling"].includes(p.mode))) return "brush seat by hand";
   if (seat.trayOpen || Math.abs(seat.trayAngle) > .02) return "close tray";
   return "ready";
 }
@@ -65,7 +69,7 @@ export function theaterSummary(job) {
   const trash = job.particles.filter(p => p.mode === "trash").length;
   const floorSurfaces = job.surfaces.filter(s => s.kind === "floor"), spills = floorSurfaces.filter(surfaceClean).length;
   return { active: true, id: job.id, number: job.number, usedSeats: job.seats.length, seatsReady, floor, pan, trash,
-    total: job.particles.length, spills, totalSpills: floorSurfaces.length, floorUnlocked: seatsReady === job.seats.length,
+    total: job.particles.length, spills, totalSpills: floorSurfaces.length, floorUnlocked: true,
     complete: seatsReady === job.seats.length && floor === 0 && pan === 0 && spills === floorSurfaces.length };
 }
 export function usherSummary(state) {
@@ -101,38 +105,40 @@ export function stepUsherState(state, seconds, contact = {}) {
       && !job.seats.some(s => Math.abs(s.trayTarget - s.trayAngle) > .001)
       && !job.particles.some(p => p.mode === "falling" || p.mode === "pouring" || Math.hypot(p.vx, p.vz) > .001)) continue;
     for (const s of job.seats) s.trayAngle += clamp(s.trayTarget - s.trayAngle, -dt * 2.8, dt * 2.8);
-    const floorUnlocked = theaterSummary(job).floorUnlocked;
-    const { brush, pan, cloth } = contact;
+    const { brush, pan, cloth, hand } = contact;
     if (cloth && state.heldTool === "cloth") {
       const surface = job.surfacesById.get(cloth.surfaceId);
       const seat = surface?.seatId && job.seatsById.get(surface.seatId);
-      const allowed = surface && (surface.kind === "floor" ? floorUnlocked : surface.kind === "tray" || seatStage(job, seat) !== "wipe tray");
+      const allowed = surface && (surface.kind === "floor" || surface.kind === "tray" || seatStage(job, seat) !== "wipe tray");
       const travel = Math.hypot(cloth.to.x - cloth.from.x, cloth.to.z - cloth.from.z);
       const touching = surface && Math.abs(cloth.to.x) <= surface.width / 2 + .035 && Math.abs(cloth.to.z) <= surface.depth / 2 + .035;
       if (allowed && touching && !surface.spill) {
         // A normally used surface needs a quick sanitizing wipe, even without
         // a stain. Held contact makes this equally practical on touch screens.
         for (const c of surface.cells) c.dirt = Math.max(0, c.dirt - dt);
-      } else if (allowed && travel > .00005 && travel < .15) for (const c of surface.cells) {
-        if (segmentDistance(c, cloth.from, cloth.to) < .12) c.dirt = Math.max(0, c.dirt - travel * 7.0);
+      } else if (allowed && touching && travel > .00005 && travel < .15) for (const c of surface.cells) {
+        // A cloth's broad contact patch lifts a spill in about six to eight
+        // full passes. Avoid requiring pixel-perfect scrubbing of nine cells.
+        c.dirt = Math.max(0, c.dirt - travel / (surface.width * 5));
       }
     }
     for (const p of job.particles) {
       if (!["floor", "chair", "falling"].includes(p.mode)) continue;
       const seat = p.seatId && job.seatsById.get(p.seatId), chair = p.mode === "chair";
-      const canSweep = chair ? seatStage(job, seat) === "sweep seat" : floorUnlocked;
-      if (brush && state.heldTool === "broom" && canSweep && p.mode !== "falling"
-        && (chair ? brush.seatId === p.seatId : !brush.seatId) && Math.abs(brush.y - p.y) < .12) {
-        const dx = brush.to.x - brush.from.x, dz = brush.to.z - brush.from.z, travel = Math.hypot(dx, dz);
+      const sweeping = chair ? state.heldTool === "cloth" && hand?.seatId === p.seatId && hand
+        : state.heldTool === "broom" && !brush?.seatId && brush;
+      if (sweeping && p.mode !== "falling" && Math.abs(sweeping.y - p.y) < .12) {
+        const dx = sweeping.to.x - sweeping.from.x, dz = sweeping.to.z - sweeping.from.z, travel = Math.hypot(dx, dz);
         const touching = [-.15, 0, .15].some(o => segmentDistance(p,
-          { x: brush.from.x + brush.right.x * o, z: brush.from.z + brush.right.z * o },
-          { x: brush.to.x + brush.right.x * o, z: brush.to.z + brush.right.z * o }) < .09);
-        if (travel > .00001 && travel < .18 && touching && canMove(brush.from, p, p, chair ? seat.rowColliderId : null)) {
+          { x: sweeping.from.x + sweeping.right.x * o, z: sweeping.from.z + sweeping.right.z * o },
+          { x: sweeping.to.x + sweeping.right.x * o, z: sweeping.to.z + sweeping.right.z * o }) < .09);
+        if (travel > .00001 && travel < .18 && touching && canMove(sweeping.from, p, p, chair ? seat.rowColliderId : null)) {
           const speed = Math.min(1.7, travel / dt * .96); p.vx = dx / travel * speed; p.vz = dz / travel * speed;
         }
       }
       const before = { x: p.x, y: p.y, z: p.z }, after = { x: p.x + p.vx * dt, y: p.y, z: p.z + p.vz * dt };
-      if (canMove(before, after, p, p.mode !== "floor" ? seat?.rowColliderId : null)) { p.x = after.x; p.z = after.z; }
+      if (!p.vx && !p.vz) { /* Resting kernels do not need hundreds of world collision tests. */ }
+      else if (canMove(before, after, p, p.mode !== "floor" ? seat?.rowColliderId : null)) { p.x = after.x; p.z = after.z; }
       else p.vx = p.vz = 0;
       if (chair && (p.z - seat.z) * seat.forward > .30) { p.mode = "falling"; p.vy = 0; }
       if (p.mode === "falling") {
@@ -148,7 +154,7 @@ export function stepUsherState(state, seconds, contact = {}) {
       if (p.mode === "floor") {
         const b = p.bounds; p.x = clamp(p.x, b.xMin + .04, b.xMax - .04); p.z = clamp(p.z, b.zMin + .04, b.zMax - .04);
         const speed = Math.hypot(p.vx, p.vz);
-        if (pan && floorUnlocked && speed > .06 && Math.abs(pan.y - p.floorY) < .05 && !state.pouring) {
+        if (pan && speed > .06 && Math.abs(pan.y - p.floorY) < .05 && !state.pouring) {
           const dx = p.x - pan.x, dz = p.z - pan.z;
           const front = dx * pan.forward.x + dz * pan.forward.z, side = dx * pan.right.x + dz * pan.right.z;
           if (Math.abs(side) < .25 && front > -.19 && front < .18 && p.vx * pan.forward.x + p.vz * pan.forward.z > .035
@@ -169,24 +175,25 @@ export function beginUsherPour(state, target, acceptedCount) {
   state.pourTarget = target; state.pouring = .85; return true;
 }
 export function serializeUsherState(state) {
-  return JSON.stringify({ version: 23, kit: true, jobs: state.jobs.map(j => ({ id: j.id, seed: j.seed,
+  return JSON.stringify({ version: 24, kit: true, jobs: state.jobs.map(j => ({ id: j.id, seed: j.seed, cycle: j.cycle,
     seats: j.seats.map(s => ({ id: s.id, trayOpen: s.trayOpen })),
     surfaces: j.surfaces.map(s => ({ id: s.id, dirt: s.cells.map(c => c.dirt) })),
     particles: j.particles.map(p => ({ id: p.id, x: p.x, y: p.y, z: p.z, mode: p.mode === "pouring" ? "trash" : p.mode })),
   })) });
 }
-export function restoreUsherState(raw, plans = []) {
+export function restoreUsherState(raw, plans = [], { cycleForRoom = () => 0 } = {}) {
   const state = createUsherState();
   try {
     const saved = JSON.parse(raw);
-    if (![22, 23].includes(saved?.version) || !Array.isArray(saved.jobs) || saved.jobs.length > 14) return state;
+    if (![22, 23, 24].includes(saved?.version) || !Array.isArray(saved.jobs) || saved.jobs.length > 14) return state;
     for (const data of saved.jobs) {
       const plan = plans.find(p => p.id === data.id); if (!plan || state.jobs.some(j => j.id === data.id) || typeof data.seed !== "string") continue;
-      const job = beginCleaningBreak(state, plan, data.seed);
+      const job = beginCleaningBreak(state, plan, data.seed, { cycle: Number.isInteger(data.cycle) ? data.cycle : cycleForRoom(data.id),
+        seatIds: saved.version === 24 && Array.isArray(data.seats) ? data.seats.map(s => s.id) : undefined });
       if (!job || !Array.isArray(data.particles) || !Array.isArray(data.surfaces)) continue;
-      // Previously completed rooms remain completed when upgrading from the
-      // sampled-seat v22 jobs to a full-room inspection.
-      if (saved.version === 22 && data.seats?.length && data.seats.every(s => s.trayOpen === false)
+      // Completed rooms stay complete when moving older all-seat jobs to the
+      // actual show's occupied-seat selection.
+      if (saved.version < 24 && data.seats?.length && data.seats.every(s => s.trayOpen === false)
         && data.surfaces.every(s => s.dirt?.every(v => Number.isFinite(v) && v <= .001))
         && data.particles.every(p => p.mode === "trash")) {
         for (const s of job.surfaces) for (const cell of s.cells) cell.dirt = 0;

@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { seatTrayGeometry } from "./seat-tray-motion.js";
 export const USHER_STATION = Object.freeze({ x: 24.3, y: 0, z: 54.7 });
 export const USHER_SPAWN = Object.freeze({ position: [24.3, 0, 52.8], yaw: Math.PI });
 export function createCleaningVisuals({ scene, world, hands }) {
@@ -40,7 +41,7 @@ export function createCleaningVisuals({ scene, world, hands }) {
   const lobes = [new THREE.IcosahedronGeometry(.027, 1), new THREE.IcosahedronGeometry(.024, 0).translate(.023, .008, .01), new THREE.IcosahedronGeometry(.021, 0).translate(-.02, -.004, -.006)];
   const kernelGeometry = geo(mergeGeometries(lobes)); lobes.forEach(g => g.dispose());
   const kernels = new THREE.InstancedMesh(kernelGeometry, palette.popcorn, 4096); kernels.name = "usher-popcorn"; kernels.count = 0; root.add(kernels);
-  const surfaces = new Map(), trays = new Map(), jobSeeds = new Map(), cleanGroups = new Map(), trayBatches = new Map();
+  const surfaces = new Map(), trays = new Map(), jobSeeds = new Map(), cleanGroups = new Map(), trayBatches = new Map(), supportBatches = new Map();
   function releaseSurface(entry) {
     if (!entry.mesh) return;
     entry.mesh.removeFromParent(); entry.texture.dispose(); textures.delete(entry.texture);
@@ -74,20 +75,30 @@ export function createCleaningVisuals({ scene, world, hands }) {
         }
         for (const [id, entry] of trays) if (entry.job.id === job.id) trays.delete(id);
         trayBatches.get(job.id)?.dispose();
+        supportBatches.get(job.id)?.dispose();
       }
       const group = new THREE.Group(); group.name = `${job.id}-cleaning`; root.add(group); cleanGroups.set(job.id, group); jobSeeds.set(job.id, job.seed);
       const batch = new THREE.InstancedMesh(cube, palette.tray, job.seats.length); batch.name = `${job.id}-moving-trays`; batch.receiveShadow = true;
       group.add(batch); trayBatches.set(job.id, batch);
+      const supports = new THREE.InstancedMesh(cube, palette.metal, job.seats.length); supports.name = `${job.id}-tray-support-brackets`;
+      group.add(supports); supportBatches.set(job.id, supports);
       for (const [index, seat] of job.seats.entries()) {
         const base = new THREE.Group(); base.position.set(seat.x, seat.floorY, seat.z); base.rotation.y = seat.forward > 0 ? 0 : Math.PI; group.add(base);
-        const hinge = new THREE.Group(); hinge.position.set(.25 * seat.width / .665, .918, .117); base.add(hinge);
-        const trayMatrix = new THREE.Matrix4().compose(new THREE.Vector3(-.18 * seat.width / .665, 0, .11), new THREE.Quaternion(), new THREE.Vector3(.40 * seat.width / .665, .04, .28));
-        trays.set(seat.id, { base, hinge, seat, job, batch, index, trayMatrix, angle: NaN });
+        const dimensions = seatTrayGeometry(seat.width);
+        const hinge = new THREE.Group(); hinge.position.set(...dimensions.pivot); base.add(hinge);
+        const trayMatrix = new THREE.Matrix4().compose(new THREE.Vector3(...dimensions.offset), new THREE.Quaternion(), new THREE.Vector3(...dimensions.size));
+        trays.set(seat.id, { base, hinge, seat, job, batch, index, trayMatrix, dimensions, angle: NaN });
+        const support = new THREE.Matrix4().compose(new THREE.Vector3(dimensions.post[0], dimensions.pivot[1] - .032,
+          (dimensions.post[2] + dimensions.pivot[2]) / 2), new THREE.Quaternion(),
+        new THREE.Vector3(.034, .034, dimensions.pivot[2] - dimensions.post[2] + .025));
+        base.updateMatrix(); supports.setMatrixAt(index, support.premultiply(base.matrix));
       }
+      supports.instanceMatrix.needsUpdate = true; supports.computeBoundingSphere();
       for (const surface of job.surfaces) {
         const holder = new THREE.Group(); holder.name = surface.id;
         if (surface.kind === "tray") {
-          const tray = trays.get(surface.seatId); tray.hinge.add(holder); holder.position.set(-.18 * tray.seat.width / .665, .024, .11);
+          const tray = trays.get(surface.seatId); tray.hinge.add(holder);
+          holder.position.set(tray.dimensions.offset[0], tray.dimensions.size[1] / 2 + .004, tray.dimensions.offset[2]);
         } else group.add(holder);
         surfaces.set(surface.id, { surface, job, holder, group, mesh: null, signature: "" });
       }
@@ -209,6 +220,6 @@ export function createCleaningVisuals({ scene, world, hands }) {
     kernels.count = index; kernels.instanceMatrix.needsUpdate = true; kernels.computeBoundingSphere();
   }
   return { root, tools, stored, belt, surfaces, trays, ensure, prepare, update,
-    dispose() { root.removeFromParent(); world.setCleaningSeatTrays?.([]); kernels.dispose(); trayBatches.forEach(b => b.dispose()); geometries.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); textures.forEach(t => t.dispose()); },
+    dispose() { root.removeFromParent(); world.setCleaningSeatTrays?.([]); kernels.dispose(); trayBatches.forEach(b => b.dispose()); supportBatches.forEach(b => b.dispose()); geometries.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); textures.forEach(t => t.dispose()); },
   };
 }

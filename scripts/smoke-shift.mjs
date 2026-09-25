@@ -49,8 +49,11 @@ sheet.toggle(); sheet.update(); assert.equal(sheet.root.visible, true);
 assert.equal(sheet.root.material.transparent, true, "Paper renders in the final transparent queue above signs");
 const texts = sheet.root.material.map.image.text;
 for (const row of schedule.sheetRows()) {
-  const entry = texts.find(t => t.text === row.title && t.font.startsWith(row.bold ? "bold " : "27px"));
+  const entry = texts.find(t => t.text === row.title.toUpperCase() && t.font.startsWith(row.bold ? "bold " : "29px"));
   assert.ok(entry, `${row.id}: physical sheet contains the correctly styled movie line`);
+  const time = texts.find(t => t.text === row.textTime && t.font.startsWith(row.bold ? "bold " : "29px"));
+  assert.ok(time && time.args[0] === (row.bold ? 52 : 151), "Times stagger by start/break and come before theater and title");
+  assert.match(row.textTime, /\d+:\d{2} (AM|PM)$/);
 }
 sheet.hide(); assert.equal(sheet.root.visible, false);
 const doors = createUsherDoors({ scene, camera, collisionWorld: collisions });

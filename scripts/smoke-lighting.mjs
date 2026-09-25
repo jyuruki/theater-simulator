@@ -89,16 +89,18 @@ let shadowLights = 0;
 scene.traverse(object => { if (object.isLight && object.castShadow) shadowLights++; });
 assert.equal(shadowLights, 1, "The existing sun remains the only shadow-casting light");
 
-// Irradiance on a horizontal floor, using Three's spotlight cone/distance
-// attenuation. This catches a return to long-range uniform hall fill even
-// if the light type and fixture count remain unchanged.
-function floorIrradiance(point) {
+// Compare the continuous hall walk with the v23 fixture settings, using Three's
+// actual spotlight cone/distance attenuation. Smoother falloff must preserve
+// average brightness rather than merely flooding the dark intervals.
+function floorIrradiance(point, legacy = false) {
   return pools.reduce((sum, pool) => {
+    if (legacy && pool.name.includes("transition-downlight")) return sum;
+    const config = legacy ? { angle: .88, penumbra: .62, distance: 9, decay: 2, intensity: 70 } : pool;
     const distance = point.distanceTo(pool.position);
     const incidence = pool.position.y / distance;
-    const cone = THREE.MathUtils.smoothstep(incidence, Math.cos(pool.angle), Math.cos(pool.angle * (1 - pool.penumbra)));
-    const cutoff = Math.max(0, 1 - (distance / pool.distance) ** 4) ** 2;
-    return sum + pool.intensity * cone * cutoff * incidence / Math.max(distance ** pool.decay, 0.01);
+    const cone = THREE.MathUtils.smoothstep(incidence, Math.cos(config.angle), Math.cos(config.angle * (1 - config.penumbra)));
+    const cutoff = Math.max(0, 1 - (distance / config.distance) ** 4) ** 2;
+    return sum + config.intensity * cone * cutoff * incidence / Math.max(distance ** config.decay, 0.01);
   }, 0);
 }
 const centerPool = pools.find(pool => Math.abs(pool.position.x - planToWorldX(38)) < 0.01);
@@ -107,7 +109,21 @@ const underFixture = new THREE.Vector3(centerPool.position.x, 0, centerPool.posi
 const betweenFixtures = underFixture.clone().add(new THREE.Vector3(-6, 0, 0));
 const poolIrradiance = floorIrradiance(underFixture);
 const gapIrradiance = floorIrradiance(betweenFixtures);
-assert.ok(poolIrradiance > 2 && poolIrradiance > gapIrradiance * 5, "Bright pools and darker intervals must be measurably distinct");
+assert.ok(poolIrradiance > 1 && gapIrradiance > poolIrradiance * .55,
+  "Overlapping diffuser light avoids alternating bright spots and black floor gaps");
+const currentWalk = [], legacyWalk = [];
+for (let x = HALL_PLAN.narrow.xMin + 6; x < HALL_PLAN.wide.xMax - 6; x += .15) {
+  const bounds = x < HALL_PLAN.transitionX ? HALL_PLAN.narrow : HALL_PLAN.wide;
+  const point = position(x, (bounds.zMin + bounds.zMax) / 2, 0);
+  currentWalk.push(floorIrradiance(point)); legacyWalk.push(floorIrradiance(point, true));
+}
+const average = values => values.reduce((sum, value) => sum + value, 0) / values.length;
+const coefficientOfVariation = values => { const mean = average(values); return Math.sqrt(average(values.map(value => (value - mean) ** 2))) / mean; };
+const brightnessRatio = average(currentWalk) / average(legacyWalk);
+assert.ok(brightnessRatio > .97 && brightnessRatio < 1.03, `Average hall brightness retained (${brightnessRatio.toFixed(3)}x)`);
+assert.ok(coefficientOfVariation(currentWalk) < coefficientOfVariation(legacyWalk) * .30,
+  "Hall-walk brightness variation falls by at least seventy percent");
+assert.ok(Math.min(...currentWalk) > .7, "The west width-transition gap is illuminated too");
 assert.ok(hallProfile.hemisphere >= 0.3, "Intervals retain sufficient ambient fill for navigation");
 const theaterSigns = AUDITORIUMS.map(room => world.root.getObjectByName(`${room.id}-sign`));
 assert.ok(theaterSigns.every(sign => sign?.isMesh && sign.material?.map));

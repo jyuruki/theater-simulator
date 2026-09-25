@@ -41,6 +41,7 @@ if (process.argv.includes("--built")) {
   const shipped = readFileSync(new URL("../dist/sw.js", import.meta.url), "utf8");
   const files = JSON.parse(/FILES=(\[[^\n]+\]);/.exec(shipped)[1]);
   assert.ok(files.includes("index.html"), "Real Vite output must cache its transformed entry HTML");
+  assert.ok(files.includes("media/big-buck-bunny.mp4"), "The full feature program is available offline");
   for (const file of files) assert.ok(existsSync(new URL(`../dist/${file}`, import.meta.url)), `Offline cache references a real emitted file: ${file}`);
   const shippedHtml = readFileSync(new URL("../dist/index.html", import.meta.url), "utf8");
   for (const [, asset] of shippedHtml.matchAll(/(?:src|href)="\.\/(assets\/[^"]+)"/g))
@@ -74,7 +75,7 @@ vm.runInNewContext(code, { self, caches, fetch: network, URL, Response });
 let pending;
 listeners.get("install")({ waitUntil(promise) { pending = promise; } }); await pending;
 assert.equal(skipped, 0, "Installation cannot interrupt a running shift without user action");
-for (const path of ["index.html", "manifest.webmanifest", "models/theater-props.glb", "models/theater-npcs.glb", "models/mililani-ticket-kiosk.glb", "media/hula-start.mp4", "media/hula-start.m4a"])
+for (const path of ["index.html", "manifest.webmanifest", "models/theater-props.glb", "models/theater-npcs.glb", "models/mililani-ticket-kiosk.glb", "media/hula-start.mp4", "media/hula-start.m4a", "media/big-buck-bunny.mp4"])
   assert.ok(fetched.includes(scope + path), `${path} is available offline after installation`);
 assert.ok(!fetched.some(url => url.endsWith(".map")));
 assert.ok(fetched.every(url => url.startsWith(scope)), "All cache paths honor the GitHub Pages subdirectory");

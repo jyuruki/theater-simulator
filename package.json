@@ -1,13 +1,13 @@
 {
   "name": "mililani-theater-simulator",
-  "version": "0.23.0",
+  "version": "0.24.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build && node scripts/smoke-pwa.mjs --built",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "node scripts/validate-layout.mjs && node scripts/smoke-world.mjs && node scripts/smoke-player.mjs && node scripts/smoke-navigation.mjs && node scripts/smoke-visit.mjs && node scripts/smoke-kiosk-assets.mjs && node scripts/smoke-enclosure.mjs && node scripts/smoke-prop-assets.mjs && node scripts/smoke-npc-assets.mjs && node scripts/smoke-seating.mjs && node scripts/smoke-compaction.mjs && node scripts/smoke-integrated-assets.mjs && node scripts/smoke-lobby-repair.mjs && node scripts/smoke-counter-geometry.mjs && node scripts/smoke-lighting.mjs && node scripts/smoke-screens.mjs && node scripts/smoke-usher.mjs && node scripts/smoke-usher-ui.mjs && node scripts/smoke-shift.mjs && node scripts/smoke-waste.mjs && node scripts/smoke-supplies.mjs && node scripts/smoke-usher-shift.mjs && node scripts/smoke-prop-placement.mjs && node scripts/smoke-show-media.mjs && node scripts/smoke-pwa.mjs && node scripts/smoke-show-customers.mjs"
+    "test": "node scripts/validate-layout.mjs && node scripts/smoke-world.mjs && node scripts/smoke-player.mjs && node scripts/smoke-navigation.mjs && node scripts/smoke-visit.mjs && node scripts/smoke-kiosk-assets.mjs && node scripts/smoke-enclosure.mjs && node scripts/smoke-prop-assets.mjs && node scripts/smoke-npc-assets.mjs && node scripts/smoke-seating.mjs && node scripts/smoke-compaction.mjs && node scripts/smoke-integrated-assets.mjs && node scripts/smoke-lobby-repair.mjs && node scripts/smoke-counter-geometry.mjs && node scripts/smoke-lighting.mjs && node scripts/smoke-screens.mjs && node scripts/smoke-usher.mjs && node scripts/smoke-usher-ui.mjs && node scripts/smoke-shift.mjs && node scripts/smoke-waste.mjs && node scripts/smoke-supplies.mjs && node scripts/smoke-usher-shift.mjs && node scripts/smoke-prop-placement.mjs && node scripts/smoke-show-media.mjs && node scripts/smoke-pwa.mjs && node scripts/smoke-show-customers.mjs && node scripts/smoke-v24-geometry.mjs && node scripts/smoke-bin-pushing.mjs && node scripts/smoke-feature-program.mjs"
   },
   "dependencies": {
     "three": "0.185.1"

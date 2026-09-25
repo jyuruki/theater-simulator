@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { createUsherState, beginCleaningBreak, stepUsherState, seatStage, closeCleaningTray,
   theaterSummary, beginUsherPour, restoreUsherState, serializeUsherState } from "../src/usher-state.js";
 import { createCleaningPlans } from "../src/usher-cleaning-layout.js";
+import { createShowAttendance } from "../src/show-attendance.js";
+import { seatTrayGeometry, seatTrayCorners, seatTrayOpenAngle, trayOverlapsAdjacentSeat } from "../src/seat-tray-motion.js";
 import { createUsherGameplay, USHER_SPAWN } from "../src/usher-gameplay.js";
 import { createMaterialLibrary } from "../src/materials.js";
 import { createTheaterWorld } from "../src/world.js";
@@ -19,7 +23,12 @@ const plans=createCleaningPlans(world), state=createUsherState();
 assert.equal(plans.length,14);
 for(const plan of plans) beginCleaningBreak(state,plan,1234);
 assert.ok(state.kit,"The usher starts with the portable tools");
-assert.ok(state.jobs.every(j=>j.seats.length===plans.find(p=>p.id===j.id).seats.length&&j.seats.every(s=>s.trayOpen)),"Every seat tray is open for inspection");
+for(const job of state.jobs){
+  const plan=plans.find(p=>p.id===job.id),expected=createShowAttendance(plan,{cycle:0});
+  assert.deepEqual(job.seats.map(s=>s.id).sort(),expected.seatIds.sort(),"Only the actual shared audience's seats become cleaning jobs");
+  assert.ok(job.seats.length<plan.seats.length&&job.seats.every(s=>s.trayOpen),"Only occupied trays open");
+  assert.ok(job.seats.every(s=>s.trayAngle===seatTrayOpenAngle(s.width)),"Trays stop at the widest safe outward angle for their actual width");
+}
 const twin=createUsherState();for(const plan of plans) beginCleaningBreak(twin,plan,1234);
 assert.equal(serializeUsherState(state),serializeUsherState(twin),"Seeded layouts reproduce exactly");
 const varied=createUsherState();for(const plan of plans) beginCleaningBreak(varied,plan,9876);
@@ -32,7 +41,18 @@ assert.ok(popcornSeats.size/allSeats.length>.15&&popcornSeats.size/allSeats.leng
 assert.ok(state.jobs.some(j=>j.seats.some(s=>s.column>0&&s.column<3)),"Interior seat columns are eligible");
 scene.updateMatrixWorld(true);const ray=new THREE.Raycaster();
 let standingChecks=0;
-for(const job of state.jobs) for(const s of job.seats) {
+for(const plan of plans) for(const s of plan.seats) {
+  const angle=seatTrayOpenAngle(s.width),geometry=seatTrayGeometry(s.width),closed=seatTrayCorners(s.width,0),open=seatTrayCorners(s.width,angle);
+  assert.ok(open.reduce((n,p)=>n+p.z,0)>closed.reduce((n,p)=>n+p.z,0)+.20,`${s.id} tray center swings forward toward the row aisle`);
+  assert.ok(open.some(p=>p.z>geometry.upholstery.front+.15),`${s.id} open tray extends beyond the upholstery into the front aisle`);
+  for(let step=0;step<=20;step++)assert.equal(trayOverlapsAdjacentSeat(s.width,angle*step/20),false,`${s.id} complete swivel arc clears neighboring cushion`);
+  const forwardCenter=a=>seatTrayCorners(s.width,a).reduce((n,p)=>n+p.z,0)/4;
+  assert.ok(forwardCenter(angle)>forwardCenter(angle-.02)&&forwardCenter(angle)>forwardCenter(angle+.02),`${s.id} stop maximizes useful forward extension`);
+  for(const corner of open){
+    const worldX=s.x+corner.x*s.forward,worldZ=s.z+corner.z*s.forward;
+    assert.ok(Number.isFinite(worldX)&&Number.isFinite(worldZ));
+    assert.ok((worldZ-s.z)*s.forward<.70,`${s.id} leaves the standing strip center clear in either room orientation`);
+  }
   assert.ok(Math.abs(world.groundHeight(s.stand[0],s.stand[2],s.floorY)-s.floorY)<.035,`${s.id} standing strip follows deck height`);
   const p={x:s.stand[0],y:s.floorY,z:s.stand[2]};
   assert.equal(collisionWorld.isOverlapping(p,.28,s.floorY,1.8),false,`${s.id} has full player capsule clearance`);
@@ -42,6 +62,28 @@ for(const job of state.jobs) for(const s of job.seats) {
   const hits=ray.intersectObject(world.root,true);
   assert.ok(hits.some(h=>Math.abs(h.point.y-s.floorY)<.035),`${s.id} has rendered floor under its standing pose`);standingChecks++;
 }
+// Compare the actual exported Blender tray rectangle and swivel-post X/Z
+// against the articulated tray at its zero-angle endpoint, at every seat width.
+const glbBytes=await readFile(new URL("../public/models/theater-props.glb",import.meta.url));
+const loaded=await new GLTFLoader().parseAsync(glbBytes.buffer.slice(glbBytes.byteOffset,glbBytes.byteOffset+glbBytes.byteLength),"");
+loaded.scene.updateMatrixWorld(true);
+const recliner=loaded.scene.getObjectByName("recliner"),modelBounds=new THREE.Box3().setFromObject(recliner),modelSize=modelBounds.getSize(new THREE.Vector3());
+const exportedTray=recliner.children.find(c=>/espresso/i.test(c.name)),exportedMetal=recliner.children.find(c=>/metal/i.test(c.name));
+assert.ok(exportedTray&&exportedMetal,"Actual GLB has the tray and fixed metal post");
+const trayBounds=new THREE.Box3().setFromObject(exportedTray),center=modelBounds.getCenter(new THREE.Vector3());
+for(const width of new Set(plans.flatMap(p=>p.seats.map(s=>s.width)))){
+  const actual=trayBounds.clone().translate(new THREE.Vector3(-center.x,-modelBounds.min.y,-center.z));
+  const scale=new THREE.Matrix4().makeScale(width/modelSize.x,1.36/modelSize.y,.74/modelSize.z);actual.applyMatrix4(scale);
+  const authored=seatTrayGeometry(width),authoredCenter=new THREE.Vector3(...authored.pivot).add(new THREE.Vector3(...authored.offset));
+  const moving=new THREE.Box3().setFromCenterAndSize(authoredCenter,new THREE.Vector3(...authored.size));
+  assert.ok(moving.min.distanceTo(actual.min)<.00002&&moving.max.distanceTo(actual.max)<.00002,"Closed moving tray exactly matches the loaded Blender component bounds");
+  const postVertices=exportedMetal.geometry.attributes.position,postPoints=[];
+  for(let i=0;i<postVertices.count;i++){const p=new THREE.Vector3().fromBufferAttribute(postVertices,i).applyMatrix4(exportedMetal.matrixWorld);if(p.y>.65)postPoints.push(p);}
+  const postBounds=new THREE.Box3().setFromPoints(postPoints),post=postBounds.getCenter(new THREE.Vector3()).sub(new THREE.Vector3(center.x,modelBounds.min.y,center.z)).applyMatrix4(scale);
+  assert.ok(Math.hypot(post.x-authored.post[0],post.z-authored.post[2])<.00002,"Support begins at the actual unchanged Blender post");
+  assert.ok(Math.abs(authored.pivot[0]-authored.post[0])<.00001&&authored.pivot[2]-authored.post[2]<.16,"A short forward bracket physically joins the original post and swivel");
+}
+loaded.scene.traverse(o=>{if(o.isMesh){o.geometry.dispose();for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();}});
 for(const plan of plans)for(const patch of plan.patches){
   const standing={x:patch.x-.75,y:patch.y,z:patch.z};
   assert.equal(collisionWorld.isOverlapping(standing,.28,patch.y,1.8),false,`${plan.id} floor mess has a reachable side approach`);
@@ -60,17 +102,21 @@ function wipe(surface) {
 }
 const cushion=job.surfaces.find(s=>s.id===`${seat.id}-seat`), tray=job.surfaces.find(s=>s.id===`${seat.id}-tray`);
 wipe(cushion);assert.ok(cushion.cells.every(c=>c.dirt===1),"Tray must be wiped before its seat");
-wipe(tray);assert.equal(seatStage(job,seat),"wipe seat");wipe(cushion);assert.equal(seatStage(job,seat),"sweep seat");
+wipe(tray);assert.equal(seatStage(job,seat),"wipe seat");wipe(cushion);assert.equal(seatStage(job,seat),"brush seat by hand");
 state.heldTool="broom";
+const chairBefore=JSON.stringify(job.chairParticles.get(seat.id));
+stepUsherState(state,1/120,{brush:{from:{x:seat.x,z:seat.z},to:{x:seat.x,z:seat.z+.1},y:seat.floorY+.625,right:{x:1,z:0},seatId:seat.id}});
+assert.equal(JSON.stringify(job.chairParticles.get(seat.id)),chairBefore,"A dirty floor broom never moves chair popcorn");
+state.heldTool="cloth";
 let prev=null;
 for(let i=0;i<480;i++) {
   const phase=(i/120)%1.1, p={x:seat.x,y:seat.floorY+.625,z:seat.z+seat.forward*(-.075+phase/.72*.525)};
-  stepUsherState(state,1/120,{brush:phase<.72&&prev?{from:prev,to:p,y:p.y,right:{x:1,z:0},seatId:seat.id}:null});prev=phase<.72?p:null;
+  stepUsherState(state,1/120,{hand:phase<.72&&prev?{from:prev,to:p,y:p.y,right:{x:1,z:0},seatId:seat.id}:null});prev=phase<.72?p:null;
 }
 assert.ok(job.particles.filter(p=>p.seatId===seat.id).every(p=>p.mode==="floor"),"Chair kernels physically fall onto row floor before pan collection");
 assert.equal(closeCleaningTray(job,seat),true);for(let i=0;i<100;i++)stepUsherState(state,1/120);
 assert.equal(seatStage(job,seat),"ready");
-assert.equal(theaterSummary(job).floorUnlocked,false,"Floor work waits for all used seats");
+assert.equal(theaterSummary(job).floorUnlocked,true,"Floor work is available while other seats still need cleaning");
 assert.equal(beginCleaningBreak(state,plans.find(p=>p.id===job.id),"next-show"),false,"Next break cannot discard unfinished mess or pan contents");
 const saved=serializeUsherState(state), restored=restoreUsherState(saved,plans);
 assert.equal(serializeUsherState(restored),saved,"Partial seat workflow and per-theater seed survive reload");
@@ -85,6 +131,36 @@ for(const kind of ["tray","seat"]){
   for(let i=0;i<61;i++)stepUsherState(quickState,1/120,contact);
   assert.ok(surface.cells.every(c=>c.dirt<=.001),"One second of stationary valid contact sanitizes a clean-looking surface");
 }
+// A spill takes six broad hand passes, rather than individually hunting for
+// tiny dirty cells. This exercises tray, cushion and floor surface dimensions.
+for(const dimensions of [[.36,.25],[.55,.39],[.5,.5]]){
+  const stain=quickJob.surfaces.find(s=>s.kind==="floor");stain.width=dimensions[0];stain.depth=dimensions[1];stain.spill=true;
+  stain.cells.forEach(c=>c.dirt=1);
+  for(let swipe=0;swipe<6;swipe++){
+    const sign=swipe%2? -1:1;let from={x:-sign*stain.width*.45,z:0};
+    for(let i=1;i<=40;i++){
+      const to={x:sign*stain.width*(-.45+i*.9/40),z:0};
+      stepUsherState(quickState,1/120,{cloth:{surfaceId:stain.id,from,to}});from=to;
+    }
+    if(swipe===4)assert.ok(stain.cells.some(c=>c.dirt>.001),"Five passes still leave a trace of a real spill");
+  }
+  assert.ok(stain.cells.every(c=>c.dirt<=.001),"Six broad swipes clean a spill");
+}
+const floorFirst=createUsherState(),floorFirstJob=beginCleaningBreak(floorFirst,plans[1],1234);
+floorFirst.heldTool="broom";
+const floorFirstKernel=floorFirstJob.particles.find(p=>p.mode==="floor"),originalFloorX=floorFirstKernel.x;
+stepUsherState(floorFirst,1/120,{brush:{from:{x:floorFirstKernel.x-.05,z:floorFirstKernel.z},to:{x:floorFirstKernel.x+.01,z:floorFirstKernel.z},y:floorFirstKernel.y,right:{x:0,z:1}}});
+assert.ok(floorFirstKernel.x>originalFloorX,"Floor popcorn moves before any tray or cushion is wiped");
+let restingCollisionCalls=0;
+const resting=createUsherState();for(const plan of plans)beginCleaningBreak(resting,plan,1234,{seatIds:plan.seats.map(s=>s.id)});
+stepUsherState(resting,1/120,{canMove:()=>{restingCollisionCalls++;return true;}});
+assert.equal(restingCollisionCalls,0,"Resting debris across all 1093 chairs performs zero world collision queries");
+
+// Legacy finished rooms and partial matching seats retain their progress.
+const completedLegacy=JSON.parse(serializeUsherState(resting));completedLegacy.version=23;
+for(const oldJob of completedLegacy.jobs){for(const s of oldJob.seats)s.trayOpen=false;for(const s of oldJob.surfaces)s.dirt.fill(0);for(const p of oldJob.particles)p.mode="trash";}
+const migrated=restoreUsherState(JSON.stringify(completedLegacy),plans);
+assert.ok(migrated.jobs.every(j=>theaterSummary(j).complete),"A v23 completed room remains completed after attendance migration");
 
 const camera=new THREE.PerspectiveCamera(70,1.5,.05,200), hands={owner:null};let deposited=0;
 const game=createUsherGameplay({scene,world,camera,collisionWorld,hands,depositTrash:(_id,count)=>{const n=Math.min(2,count);deposited+=n;return n;}});
@@ -115,10 +191,10 @@ function dragWorldSurface(id) {
 dragWorldSurface(`${anchor.id}-tray`);dragWorldSurface(`${anchor.id}-seat`);
 let js=game.getSnapshot().state.jobs.find(j=>j.id==="theater-2");
 assert.ok(js.surfaces.filter(s=>s.seatId===anchor.id).every(s=>s.cells.every(c=>c.dirt<=.001)),"Real cloth drag wipes tray and cushion");
-game.selectTool("broom");
+game.selectTool("cloth");
 for(let i=0;i<300;i++)aim(standing,anchor.seat,true);
 js=game.getSnapshot().state.jobs.find(j=>j.id==="theater-2");
-assert.ok(js.particles.filter(p=>p.seatId===anchor.id).every(p=>p.mode==="floor"),`Actual chair sweep drops kernels: ${JSON.stringify(js.particles.filter(p=>p.seatId===anchor.id))}`);
+assert.ok(js.particles.filter(p=>p.seatId===anchor.id).every(p=>p.mode==="floor"),`Actual cloth/hand sweep drops kernels: ${JSON.stringify(js.particles.filter(p=>p.seatId===anchor.id))}`);
 assert.ok(js.particles.filter(p=>p.seatId===anchor.id).every(p=>(p.z-realSeat.z)*realSeat.forward>=.449),"Landed kernels resolve fully outside the chair collision margin");
 aim(standing,anchor.tray);assert.equal(game.interact(),true);
 for(let i=0;i<80;i++)game.update(1/60,{active:true});
@@ -201,4 +277,4 @@ pickup.update(1/60,{active:true});pickup.selectTool("broom");
 for(let i=0;i<300;i++)pickup.update(1/60,{active:true,action:true});
 assert.equal(pickup.getSnapshot().summary.pan,1,"Actual chair-fallen kernel can be swept from the row edge into the pan");
 pickup.dispose();world.dispose();
-console.log(`Usher v23 smoke passed: all ${standingChecks} seat trays, seeded minority messes, one-second routine wipes, 14-room contact/navigation, shallow-angle sweeping, wall retraction, persistence, pause, and bounded visuals.`);
+console.log(`Usher v24 smoke passed: all ${standingChecks} seat approaches, shared occupied trays, seeded minority messes, one-second routine wipes, hand-brushed chair popcorn, unrestricted floor work, 14-room contact/navigation, shallow-angle sweeping, wall retraction, persistence, pause, and bounded visuals.`);

@@ -33,7 +33,7 @@ export function createCustomerNavigation(world, getObstacles = () => []) {
   const dynamic = new Set(world.dynamicColliders ?? []);
   const fixed = world.colliders.filter(c => !dynamic.has(c));
   const buckets = new Map(), nodes = new Map(), cachedRoutes = new Map();
-  const seatPlans = createCleaningPlans(world), cachedSeats = new Map();
+  const seatPlans = createCleaningPlans(world), cachedSeats = new Map(), clearanceCache = new Map();
   for (const c of fixed) for (let x = Math.floor((c.minX - PATRON_RADIUS) / HASH); x <= Math.floor((c.maxX + PATRON_RADIUS) / HASH); x++)
     for (let z = Math.floor((c.minZ - PATRON_RADIUS) / HASH); z <= Math.floor((c.maxZ + PATRON_RADIUS) / HASH); z++) {
       const key = `${x},${z}`; if (!buckets.has(key)) buckets.set(key, []); buckets.get(key).push(c);
@@ -60,6 +60,18 @@ export function createCustomerNavigation(world, getObstacles = () => []) {
     }
     return true;
   }
+  function clearance(x, z, y = world.groundHeight(x, z, 0)) {
+    const key = `${Math.round(x * 10)},${Math.round(z * 10)},${Math.round(y * 10)}`;
+    if (clearanceCache.has(key)) return clearanceCache.get(key);
+    let distance = 2;
+    for (let ix = -1; ix <= 1; ix++) for (let iz = -1; iz <= 1; iz++) {
+      for (const c of buckets.get(`${Math.floor(x / HASH) + ix},${Math.floor(z / HASH) + iz}`) ?? []) {
+        if (c.enabled === false || y + .04 >= c.maxY || y + PATRON_HEIGHT <= c.minY) continue;
+        distance = Math.min(distance, Math.hypot(x - THREE.MathUtils.clamp(x, c.minX, c.maxX), z - THREE.MathUtils.clamp(z, c.minZ, c.maxZ)));
+      }
+    }
+    clearanceCache.set(key, distance); return distance;
+  }
   function node(ix, iz) {
     const key = `${ix},${iz}`; if (nodes.has(key)) return nodes.get(key);
     const x = ix * STEP, z = iz * STEP, y = world.groundHeight(x, z, 0);
@@ -80,18 +92,28 @@ export function createCustomerNavigation(world, getObstacles = () => []) {
     for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) { const n = node(ix + dx, iz + dz); if (n && clearSegment(p, n) && dynamicSegment(p, n, obstacles)) candidates.push(n); }
     return candidates.sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0] ?? null;
   }
-  function path(from, to) {
+  function path(from, to, options = {}) {
     const startPoint = vector(from), endPoint = vector(to);
-    const obstacles = getObstacles();
+    const obstacles = [...getObstacles(), ...(options.obstacles ?? [])];
     const segment = (a, b) => clearSegment(a, b) && dynamicSegment(a, b, obstacles);
+    const comfortable = (a, b) => {
+      if (!segment(a, b)) return false;
+      const margin = Math.min(options.clearance ?? .72, clearance(a.x, a.z, a.y), clearance(b.x, b.z, b.y));
+      const steps = Math.max(1, Math.ceil(Math.hypot(a.x - b.x, a.z - b.z) / .4));
+      for (let i = 1; i < steps; i++) {
+        const x = THREE.MathUtils.lerp(a.x, b.x, i / steps), z = THREE.MathUtils.lerp(a.z, b.z, i / steps);
+        if (clearance(x, z) < margin - .03) return false;
+      }
+      return true;
+    };
     startPoint.y = world.groundHeight(startPoint.x, startPoint.z, startPoint.y);
     endPoint.y = world.groundHeight(endPoint.x, endPoint.z, endPoint.y);
-    if (segment(startPoint, endPoint)) return [startPoint, endPoint];
+    if (comfortable(startPoint, endPoint)) return [startPoint, endPoint];
     const start = nearest(startPoint, obstacles), goal = nearest(endPoint, obstacles); if (!start || !goal) return null;
     const open = new Heap(), best = new Map([[start.key, 0]]), previous = new Map(), closed = new Set();
     const heuristic = n => Math.hypot(n.x - goal.x, n.z - goal.z);
     open.push({ node: start, f: heuristic(start), g: 0 });
-    while (open.list.length && closed.size < 40000) {
+    while (open.list.length && closed.size < (options.maxNodes ?? 40000)) {
       const entry = open.pop(), current = entry.node; if (closed.has(current.key)) continue;
       if (current.key === goal.key) {
         const result = [endPoint]; let p = current;
@@ -100,7 +122,7 @@ export function createCustomerNavigation(world, getObstacles = () => []) {
         const smooth = [result[0]]; let at = 0;
         while (at < result.length - 1) {
           let next = Math.min(result.length - 1, at + 60);
-          while (next > at + 1 && !segment(result[at], result[next])) next--;
+          while (next > at + 1 && !comfortable(result[at], result[next])) next--;
           smooth.push(result[next]); at = next;
         }
         return smooth;
@@ -108,7 +130,9 @@ export function createCustomerNavigation(world, getObstacles = () => []) {
       closed.add(current.key);
       for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
         const next = node(current.ix + dx, current.iz + dz); if (!next || closed.has(next.key) || !segment(current, next)) continue;
-        const g = entry.g + STEP * Math.hypot(dx, dz);
+        // Prefer the middle of a usable aisle even when a wall-skimming corner
+        // would save a few centimeters. Tight doors remain traversable.
+        const g = entry.g + STEP * Math.hypot(dx, dz) * (1 + Math.max(0, .9 - clearance(next.x, next.z, next.y)) * 1.8);
         if (g >= (best.get(next.key) ?? Infinity)) continue;
         best.set(next.key, g); previous.set(next.key, current); open.push({ node: next, g, f: g + heuristic(next) });
       }
@@ -136,23 +160,24 @@ export function createCustomerNavigation(world, getObstacles = () => []) {
     }
     return cachedRoutes.get(id)?.map(p => p.clone()) ?? null;
   }
-  function theaterSeats(id) {
-    if (cachedSeats.has(id)) return cachedSeats.get(id);
+  function theaterSeats(id, seatIds = null) {
     const layout = world.auditoriumLayouts.get(id), plan = seatPlans.find(p => p.id === id), base = theaterPath(id);
     if (!plan || !base) return [];
     const rowIndex = layout.entryCross ? layout.groundRowIndex : layout.access === "top" ? layout.rows.length - 1 : 0;
-    const seats = plan.seats.filter(s => s.row === rowIndex).sort((a, b) => Math.abs(a.x - base.at(-1).x) - Math.abs(b.x - base.at(-1).x));
+    const seats = seatIds ? seatIds.map(seatId => plan.seats.find(seat => seat.id === seatId)).filter(Boolean)
+      : plan.seats.filter(s => s.row === rowIndex).sort((a, b) => Math.abs(a.x - base.at(-1).x) - Math.abs(b.x - base.at(-1).x)).slice(0, 4);
     const results = [];
     for (const seat of seats) {
+      if (cachedSeats.has(seat.id)) { results.push(cachedSeats.get(seat.id)); continue; }
       const approach = new THREE.Vector3(...seat.stand);
       if (!clearPoint(approach.x, approach.z, approach.y)) continue;
       const tail = path(base.at(-1), approach); if (!tail) continue;
-      results.push({ seat, route: [...base.map(p => p.clone()), ...tail.slice(1)] });
-      if (results.length === 4) break;
+      const result = { seat, route: [...base.map(p => p.clone()), ...tail.slice(1)] };
+      results.push(result); cachedSeats.set(seat.id, result);
     }
-    cachedSeats.set(id, results); return results;
+    return results;
   }
-  return { path, theaterPath, theaterSeats, theaterDestination, clearPoint,
+  return { path, theaterPath, theaterSeats, theaterDestination, clearPoint, clearance, seatPlans,
     clearSegment: (a, b) => clearSegment(a, b) && dynamicSegment(a, b, getObstacles()),
     get cachedNodes() { return nodes.size; } };
 }

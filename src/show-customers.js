@@ -2,10 +2,11 @@ import * as THREE from "three";
 import { AUDITORIUMS } from "./layout-data.js";
 import { createNpcAssets } from "./npc-assets.js";
 import { createCustomerNavigation, PATRON_HEIGHT, PATRON_RADIUS, PATRON_EXIT } from "./show-customer-navigation.js";
+import { createShowAttendance, attendanceCycle, MAX_SHOW_AUDIENCE } from "./show-attendance.js";
 
 const idOf = event => typeof event === "string" ? event : event?.theaterId ?? event?.id;
 const copyRoute = route => route.map(point => point.clone());
-const REAL_STEP = .05, MAX_MOVING = 20;
+const REAL_STEP = .05, MAX_MOVING = 28;
 
 /** A bounded set of visitors lives through arrival, sitting, departure and
  * rubbish disposal. Movement uses the same capsule collisions as the usher. */
@@ -20,13 +21,13 @@ export function createShowCustomers({ scene, world, collisionWorld, camera, door
     const hx = Math.abs(cos) * leaf.leafWidth / 2 + Math.abs(sin) * .035, hz = Math.abs(sin) * leaf.leafWidth / 2 + Math.abs(cos) * .035;
     return { id: `${door.id}-parked-leaf`, minX: x - hx, maxX: x + hx, minZ: z - hz, maxZ: z + hz, minY: .05, maxY: door.height };
   }));
-  const navigation = createCustomerNavigation(world, () => [...parkedLeaves, ...collisionWorld.colliders.filter(c => /^rolling-bin-|^waste-bag-|^supplies-loose-/.test(c.id))]), actors = [], routes = new Map(), queue = [], completed = new Set();
+  const navigation = createCustomerNavigation(world, () => [...parkedLeaves, ...collisionWorld.colliders.filter(c => /^rolling-bin-|^waste-bag-|^supplies-loose-/.test(c.id))]), actors = [], routes = new Map(), queue = [], completed = new Set(), audiences = new Map();
   const geometry = new THREE.BoxGeometry(1, 1, 1), materials = [0xb38e72, 0x795d47, 0xc29e7c, 0x729186, 0x7a7695, 0xad725b]
     .map(color => new THREE.MeshStandardMaterial({ color, roughness: .88 }));
   const stats = { entered: 0, exited: 0, tossed: 0, queuedStarts: 0, queuedBreaks: 0 };
-  let frontExit = []; const disposalExits = new Map();
+  let frontExit = []; const disposalExits = new Map(), disposalApproaches = new Map();
   let disposed = false, enabled = true, clock = 0, assets, ready, prepared = false, carry = 0;
-  for (const room of AUDITORIUMS) for (let index = 0; index < 4; index++) {
+  for (const room of AUDITORIUMS) for (let index = 0; index < MAX_SHOW_AUDIENCE; index++) {
     const group = new THREE.Group(), fallback = new THREE.Group(); group.name = `${room.id}-customer-${index + 1}`; group.visible = false; group.add(fallback); root.add(group);
     const make = (parent, position, size, material) => { const m = new THREE.Mesh(geometry, material); m.position.set(...position); m.scale.set(...size); parent.add(m); return m; };
     make(fallback, [0, 1.16, 0], [.35, .52, .22], materials[3 + index % 3]);
@@ -40,7 +41,8 @@ export function createShowCustomers({ scene, world, collisionWorld, camera, door
     const packaging = make(group, [.24, .97, .15], index % 2 ? [.20, .12, .17] : [.13, .24, .13], materials[index % 3]);
     packaging.name = `${group.name}-carried-packaging`; packaging.visible = false;
     actors.push({ group, fallback, fallbackLimbs: limbs, limbs, packaging, collider, room: room.id, index, state: "idle", path: [], waypoint: 1,
-      walked: 0, time: 0, speed: 1.04 + index * .065, waiting: false, departing: false, seat: null, disposal: null, retry: 0 });
+      walked: 0, time: 0, speed: 1.10 + index % 4 * .035, waiting: false, departing: false, seat: null, disposal: null, retry: 0,
+      rank: actors.length, stalled: 0, repathAt: 0, party: null, partySlot: 0, baseRoute: [], lastPosition: new THREE.Vector3() });
   }
   waste?.enableScheduledCustomers();
   world.entranceDoors?.setAdditionalVisitors(() => enabled ? actors.filter(a => a.collider.enabled).map(a => a.group.position) : []);
@@ -76,14 +78,18 @@ export function createShowCustomers({ scene, world, collisionWorld, camera, door
   }
   function planExit(actor) {
     const origin = actor.group.position;
-    const reversed = copyRoute(routes.get(actor.room)[actor.index].route).reverse();
+    if (!actor.baseRoute.length) actor.baseRoute = navigation.theaterSeats(actor.room, [actor.seat.id])[0]?.route ?? [];
+    if (!actor.baseRoute.length) { actor.state = "leaving"; actor.retry = 2; return; }
+    const reversed = copyRoute(actor.baseRoute).reverse();
     const completeExit = [...reversed, ...copyRoute(frontExit).slice(1)];
     const outside = doors?.getSnapshot().find(d => d.id === actor.room)?.route.hall ?? origin.toArray();
     actor.disposal = waste?.getCustomerDisposalTarget(outside, actor.room) ?? null;
     if (actor.disposal) {
       const outsidePoint = new THREE.Vector3(...outside);
       let nearest = 0; reversed.forEach((p, i) => { if (p.distanceTo(outsidePoint) < reversed[nearest].distanceTo(outsidePoint)) nearest = i; });
-      const tail = navigation.path(reversed[nearest], actor.disposal.stand);
+      const approachKey = `${actor.room}:${reversed[nearest].toArray()}:${actor.disposal.binId}:${actor.disposal.stand}`;
+      if (!disposalApproaches.has(approachKey)) disposalApproaches.set(approachKey, navigation.path(reversed[nearest], actor.disposal.stand));
+      const tail = disposalApproaches.get(approachKey);
       if (tail) {
         const prefix = reversed.slice(0, nearest + 1), path = [...prefix, ...tail.slice(1)];
         if (origin.distanceTo(prefix[0]) > .15) { const access = navigation.path(origin, prefix[0]); if (access) path.unshift(...access.slice(0, -1)); }
@@ -102,15 +108,17 @@ export function createShowCustomers({ scene, world, collisionWorld, camera, door
     const key = `${kind}:${typeof event === "object" ? event.id ?? `${room}:${event.time ?? clock}` : `${room}:${clock}`}`;
     if (completed.has(key)) return false; completed.add(key);
     if (kind === "start") stats.queuedStarts++; else stats.queuedBreaks++;
-    queue.push({ room, kind, time: clock }); return true;
+    const activeShow = actors.find(actor => actor.room === room && actor.state !== "idle");
+    const cycle = kind === "break" && !Number.isInteger(event?.cycle) && activeShow ? activeShow.showCycle : attendanceCycle(event, kind);
+    queue.push({ room, kind, cycle, time: clock }); return true;
   }
   async function prepare() {
     frontExit = navigation.path([1.925, 0, 2.2], PATRON_EXIT);
     for (const room of AUDITORIUMS) {
       if (disposed) return;
-      const seats = navigation.theaterSeats(room.id);
-      if (seats.length !== 4) throw new Error(`Scheduled customers cannot reach four seats in ${room.id}`);
-      routes.set(room.id, seats);
+      const path = navigation.theaterPath(room.id);
+      if (!path) throw new Error(`Scheduled customers cannot reach ${room.id}`);
+      routes.set(room.id, path);
       await new Promise(resolve => setTimeout(resolve, 0));
     }
     for (const bin of waste?.getSnapshot().bins ?? []) {
@@ -119,63 +127,159 @@ export function createShowCustomers({ scene, world, collisionWorld, camera, door
     }
     prepared = true;
   }
+  function audience(room, cycle) {
+    const key = `${room}:${cycle}`;
+    if (!audiences.has(key)) {
+      const plan = navigation.seatPlans.find(p => p.id === room), attendance = createShowAttendance(plan, { cycle });
+      const byId = new Map(plan.seats.map(seat => [seat.id, seat]));
+      const members = attendance.groups.flatMap(party => party.seatIds.map((id, slot) => ({ seat: byId.get(id), route: null, party: party.id, partySlot: slot,
+        delay: party.arrivalDelay + Math.floor(slot / 2) * .9 })));
+      audiences.set(key, { ...attendance, members, key });
+    }
+    return audiences.get(key);
+  }
+  function assign(actor, member, show) {
+    actor.seat = member.seat; actor.baseRoute = member.route ?? []; actor.party = member.party; actor.partySlot = member.partySlot;
+    actor.show = show.key; actor.showCycle = show.cycle; actor.packaging.visible = false; actor.stalled = 0; actor.repathAt = 0;
+  }
   function serviceQueue() {
     if (!prepared) return;
     let moving = actors.filter(a => !["idle", "seated"].includes(a.state)).length;
+    // A departing audience owns the narrow cubby until its last member clears
+    // it. New parties queue in the lobby, never face-to-face inside the door.
     for (const event of queue) {
-      const roomActors = actors.filter(a => a.room === event.room), plans = routes.get(event.room);
-      for (const actor of roomActors) {
-        if (actor.lastEvent === event || clock < event.time + actor.index * 2.6 || moving >= MAX_MOVING) continue;
+      const roomActors = actors.filter(a => a.room === event.room);
+      const show = audience(event.room, event.cycle);
+      if (event.kind === "start" && (queue.some(other => other !== event && other.room === event.room && other.kind === "break")
+        || roomActors.some(a => a.departing && a.state !== "idle"))) continue;
+      event.done ??= new Set();
+      for (let index = 0; index < show.count; index++) {
+        const actor = roomActors[index], member = show.members[index];
+        if (event.done.has(index) || moving >= MAX_MOVING) continue;
+        if (clock < event.time + (event.kind === "start" ? member.delay : index * 1.6)) continue;
         if (event.kind === "start") {
           if (actor.state !== "idle") continue;
-          const start = plans[actor.index].route[0];
-          if (camera.position.distanceTo(start.clone().add(new THREE.Vector3(0, 1.68, 0))) < 1.0
-            || actors.some(a => a !== actor && a.collider.enabled && a.group.position.distanceTo(start) < .8)) continue;
-          actor.seat = plans[actor.index].seat; actor.group.position.copy(start); actor.departing = false;
-          actor.packaging.visible = false;
-          setPath(actor, plans[actor.index].route, "arriving");
+          member.route ??= navigation.theaterSeats(event.room, [member.seat.id])[0]?.route;
+          if (!member.route) throw new Error(`Customer cannot reach ${member.seat.id}`);
+          const start = member.route[0].clone();
+          // Companions start together across the broad lobby. The formation
+          // naturally compresses at narrow passages and widens again afterward.
+          const next = member.route[1], tangent = next.clone().sub(start).setY(0).normalize();
+          const side = new THREE.Vector3(tangent.z, 0, -tangent.x);
+          start.addScaledVector(side, (member.partySlot % 2 ? 1 : -1) * .36);
+          if (!navigation.clearSegment(member.route[0], start)) start.copy(member.route[0]);
+          if (Math.hypot(camera.position.x - start.x, camera.position.z - start.z) < 1
+            || actors.some(a => a !== actor && a.collider.enabled && a.group.position.distanceTo(start) < .60)) continue;
+          assign(actor, member, show); actor.group.position.copy(start); actor.departing = false;
+          setPath(actor, [start, ...member.route.slice(1)], "arriving");
         } else {
-          // The first break of a loaded shift already has an audience in its
-          // chairs. Later breaks use the same people who visibly entered.
-          actor.seat ??= plans[actor.index].seat;
-          if (actor.state === "idle") { poseSeated(actor); actor.state = "seated"; }
+          if (actor.show !== show.key && actor.state !== "idle") continue;
+          if (actor.state === "idle") { assign(actor, member, show); poseSeated(actor); actor.state = "seated"; }
           if (actor.state === "seated") leaveSeat(actor);
-          else if (actor.state === "arriving") { actor.departing = true; planExit(actor); }
+          else if (actor.state === "arriving" || actor.state === "sitting") { actor.departing = true; actor.packaging.visible = true; planExit(actor); }
           else continue;
         }
-        actor.lastEvent = event; actor.group.visible = enabled; body(actor); moving++;
+        event.done.add(index); actor.group.visible = enabled; body(actor); moving++;
       }
     }
-    for (let i = queue.length - 1; i >= 0; i--) if (actors.filter(a => a.room === queue[i].room).every(a => a.lastEvent === queue[i])) queue.splice(i, 1);
+    for (let i = queue.length - 1; i >= 0; i--) if (queue[i].done?.size === audience(queue[i].room, queue[i].cycle).count) queue.splice(i, 1);
+  }
+  const up = new THREE.Vector3(0, 1, 0);
+  function localObstacles(actor) {
+    const p = actor.group.position, result = [];
+    if (Math.abs(camera.position.y - 1.68 - p.y) < 1.6 && Math.hypot(camera.position.x - p.x, camera.position.z - p.z) > .72) {
+      result.push({ minX: camera.position.x - .34, maxX: camera.position.x + .34, minZ: camera.position.z - .34, maxZ: camera.position.z + .34,
+        minY: camera.position.y - 1.68, maxY: camera.position.y + .05 });
+    }
+    for (const other of actors) if (other !== actor && other.collider.enabled && p.distanceTo(other.group.position) > .72
+      && p.distanceTo(other.group.position) < 5) result.push(other.collider);
+    return result;
+  }
+  function replan(actor) {
+    const nextIndex = Math.min(actor.waypoint + 1, actor.path.length - 1), goal = actor.path[nextIndex];
+    if (!goal || clock < actor.repathAt) return;
+    actor.repathAt = clock + 3 + actor.rank % 7 * .13;
+    const result = navigation.path(actor.group.position, goal, { obstacles: localObstacles(actor), maxNodes: 1600 });
+    if (result) { actor.path = [...result, ...actor.path.slice(nextIndex + 1)]; actor.waypoint = 1; actor.stalled = 0; }
   }
   function walk(actor, dt) {
     const target = actor.path[actor.waypoint]; if (!target) return true;
-    const p = actor.group.position, dx = target.x - p.x, dz = target.z - p.z, distance = Math.hypot(dx, dz);
-    const following = actor.path[actor.waypoint + 1];
-    if (following && distance < .46 && navigation.clearSegment(p, following)) { actor.waypoint++; return false; }
-    if (distance < (actor.state === "exit" && !following ? .35 : .11)) { p.copy(target); actor.waypoint++; return actor.waypoint >= actor.path.length; }
-    const step = Math.min(distance, actor.speed * dt), direction = new THREE.Vector3(dx / distance, 0, dz / distance);
-    let next = null;
+    const p = actor.group.position, following = actor.path[actor.waypoint + 1];
+    let distance = Math.hypot(target.x - p.x, target.z - p.z);
+    if (following && distance < .22 && navigation.clearSegment(p, following)) { actor.waypoint++; return false; }
+    if (distance < (actor.state === "exit" && !following ? .35 : .12)) { p.copy(target); actor.waypoint++; actor.stalled = 0; return actor.waypoint >= actor.path.length; }
+    const destination = target.clone(), door = doors?.doors.find(d => d.id === actor.room);
+    const roomPlan = navigation.seatPlans.find(plan => plan.id === actor.room);
+    const inRoom = p.x > roomPlan.bounds.xMin && p.x < roomPlan.bounds.xMax && p.z > roomPlan.bounds.zMin && p.z < roomPlan.bounds.zMax;
+    if (following && !inRoom && actor.party && distance > 1.5 && navigation.clearance(p.x, p.z, p.y) > 1) {
+      const lane = (actor.partySlot % 2 ? 1 : -1) * .35;
+      destination.x += (target.z - p.z) / distance * lane; destination.z -= (target.x - p.x) / distance * lane;
+      if (!navigation.clearSegment(p, destination)) destination.copy(target);
+    }
+    const direction = destination.clone().sub(p).setY(0).normalize();
+    let pace = actor.speed;
+    if (!inRoom && actor.party && navigation.clearance(p.x, p.z, p.y) > .85) {
+      const mate = actors.find(other => other !== actor && other.party === actor.party && other.partySlot === (actor.partySlot ^ 1)
+        && other.state === actor.state);
+      if (mate) {
+        const along = (mate.group.position.x - p.x) * direction.x + (mate.group.position.z - p.z) * direction.z;
+        if (along < -.9 && along > -4) pace *= .66;
+        else if (along > 1.1) pace *= 1.1;
+      }
+    }
+    const step = Math.min(distance, pace * dt);
+    let next = null, bestScore = -Infinity, closedDoor = false;
     actor.collider.enabled = false;
-    for (const angle of [0, .6, -.6, 1.05, -1.05, 1.5, -1.5]) {
-      const d = direction.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), angle), trial = { x: p.x, y: p.y, z: p.z };
+    const nearby = actors.filter(other => other !== actor && other.collider.enabled && Math.abs(other.group.position.y - p.y) < 1.6
+      && Math.hypot(other.group.position.x - p.x, other.group.position.z - p.z) < 1.7);
+    const playerNear = Math.abs(camera.position.y - 1.68 - p.y) < 1.6 && Math.hypot(camera.position.x - p.x, camera.position.z - p.z) < 1.6;
+    for (const angle of [0, -.35, .35, -.75, .75, -1.15, 1.15, -1.57, 1.57, -2.15, 2.15, Math.PI]) {
+      const d = direction.clone().applyAxisAngle(up, angle), trial = { x: p.x, y: p.y, z: p.z };
       collisionWorld.moveCircle(trial, d.x * step, d.z * step, PATRON_RADIUS, p.y + .03, PATRON_HEIGHT);
       const ground = world.groundHeight(trial.x, trial.z, p.y);
-      const door = doors?.doors.find(d => d.id === actor.room);
       if (door && door.angle < 1.40) {
         const signed = (trial.x - door.x) * door.normal[0] + (trial.z - door.z) * door.normal[2];
         const lateral = (trial.x - door.x) * door.normal[2] - (trial.z - door.z) * door.normal[0];
-        if (Math.abs(signed) < 1.75 && Math.abs(lateral) < door.width / 2 + .35) continue;
+        if (Math.abs(signed) < 1.75 && Math.abs(lateral) < door.width / 2 + .35) { closedDoor = true; continue; }
       }
       if (Math.abs(ground - p.y) > .32 || !navigation.clearPoint(trial.x, trial.z, ground)) continue;
-      if (Math.abs(camera.position.y - 1.68 - ground) < 1.6 && Math.hypot(camera.position.x - trial.x, camera.position.z - trial.z) < .70) continue;
-      if (actors.some(other => other !== actor && other.collider.enabled && Math.abs(other.group.position.y - ground) < 1.6
-        && Math.hypot(other.group.position.x - trial.x, other.group.position.z - trial.z) < .53)) continue;
-      const progressed = (trial.x - p.x) * direction.x + (trial.z - p.z) * direction.z;
-      if (progressed > -.0001 && Math.hypot(trial.x - p.x, trial.z - p.z) > step * .30) { next = new THREE.Vector3(trial.x, ground, trial.z); break; }
+      if (!navigation.clearSegment(p, new THREE.Vector3(trial.x, ground, trial.z))) continue;
+      const moved = Math.hypot(trial.x - p.x, trial.z - p.z); if (moved < step * .30) continue;
+      if (playerNear && Math.hypot(camera.position.x - trial.x, camera.position.z - trial.z) < .68) continue;
+      if (nearby.some(other => {
+        const previousGap = Math.hypot(other.group.position.x - p.x, other.group.position.z - p.z);
+        const gap = Math.hypot(other.group.position.x - trial.x, other.group.position.z - trial.z);
+        // A standing animation or player shove may begin in overlap. Allow
+        // separating motion instead of trapping both people forever.
+        return gap < .52 && gap < previousGap + .001;
+      })) continue;
+      let score = ((trial.x - p.x) * direction.x + (trial.z - p.z) * direction.z) / step;
+      // Look ahead rather than waiting until capsules touch. Everyone passes
+      // on their right, so opposite streams choose opposite physical sides.
+      const ahead = new THREE.Vector3(trial.x + d.x * .75, ground, trial.z + d.z * .75);
+      for (const other of nearby) {
+        const gap = Math.hypot(other.group.position.x - ahead.x, other.group.position.z - ahead.z);
+        score -= Math.max(0, 1 - gap / .85) * 2.2;
+      }
+      if (playerNear) score -= Math.max(0, 1 - Math.hypot(camera.position.x - ahead.x, camera.position.z - ahead.z) / .95) * 3;
+      score += angle < 0 ? .06 : 0;
+      if (Math.abs(angle) > 1.6 && actor.stalled < .7) score -= 2;
+      if (score > bestScore) { bestScore = score; next = new THREE.Vector3(trial.x, ground, trial.z); }
     }
-    actor.waiting = !next;
-    if (next) { actor.walked += p.distanceTo(next); p.copy(next); actor.group.rotation.y = Math.atan2(dx, dz); }
+    actor.waiting = !next || bestScore < -.5 && closedDoor;
+    if (actor.waiting) next = null;
+    const before = distance;
+    if (next) {
+      actor.walked += p.distanceTo(next); const travel = next.clone().sub(p); p.copy(next);
+      actor.group.rotation.y = Math.atan2(travel.x, travel.z);
+    }
+    const progress = before - Math.hypot(target.x - p.x, target.z - p.z);
+    actor.stalled = progress > step * .18 ? Math.max(0, actor.stalled - dt * .25) : actor.stalled + dt;
+    const crossing = nearby.some(other => {
+      const goal = other.path[other.waypoint];
+      return goal && direction.x * (goal.x - other.group.position.x) + direction.z * (goal.z - other.group.position.z) < -.1;
+    });
+    if (actor.stalled > 1.1 && !closedDoor && (playerNear || crossing || actor.stalled > 5 && !nearby.length)) replan(actor);
     actor.limbs.forEach(({ arm, leg, side }) => {
       const swing = next ? Math.sin(actor.walked * 8.8) * .33 * side : 0; leg.rotation.x = swing; arm.rotation.x = -swing;
     });
@@ -185,14 +289,22 @@ export function createShowCustomers({ scene, world, collisionWorld, camera, door
     clock += dt; serviceQueue();
     for (const actor of actors) {
       if (actor.state === "idle") { actor.group.visible = false; continue; }
-      actor.group.visible = Math.hypot(actor.group.position.x - camera.position.x, actor.group.position.z - camera.position.z) < 70;
+      const room = navigation.seatPlans.find(plan => plan.id === actor.room);
+      const cameraInRoom = camera.position.x > room.bounds.xMin - 1 && camera.position.x < room.bounds.xMax + 1
+        && camera.position.z > room.bounds.zMin - 1 && camera.position.z < room.bounds.zMax + 1;
+      actor.group.visible = actor.state === "seated" ? cameraInRoom : Math.hypot(actor.group.position.x - camera.position.x, actor.group.position.z - camera.position.z) < 65;
       actor.time += dt;
-      if (actor.state === "seated") { poseSeated(actor); continue; }
+      if (actor.state === "seated") continue;
       if (actor.state === "sitting") {
         poseSeated(actor, Math.min(1, actor.time / .8));
         if (actor.time >= .8) { actor.state = "seated"; stats.entered++; } continue;
       }
       if (actor.state === "standing") {
+        const stand = new THREE.Vector3(...actor.seat.stand);
+        if (actor.time >= .65 && actors.some(other => other !== actor && other.collider.enabled
+          && Math.abs(other.group.position.y - stand.y) < 1.6 && Math.hypot(other.group.position.x - stand.x, other.group.position.z - stand.z) < .7)) {
+          actor.time = .65; poseSeated(actor, .22); continue;
+        }
         poseSeated(actor, Math.max(0, 1 - actor.time / .8));
         if (actor.time >= .8) planExit(actor); continue;
       }
@@ -200,7 +312,7 @@ export function createShowCustomers({ scene, world, collisionWorld, camera, door
       if (actor.state === "tossing") {
         actor.limbs[1].arm.rotation.x = -1.3 + Math.sin(Math.min(1, actor.time) * Math.PI) * .5;
         if (!actor.tossStarted && actor.time > .25) {
-          actor.tossStarted = waste?.throwCustomerTrash({ binId: actor.disposal.binId, from: actor.group.position.clone().setY(actor.group.position.y + 1.3), units: 7 + actor.index * 2, shape: actor.index % 3, sourceColliderId: actor.collider.id });
+          actor.tossStarted = waste?.throwCustomerTrash({ binId: actor.disposal.binId, from: actor.group.position.clone().setY(actor.group.position.y + 1.3), units: 7 + actor.index % 4 * 2, shape: actor.index % 3, sourceColliderId: actor.collider.id });
           if (actor.tossStarted) { actor.time = 0; actor.packaging.visible = false; stats.tossed++; }
         }
         if ((actor.tossStarted && actor.time > 1.05) || actor.time > 5) {
@@ -220,6 +332,19 @@ export function createShowCustomers({ scene, world, collisionWorld, camera, door
   return {
     root, actors, navigation,
     onStart(event) { return enqueue(event, "start"); }, onBreak(event) { return enqueue(event, "break"); },
+    restoreSchedule({ minute = 0, done = [], events = [] } = {}) {
+      const processed = new Set(done); let restored = 0;
+      for (const room of AUDITORIUMS) {
+        if (actors.some(a => a.room === room.id && a.state !== "idle") || queue.some(event => event.room === room.id)) continue;
+        const past = events.filter(event => event.theaterId === room.id && event.time <= minute && processed.has(event.id));
+        const last = past.at(-1); if (last?.kind === "break") continue;
+        const cycle = last ? attendanceCycle(last, "start") : 0, show = audience(room.id, cycle);
+        const roomActors = actors.filter(actor => actor.room === room.id);
+        show.members.forEach((member, index) => { const actor = roomActors[index]; assign(actor, member, show); poseSeated(actor);
+          actor.state = "seated"; actor.departing = false; actor.group.visible = false; restored++; });
+      }
+      return restored;
+    },
     loadAssets(options = {}) {
       if (disposed) return Promise.resolve({ status: "disposed", actorCount: 0 });
       if (!ready) {
@@ -236,7 +361,8 @@ export function createShowCustomers({ scene, world, collisionWorld, camera, door
     setEnabled(value) { enabled = Boolean(value); root.visible = enabled; actors.forEach(body); },
     getSnapshot() { return { enabled, prepared, clock, stats: { ...stats }, queued: queue.map(event => ({ room: event.room, kind: event.kind })),
       actors: actors.filter(a => a.state !== "idle").map(a => ({ room: a.room, index: a.index, state: a.state, position: a.group.position.toArray(),
-        waiting: a.waiting, waypoint: a.waypoint, pathLength: a.path.length, seat: a.seat?.label, visible: a.group.visible })) }; },
+        waiting: a.waiting, waypoint: a.waypoint, pathLength: a.path.length, seat: a.seat?.label, seatId: a.seat?.id, show: a.show,
+        party: a.party, partySlot: a.partySlot, visible: a.group.visible })) }; },
     dispose() { if (disposed) return; disposed = true; assets?.dispose(); world.entranceDoors?.setAdditionalVisitors(null);
       actors.forEach(actor => collisionWorld.remove(actor.collider)); root.removeFromParent(); geometry.dispose(); materials.forEach(m => m.dispose()); },
   };

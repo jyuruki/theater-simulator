@@ -17,6 +17,7 @@ import { createShowStartMedia, HULA_DURATION } from "./show-start-media.js";
 import { createShowCustomers } from "./show-customers.js";
 import { setupInstallApp } from "./install-app.js";
 import { SHIFT_TIME_SCALE } from "./usher-schedule.js";
+import { createFeatureProgram } from "./feature-program.js";
 
 const canvas = document.querySelector("#game-canvas");
 const loadingScreen = document.querySelector("#loading-screen");
@@ -113,7 +114,7 @@ try {
   crowd.loadAssets({ url: `${import.meta.env.BASE_URL}models/theater-npcs.glb` });
   const audio = createTheaterAudio();
   const media = createCinemaMedia({ scene, world, materials });
-  let usher, patrons;
+  let usher, patrons, features;
   let mediaWarningShown = false;
   const startMedia = createShowStartMedia({ camera, world, audio,
     getDoor: id => usher?.doors.getSnapshot().find(d => d.id === id),
@@ -167,12 +168,12 @@ try {
     }
     pauseCard.hidden = true;
     audio.start();
-    startMedia.prepare(); startMedia.retry();
+    startMedia.prepare(); startMedia.retry(); features?.retry();
     controller.start();
   };
 
   enterButton.addEventListener("click", enterWalkthrough);
-  resumeButton.addEventListener("click", () => { audio.start(); startMedia.retry(); controller.resume(); });
+  resumeButton.addEventListener("click", () => { audio.start(); startMedia.retry(); features?.retry(); controller.resume(); });
   canvas.addEventListener("click", () => {
     if (entered && !controller.active && !controller.isTouchMode && !interactions?.isOpen) controller.resume();
   });
@@ -187,12 +188,16 @@ try {
     onSound: (kind) => audio.play(kind), audio, crowd, toggleMap, employeeMode: true });
   let shiftStorage;
   try { shiftStorage = window.localStorage; } catch { /* The shift also works without browser storage. */ }
-  usher = createUsherShift({ scene, world, camera, collisionWorld, showToast,
+  usher = createUsherShift({ scene, world, camera, collisionWorld, controller, showToast,
     onSound: (kind) => audio.play(kind), storage: shiftStorage,
-    onStart: event => { startMedia.onStart(event); patrons?.onStart(event); },
+    onStart: event => { features?.suspend(event.theaterId); startMedia.onStart(event); patrons?.onStart(event); },
     onBreak: event => patrons?.onBreak(event) });
   patrons = createShowCustomers({ scene, world, camera, collisionWorld, doors: usher.doors, waste: usher.waste });
-  const patronsReady = patrons.loadAssets({ url: `${import.meta.env.BASE_URL}models/theater-npcs.glb` });
+  const patronsReady = patrons.loadAssets({ url: `${import.meta.env.BASE_URL}models/theater-npcs.glb` }).then(result => {
+    patrons.restoreSchedule({ ...usher.schedule.getSnapshot(), events: usher.schedule.events }); return result;
+  });
+  features = createFeatureProgram({ world, camera, audio, schedule: usher.schedule, trailer: startMedia,
+    getDoor: id => usher.doors.getSnapshot().find(d => d.id === id), onError: error => console.warn(error.message) });
   // Refreshing during the opening cue resumes at the corresponding show time.
   const scheduleSnapshot = usher.schedule.getSnapshot();
   const boarding = new Set(scheduleSnapshot.done);
@@ -252,6 +257,7 @@ try {
     audio.update(controller.position, currentZoneId, entered && (controller.active || interactions.isOpen), controller.grounded);
     media.update(delta, currentZoneId, entered && controller.active && !document.hidden);
     startMedia.update(delta, entered && controller.active && !document.hidden);
+    features.update(delta, entered && controller.active && !document.hidden);
     patrons.setEnabled(crowd.enabled);
     patrons.update(delta, entered && controller.active && !document.hidden);
 
@@ -296,15 +302,15 @@ try {
     if (document.hidden) {
       // Hidden pages may stop rendering immediately, before the next frame can
       // pause the independently running video and decoded soundtrack.
-      startMedia.update(0, false);
+      startMedia.update(0, false); features.update(0, false);
       if (entered && !interactions.isOpen) controller.pause();
     }
   });
   window.addEventListener("pagehide", (event) => {
-    startMedia.update(0, false);
+    startMedia.update(0, false); features.update(0, false);
     if (event.persisted) return;
     renderer.setAnimationLoop(null);
-    startMedia.dispose();
+    features.dispose(); startMedia.dispose();
     audio.dispose();
     patrons.dispose();
     crowd.dispose();
@@ -321,7 +327,7 @@ try {
     enumerable: false,
     writable: false,
     value: Object.freeze({
-      layoutVersion: "mililani-sketch-v23",
+      layoutVersion: "mililani-sketch-v24",
       validation: Object.freeze(validation),
       stats: world.stats,
       controller,
@@ -334,6 +340,7 @@ try {
       usher,
       patrons,
       startMedia,
+      features,
     }),
   });
 } catch (error) {

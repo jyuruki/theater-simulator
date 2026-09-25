@@ -17,16 +17,19 @@ export function createUsherBreaksheet({ scene, camera, schedule }) {
     if (key === signature) return; signature = key;
     ctx.fillStyle = "#fffefa"; ctx.fillRect(0, 0, 800, 1600);
     ctx.fillStyle = "#171717"; ctx.textAlign = "left";
-    ctx.font = "22px Arial"; ctx.fillText(`MILILANI 14     ${schedule.time}`, 47, 64);
+    ctx.font = "bold 27px Arial"; ctx.fillText("MILILANI 14 · DAILY BREAK SHEET", 47, 64);
     ctx.strokeStyle = "#111"; ctx.lineWidth = 4; ctx.strokeRect(42, 94, 716, 1320);
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i], y = 94 + i * 55;
       if (i) { ctx.beginPath(); ctx.moveTo(42, y); ctx.lineTo(758, y); ctx.stroke(); }
-      ctx.font = `${row.bold ? "bold " : ""}27px Arial`;
-      ctx.fillText(String(row.number), 67, y + 37);
-      ctx.fillText(row.title, 143, y + 37, 456);
-      ctx.fillText(row.textTime, 642, y + 37);
+      // Reference: time first, with starts flush left and breaks indented.
+      // Starts keep the entire row bold; theater/title columns stay aligned.
+      ctx.font = `${row.bold ? "bold " : ""}29px Arial`;
+      ctx.fillText(row.textTime, row.bold ? 52 : 151, y + 37, row.bold ? 198 : 188);
+      ctx.fillText(String(row.number), 358, y + 37);
+      ctx.fillText(row.title.toUpperCase(), 416, y + 37, 326);
     }
+    for (const x of [345, 404]) { ctx.beginPath(); ctx.moveTo(x, 94); ctx.lineTo(x, 1414); ctx.stroke(); }
     ctx.font = "bold 23px Arial"; ctx.fillText("BOLD = START / CLOSE DOORS", 48, 1462);
     ctx.font = "23px Arial"; ctx.fillText("Regular = break / clean theater", 48, 1504);
     ctx.font = "20px Arial"; ctx.fillText("B: fold sheet    1: broom    2: cloth", 48, 1556);

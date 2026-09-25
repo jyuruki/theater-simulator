@@ -16,7 +16,8 @@ export function createUsherGameplay({ scene, world, camera, collisionWorld, show
   depositTrash = (_id, count) => count, schedule = null }) {
   const plans = createCleaningPlans(world);
   let state;
-  try { state = restoreUsherState(storage?.getItem(STORAGE_KEY), plans); } catch { state = createUsherState(); }
+  try { state = restoreUsherState(storage?.getItem(STORAGE_KEY), plans,
+    { cycleForRoom: id => schedule?.currentBreak?.(id)?.cycle ?? 0 }); } catch { state = createUsherState(); }
   const visuals = createCleaningVisuals({ scene, world, hands }), { root, tools, stored } = visuals;
   const look = new THREE.Vector3(), forward = new THREE.Vector3(), right = new THREE.Vector3(), ray = new THREE.Ray();
   let disposed = false, active = false, focus = null, target = null, smooth = null, previous = null, phase = 0, accumulator = 0, saveTimer = 0;
@@ -24,8 +25,12 @@ export function createUsherGameplay({ scene, world, camera, collisionWorld, show
   const visible = { broom: true, pan: true, cloth: true }, announced = new Set(state.jobs.filter(j => j.completed).map(j => `${j.id}/${j.seed}`));
   const save = () => { try { storage?.setItem(STORAGE_KEY, serializeUsherState(state)); } catch { /* Optional private-mode storage. */ } };
   function clearSegment(a, b, ignoreId = null, radius = 0) {
+    const minX = Math.min(a.x, b.x) - radius, maxX = Math.max(a.x, b.x) + radius;
+    const minY = Math.min(a.y, b.y), maxY = Math.max(a.y, b.y);
+    const minZ = Math.min(a.z, b.z) - radius, maxZ = Math.max(a.z, b.z) + radius;
     return !(collisionWorld?.colliders ?? []).some(c => {
       if (c.enabled === false || c.id === ignoreId) return false;
+      if (c.maxX < minX || c.minX > maxX || c.maxY < minY || c.minY > maxY || c.maxZ < minZ || c.minZ > maxZ) return false;
       return segmentHitsBox(a, b, radius ? { ...c, minX: c.minX - radius, maxX: c.maxX + radius, minZ: c.minZ - radius, maxZ: c.maxZ + radius } : c);
     });
   }
@@ -127,13 +132,13 @@ export function createUsherGameplay({ scene, world, camera, collisionWorld, show
       resolveTool(tools.broom);
       previous = null; return {};
     }
-    if (!target || !state.heldTool || (target.kind === "tray" && state.heldTool === "broom")) {
+    if (!target || !state.heldTool || (target.seat && state.heldTool === "broom")) {
       smooth = previous = null;
       for (const [name, object] of Object.entries(tools)) {
         object.position.copy(camera.position).addScaledVector(forward, .55).addScaledVector(right, name === "pan" ? -.30 : .27);
         object.position.y = name === "cloth" ? camera.position.y - .78 : feet + .24;
         object.scale.set(1, 1, 1); object.rotation.set(0, yaw, 0);
-        resolveTool(object);
+        if (state.heldTool === "cloth" ? name === "cloth" : name !== "cloth") resolveTool(object);
       }
       return {};
     }
@@ -142,7 +147,7 @@ export function createUsherGameplay({ scene, world, camera, collisionWorld, show
     const delta = target.point.clone().sub(smooth.p); if (delta.length() > 3 * dt) delta.setLength(3 * dt);
     smooth.p.add(delta);
     const at = smooth.p, pull = new THREE.Vector3(camera.position.x - at.x, 0, camera.position.z - at.z).normalize();
-    const chair = target.kind === "seat" && state.heldTool === "broom";
+    const chair = target.kind === "seat" && state.heldTool === "cloth";
     const oldPhase = phase; phase = action ? (phase + dt) % 1.1 : 0;
     const working = action && phase < .72;
     const progress = phase < .72 ? phase / .72 : 1 - (phase - .72) / .38;
@@ -158,18 +163,27 @@ export function createUsherGameplay({ scene, world, camera, collisionWorld, show
     const panDirection = new THREE.Vector3(panPoint.x - at.x, 0, panPoint.z - at.z).normalize();
     tools.pan.position.copy(panPoint); tools.pan.position.y += .007; tools.pan.rotation.set(0, Math.atan2(panDirection.x, panDirection.z), 0);
     tools.cloth.position.copy(at); tools.cloth.position.y += action ? .008 : .12; tools.cloth.rotation.set(0, yaw, 0);
-    if (action && state.heldTool === "cloth") tools.cloth.position.addScaledVector(right, Math.sin(state.elapsed * 15) * .025);
+    if (action && state.heldTool === "cloth" && target.surface) {
+      const local = target.entry.holder.worldToLocal(at.clone());
+      local.x = clamp(local.x + Math.sin(state.elapsed * 9.5) * target.surface.width * .36, -target.surface.width * .47, target.surface.width * .47);
+      tools.cloth.position.copy(target.entry.holder.localToWorld(local)); tools.cloth.position.y += .008;
+    }
+    if (action && chair && target.job.chairParticles.get(target.seat.id).some(p => p.mode === "chair")) {
+      // The same hand holding the cloth pushes chair crumbs forward. The
+      // broom stays holstered and never touches upholstery.
+      tools.cloth.position.copy(head); tools.cloth.position.y += working ? .008 : .09;
+    }
     const ignore = target.ignoreId;
     const clearAt = (p, limit) => Math.hypot(p.x - camera.position.x, p.z - camera.position.z) < limit
       && clearSegment(camera.position, p.clone().add(new THREE.Vector3(0, .04, 0)), ignore);
-    const broomContact = clearAt(head, 2.5) && resolveTool(tools.broom, chair ? ignore : null);
-    const panContact = clearAt(panPoint, 2.5) && resolveTool(tools.pan);
-    const clothContact = clearAt(at, 1.95) && resolveTool(tools.cloth, ignore);
+    const broomContact = state.heldTool === "broom" && clearAt(head, 2.5) && resolveTool(tools.broom);
+    const panContact = state.heldTool === "broom" && clearAt(panPoint, 2.5) && resolveTool(tools.pan);
+    const clothContact = state.heldTool === "cloth" && clearAt(tools.cloth.position, 1.95) && resolveTool(tools.cloth, ignore);
     // A blocked visual retracts to the grip, but that retracted pose cannot
     // perform work at the original target through a wall or another seat.
-    if (!broomContact) resolveTool(tools.broom, chair ? ignore : null);
-    if (!panContact) resolveTool(tools.pan);
-    if (!clothContact) resolveTool(tools.cloth, ignore);
+    if (state.heldTool === "broom" && !broomContact) resolveTool(tools.broom);
+    if (state.heldTool === "broom" && !panContact) resolveTool(tools.pan);
+    if (state.heldTool === "cloth" && !clothContact) resolveTool(tools.cloth, ignore);
     const contact = { canMove };
     if (state.heldTool === "broom" && broomContact && (chair || panContact)) {
       if (working && oldPhase < .72 && previous?.kind === "brush" && previous.key === targetKey) {
@@ -178,9 +192,14 @@ export function createUsherGameplay({ scene, world, camera, collisionWorld, show
       if (!chair) contact.pan = { x: panPoint.x, y: panPoint.y, z: panPoint.z, forward: point(panDirection), right: { x: -panDirection.z, z: panDirection.x } };
       previous = working ? { kind: "brush", key: targetKey, p: point(head) } : null;
     } else if (state.heldTool === "cloth" && action && clothContact && target.surface) {
-      const local = target.entry.holder.worldToLocal(at.clone());
-      if (previous?.kind === "cloth" && previous.key === targetKey) contact.cloth = { surfaceId: target.surface.id, from: previous.p, to: point(local) };
-      previous = { kind: "cloth", key: targetKey, p: point(local) };
+      const local = target.entry.holder.worldToLocal(tools.cloth.position.clone());
+      if (previous?.kind === "cloth" && previous.key === targetKey) {
+        contact.cloth = { surfaceId: target.surface.id, from: previous.p, to: point(local) };
+        if (chair && working && oldPhase < .72 && previous.hand) contact.hand = {
+          from: previous.hand, to: point(head), y: head.y, right: { x: right.x, z: right.z }, seatId: target.seat.id,
+        };
+      }
+      previous = { kind: "cloth", key: targetKey, p: point(local), hand: working ? point(head) : null };
     } else previous = null;
     contactPose = { head: head.toArray(), pan: panPoint.toArray(), working, kind: target.kind };
     return contact;
@@ -202,10 +221,10 @@ export function createUsherGameplay({ scene, world, camera, collisionWorld, show
     }
     saveTimer += seconds; if (saveTimer > 1) { saveTimer = 0; save(); }
   }
-  function beginBreak(theaterId, seed) {
+  function beginBreak(theaterId, seed, options) {
     const id = typeof theaterId === "number" ? `theater-${theaterId}` : theaterId;
     const plan = plans.find(p => p.id === id); if (!plan) return false;
-    const job = beginCleaningBreak(state, plan, seed); if (!job) return false;
+    const job = beginCleaningBreak(state, plan, seed, options); if (!job) return false;
     visuals.update(state, camera, visible); save(); return true;
   }
   visuals.update(state, camera, visible);
@@ -229,8 +248,7 @@ export function createUsherGameplay({ scene, world, camera, collisionWorld, show
       if (hands.owner && hands.owner !== "cleaning") return "Holstered tools · put down what you carry to clean.";
       if (!state.heldTool) return "1 broom · 2 cloth · open trays mark used seats.";
       if (target?.seat) return `Seat ${target.seat.label}: ${seatStage(target.job, target.seat)}. Clean surfaces need a one-second wipe.`;
-      if (target?.job && !theaterSummary(target.job).floorUnlocked) return "Wipe trays and cushions, sweep chairs, then close trays. Floor last.";
-      return state.heldTool === "broom" ? "Hold to pull popcorn toward the dustpan on your left." : "Hold and drag the cloth across the dirty surface.";
+      return state.heldTool === "broom" ? "Sweep floor popcorn into the dustpan whenever you need." : "Hold to wipe; your hand brushes seat popcorn onto the floor.";
     },
     getSnapshot({ details = true } = {}) {
       const interaction = { status: this.status, heldTool: state.heldTool, kit: state.kit, handsOwner: hands.owner,
