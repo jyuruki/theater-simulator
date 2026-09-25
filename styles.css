@@ -457,7 +457,6 @@ html, body { overscroll-behavior: none; }
 #tool-place-button { position: fixed; z-index: 12; right: 24px; bottom: 108px;
   border: 1px solid #87bba9; border-radius: 8px; color: #e0f8eb; background: #18342de8;
   padding: 10px 14px; font: 700 11px system-ui; }
-@media (max-width: 520px) { .visit-toolbar { gap: 4px; } .visit-toolbar button { padding: 8px 9px; } }
 button:focus-visible, select:focus-visible, input:focus-visible { outline: 3px solid #77d7db; outline-offset: 4px; }
 .visit-toolbar { position: absolute; top: 87px; left: 0; display: flex; gap: 6px; pointer-events: auto; }
 .visit-toolbar button { border: 1px solid #ffffff24; border-radius: 7px; background: #10121cdd; color: #efebe4; padding: 9px 11px; cursor: pointer; font-size: 11px; }
@@ -525,4 +524,9 @@ input[type="range"] { width: 100%; accent-color: #e05a74; }
 @media (max-width: 760px), (pointer: coarse) {
   #interact-button { max-width: calc(100vw - 36px); white-space: normal; bottom: 270px; }
   #visit-status { max-width: calc(100vw - 40px); }
+}
+@media (max-width: 520px) {
+  .visit-toolbar { gap: 4px; }
+  .visit-toolbar button { padding: 8px 9px; }
+  #visit-status { top: max(180px, calc(env(safe-area-inset-top) + 170px)); }
 }
