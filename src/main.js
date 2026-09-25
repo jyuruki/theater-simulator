@@ -13,6 +13,10 @@ import { createTheaterLighting } from "./lighting.js";
 import { USHER_SPAWN } from "./usher-gameplay.js";
 import { createUsherShift } from "./usher-shift.js";
 import { createUsherUI } from "./usher-ui.js";
+import { createShowStartMedia, HULA_DURATION } from "./show-start-media.js";
+import { createShowCustomers } from "./show-customers.js";
+import { setupInstallApp } from "./install-app.js";
+import { SHIFT_TIME_SCALE } from "./usher-schedule.js";
 
 const canvas = document.querySelector("#game-canvas");
 const loadingScreen = document.querySelector("#loading-screen");
@@ -50,6 +54,7 @@ function showFatalError(error) {
 }
 
 try {
+  setupInstallApp();
   const validation = validateLayoutData();
   if (!validation.valid) throw new Error(validation.errors.join("\n"));
 
@@ -108,6 +113,12 @@ try {
   crowd.loadAssets({ url: `${import.meta.env.BASE_URL}models/theater-npcs.glb` });
   const audio = createTheaterAudio();
   const media = createCinemaMedia({ scene, world, materials });
+  let usher, patrons;
+  let mediaWarningShown = false;
+  const startMedia = createShowStartMedia({ camera, world, audio,
+    getDoor: id => usher?.doors.getSnapshot().find(d => d.id === id),
+    onError: () => { if (!mediaWarningShown) { showToast("Start trailer unavailable. The break sheet still shows all show starts.", 4000); mediaWarningShown = true; } },
+  });
   let interactions = null;
 
   let entered = false;
@@ -156,11 +167,12 @@ try {
     }
     pauseCard.hidden = true;
     audio.start();
+    startMedia.prepare(); startMedia.retry();
     controller.start();
   };
 
   enterButton.addEventListener("click", enterWalkthrough);
-  resumeButton.addEventListener("click", () => controller.resume());
+  resumeButton.addEventListener("click", () => { audio.start(); startMedia.retry(); controller.resume(); });
   canvas.addEventListener("click", () => {
     if (entered && !controller.active && !controller.isTouchMode && !interactions?.isOpen) controller.resume();
   });
@@ -175,8 +187,19 @@ try {
     onSound: (kind) => audio.play(kind), audio, crowd, toggleMap, employeeMode: true });
   let shiftStorage;
   try { shiftStorage = window.localStorage; } catch { /* The shift also works without browser storage. */ }
-  const usher = createUsherShift({ scene, world, camera, collisionWorld, showToast,
-    onSound: (kind) => audio.play(kind), storage: shiftStorage });
+  usher = createUsherShift({ scene, world, camera, collisionWorld, showToast,
+    onSound: (kind) => audio.play(kind), storage: shiftStorage,
+    onStart: event => { startMedia.onStart(event); patrons?.onStart(event); },
+    onBreak: event => patrons?.onBreak(event) });
+  patrons = createShowCustomers({ scene, world, camera, collisionWorld, doors: usher.doors, waste: usher.waste });
+  const patronsReady = patrons.loadAssets({ url: `${import.meta.env.BASE_URL}models/theater-npcs.glb` });
+  // Refreshing during the opening cue resumes at the corresponding show time.
+  const scheduleSnapshot = usher.schedule.getSnapshot();
+  const boarding = new Set(scheduleSnapshot.done);
+  for (const event of usher.schedule.events.filter(e => e.kind === "start" && scheduleSnapshot.done.includes(e.id))) {
+    const seconds = (usher.schedule.minute - event.time) * 60 / SHIFT_TIME_SCALE;
+    if (seconds >= 0 && seconds < HULA_DURATION) startMedia.onStart(event, seconds);
+  }
   const usherUI = createUsherUI({ gameplay: usher, controller, canvas,
     isBlocked: () => interactions.isOpen });
 
@@ -217,9 +240,20 @@ try {
     updateHud();
     interactions.update(delta);
     usherUI.update(delta);
+    if (entered && controller.active && !document.hidden) {
+      // Give guests time to walk the real building before the usher hears the
+      // start cue and closes the doors. Exact-start dispatch deduplicates by ID.
+      for (const event of usher.schedule.events) if (event.kind === "start" && !boarding.has(event.id)
+        && event.time >= usher.schedule.minute && event.time - usher.schedule.minute <= 8) {
+        boarding.add(event.id); patrons.onStart(event);
+      }
+    }
     lighting.update(controller.position, delta);
     audio.update(controller.position, currentZoneId, entered && (controller.active || interactions.isOpen), controller.grounded);
     media.update(delta, currentZoneId, entered && controller.active && !document.hidden);
+    startMedia.update(delta, entered && controller.active && !document.hidden);
+    patrons.setEnabled(crowd.enabled);
+    patrons.update(delta, entered && controller.active && !document.hidden);
 
     camera.getWorldDirection(cameraDirection);
     if (frame % 3 === 0 && !minimapPanel.classList.contains("is-hidden")) {
@@ -250,18 +284,29 @@ try {
   };
   window.addEventListener("resize", resize, { passive: true });
 
-  requestAnimationFrame(() => {
-    loadingScreen.classList.add("is-hidden");
-    document.body.dataset.ready = "true";
+  requestAnimationFrame(async () => {
+    try {
+      await patronsReady;
+      loadingScreen.classList.add("is-hidden");
+      document.body.dataset.ready = "true";
+    } catch (error) { showFatalError(error); }
   });
 
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden && entered && !interactions.isOpen) controller.pause();
+    if (document.hidden) {
+      // Hidden pages may stop rendering immediately, before the next frame can
+      // pause the independently running video and decoded soundtrack.
+      startMedia.update(0, false);
+      if (entered && !interactions.isOpen) controller.pause();
+    }
   });
   window.addEventListener("pagehide", (event) => {
+    startMedia.update(0, false);
     if (event.persisted) return;
     renderer.setAnimationLoop(null);
+    startMedia.dispose();
     audio.dispose();
+    patrons.dispose();
     crowd.dispose();
     media.dispose();
     usherUI.dispose();
@@ -276,7 +321,7 @@ try {
     enumerable: false,
     writable: false,
     value: Object.freeze({
-      layoutVersion: "mililani-sketch-v22",
+      layoutVersion: "mililani-sketch-v23",
       validation: Object.freeze(validation),
       stats: world.stats,
       controller,
@@ -287,6 +332,8 @@ try {
       interactions,
       crowd,
       usher,
+      patrons,
+      startMedia,
     }),
   });
 } catch (error) {

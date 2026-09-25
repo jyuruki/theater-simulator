@@ -5,6 +5,7 @@ import { createPropAssets } from "./prop-assets.js";
 import { createPropPlacements, addTheaterFurnishings } from "./prop-placements.js";
 import { createCounterBuilder } from "./counter-geometry.js";
 import { createServiceGate } from "./service-gate.js";
+import { auditoriumDoorLayout } from "./auditorium-door-layout.js";
 import { createHallLightPools, HALL_DOWNLIGHTS } from "./lighting.js";
 import {
   AUDITORIUMS,
@@ -90,8 +91,8 @@ export function createTheaterWorld({ scene, materials }) {
   const unitPlaneGeometry = new THREE.PlaneGeometry(1, 1);
   const unitCylinderGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 12);
   const seatGeometries = {
-    cushion: new THREE.BoxGeometry(0.6, 0.15, 0.54),
-    back: new THREE.BoxGeometry(0.62, 0.76, 0.15),
+    cushion: new THREE.BoxGeometry(0.665, 0.15, 0.54),
+    back: new THREE.BoxGeometry(0.665, 0.76, 0.15),
     base: new THREE.BoxGeometry(0.1, 0.46, 0.1),
     arm: new THREE.BoxGeometry(0.095, 0.18, 0.58),
     tray: new THREE.BoxGeometry(0.4, 0.045, 0.31),
@@ -780,9 +781,8 @@ export function createTheaterWorld({ scene, materials }) {
 
       const spacing = Math.min(0.76, (seatWidth - 0.14) / Math.max(1, row.seatCount));
       const rowWidth = spacing * (row.seatCount - 1);
-      // Leave a shared armrest and a small gap between upholstered bodies.
-      // Fit the mesh to the authored row pitch without changing seat counts.
-      const bodyScaleX = Math.min(1, (spacing - 0.095 - 0.025) / 0.62);
+      // Upholstery meets each shared armrest without a shoulder-width gap.
+      const bodyScaleX = (spacing - 0.095) / 0.665;
       for (let column = 0; column < row.seatCount; column += 1) {
         const planX = layout.centerX - rowWidth / 2 + column * spacing;
         const worldX = planToWorldX(planX);
@@ -824,29 +824,29 @@ export function createTheaterWorld({ scene, materials }) {
     const rearWallwardEdge = layout.direction < 0 ? rearTier.zMin : rearTier.zMax;
     const frontApron = layout.frontApronBounds;
     const rearLanding = auditorium.screenSide === "north"
-      ? { xMin: layout.bowlBounds.xMin, xMax: layout.bowlBounds.xMax, zMin: layout.bowlBounds.zMin + (layout.seatingProfile ? WALL_THICKNESS / 2 : 0.2), zMax: rearWallwardEdge }
-      : { xMin: layout.bowlBounds.xMin, xMax: layout.bowlBounds.xMax, zMin: rearWallwardEdge, zMax: layout.bowlBounds.zMax - (layout.seatingProfile ? WALL_THICKNESS / 2 : 0.2) };
+      ? { xMin: layout.bowlBounds.xMin, xMax: layout.bowlBounds.xMax, zMin: layout.bowlBounds.zMin + WALL_THICKNESS / 2, zMax: rearWallwardEdge }
+      : { xMin: layout.bowlBounds.xMin, xMax: layout.bowlBounds.xMax, zMin: rearWallwardEdge, zMax: layout.bowlBounds.zMax - WALL_THICKNESS / 2 };
     if (frontApron.zMax > frontApron.zMin) addFloor(`${auditorium.id}-screen-apron`, frontApron, materials.carpet, layout.frontElevation, parent);
     if (rearLanding.zMax > rearLanding.zMin) addFloor(`${auditorium.id}-rear-landing`, closeWallEdges(rearLanding), materials.carpet, layout.backElevation, parent);
     if (layout.entryCross) {
       addFloor(layout.entryCross.id, layout.entryCross.floorBounds, materials.carpet, layout.entryCross.elevation, parent);
-      for (const aisle of layout.flatSideAisles) {
-        addFloor(aisle.id, closeWallEdges(aisle.bounds), materials.carpet, aisle.elevation, parent);
-      }
+    }
+    for (const aisle of layout.flatSideAisles) {
+      addFloor(aisle.id, closeWallEdges(aisle.bounds), materials.carpet, aisle.elevation, parent);
     }
 
     for (const aisle of Object.values(layout.sideAisles)) {
       const frontEndcap = {
         xMin: aisle.side === "west" ? layout.frontSurroundBounds.xMin : aisle.bounds.xMin,
         xMax: aisle.side === "east" ? layout.frontSurroundBounds.xMax : aisle.bounds.xMax,
-        zMin: Math.min(frontScreenwardEdge, layout.frontRowZ),
-        zMax: Math.max(frontScreenwardEdge, layout.frontRowZ),
+        zMin: Math.min(frontScreenwardEdge, layout.stairTransitions[0].startZ),
+        zMax: Math.max(frontScreenwardEdge, layout.stairTransitions[0].startZ),
       };
       const rearEndcap = {
         xMin: aisle.bounds.xMin,
         xMax: aisle.bounds.xMax,
-        zMin: Math.min(layout.backRowZ + layout.direction * 0.0075, rearWallwardEdge),
-        zMax: Math.max(layout.backRowZ + layout.direction * 0.0075, rearWallwardEdge),
+        zMin: Math.min(layout.stairTransitions.at(-1).endZ + layout.direction * 0.0075, rearWallwardEdge),
+        zMax: Math.max(layout.stairTransitions.at(-1).endZ + layout.direction * 0.0075, rearWallwardEdge),
       };
       addFloor(`${auditorium.id}-${aisle.side}-front-endcap`, frontEndcap, materials.carpet, layout.frontElevation, parent);
       addFloor(`${auditorium.id}-${aisle.side}-rear-endcap`, closeWallEdges(rearEndcap), materials.carpet, layout.backElevation, parent);
@@ -859,17 +859,15 @@ export function createTheaterWorld({ scene, materials }) {
       // Each solid riser reaches the slab below it. Thin floating treads left
       // sky-visible slots when viewed from a lower row while cleaning seats.
       const slabHeight = tread.stepRise + 0.09;
-      const meetsGroundCrosswalk = layout.entryCross
-        && tread.transition === layout.groundRowIndex - 1
-        && tread.half === layout.stairTransitions[tread.transition].treadCount - 1;
+      const meetsLanding = tread.half === layout.stairTransitions[tread.transition].treadCount - 1;
       addBox({
         id: tread.id,
         x,
         y: tread.elevation - slabHeight / 2,
-        z: meetsGroundCrosswalk ? z - layout.direction * 0.00375 : z,
+        z: meetsLanding ? z - layout.direction * 0.00375 : z,
         width,
         height: slabHeight,
-        depth: Math.max(0.1, depth + (meetsGroundCrosswalk ? 0.0075 : 0.015)),
+        depth: Math.max(0.1, depth + (meetsLanding ? 0.0075 : 0.015)),
         material: materials.carpet,
         parent,
       });
@@ -918,23 +916,24 @@ export function createTheaterWorld({ scene, materials }) {
     const eastX = cubby.xMax;
     const southZ = cubby.zMin;
     const doorZ = entry.innerDoorCenter ?? southZ + Math.min(1.05, depth / 2);
+    const innerDoorWidth = auditoriumDoorLayout(auditorium).width;
     // The rear landing already extends through this footprint. A second floor
     // here was coplanar with it and caused visible flicker at every small-room
     // entrance.
     addWallX(`${auditorium.id}-cubby-back`, westX, eastX, southZ, { material: materials.darkWall });
     if (entry.turnSide === "west") {
-      addWallZWithOpenings(`${auditorium.id}-cubby-west`, westX, southZ, bounds.zMax, [{ center: doorZ, baseY: layout.backElevation }], { material: materials.darkWall });
+      addWallZWithOpenings(`${auditorium.id}-cubby-west`, westX, southZ, bounds.zMax, [{ center: doorZ, width: innerDoorWidth, baseY: layout.backElevation }], { material: materials.darkWall });
       if (entry.sharedBoundarySide !== "east" && Math.abs(eastX - bounds.xMax) > EPSILON) {
         addWallZ(`${auditorium.id}-cubby-east`, eastX, southZ, bounds.zMax, { material: materials.darkWall });
       }
-      addDoorTrim(`${auditorium.id}-inner`, "west", westX, doorZ, { baseY: layout.backElevation });
+      addDoorTrim(`${auditorium.id}-inner`, "west", westX, doorZ, { width: innerDoorWidth, baseY: layout.backElevation });
       addTrashCan(`${auditorium.id}-trash`, eastX - 0.52, southZ + 0.55);
     } else {
       if (entry.sharedBoundarySide !== "west" && Math.abs(westX - bounds.xMin) > EPSILON) {
         addWallZ(`${auditorium.id}-cubby-west`, westX, southZ, bounds.zMax, { material: materials.darkWall });
       }
-      addWallZWithOpenings(`${auditorium.id}-cubby-east`, eastX, southZ, bounds.zMax, [{ center: doorZ, baseY: layout.backElevation }], { material: materials.darkWall });
-      addDoorTrim(`${auditorium.id}-inner`, "east", eastX, doorZ, { baseY: layout.backElevation });
+      addWallZWithOpenings(`${auditorium.id}-cubby-east`, eastX, southZ, bounds.zMax, [{ center: doorZ, width: innerDoorWidth, baseY: layout.backElevation }], { material: materials.darkWall });
+      addDoorTrim(`${auditorium.id}-inner`, "east", eastX, doorZ, { width: innerDoorWidth, baseY: layout.backElevation });
       addTrashCan(`${auditorium.id}-trash`, westX + 0.52, southZ + 0.55);
     }
   };
@@ -2256,6 +2255,7 @@ export function createTheaterWorld({ scene, materials }) {
 
   const concession = roomById("concession-boh");
   const serviceGate = addCounterPolyline();
+  const barServiceGate = createServiceGate({ root, materials, plan: LOBBY_PLAN.barServiceGate });
   const backBar = LOBBY_PLAN.backBar;
   addBox({ id: "back-bar-cabinet", x: (backBar.xMin + backBar.xMax) / 2, y: 0.52, z: (backBar.zMin + backBar.zMax) / 2, width: backBar.xMax - backBar.xMin, height: 1.04, depth: backBar.zMax - backBar.zMin, material: materials.wood, collide: true });
   addBox({ id: "back-bar-top", x: (backBar.xMin + backBar.xMax) / 2, y: 1.08, z: (backBar.zMin + backBar.zMax) / 2, width: backBar.xMax - backBar.xMin + 0.2, height: 0.1, depth: backBar.zMax - backBar.zMin + 0.16, material: materials.counterStone });
@@ -2891,6 +2891,7 @@ export function createTheaterWorld({ scene, materials }) {
 
   const update = (delta = 0, player = null) => {
     serviceGate.update(delta, player);
+    barServiceGate.update(delta, player);
     entranceDoors.update(delta, player);
     if (!barScreenMaterial || barScreenTextures.length < 2 || !Number.isFinite(delta) || delta <= 0) return;
     barScreenElapsed += delta;
@@ -2940,9 +2941,10 @@ export function createTheaterWorld({ scene, materials }) {
   return {
     root,
     colliders,
-    dynamicColliders: [...entranceDoors.colliders, ...serviceGate.colliders],
+    dynamicColliders: [...entranceDoors.colliders, ...serviceGate.colliders, ...barServiceGate.colliders],
     entranceDoors,
     serviceGate,
+    barServiceGate,
     equipment,
     auditoriumGroups,
     auditoriumLayouts,
@@ -2971,6 +2973,7 @@ export function createTheaterWorld({ scene, materials }) {
       propAssets?.dispose();
       entranceDoors.dispose();
       serviceGate.dispose();
+      barServiceGate.dispose();
       hallLightPools.dispose();
       const disposedTextures = new Set();
       const disposeTexture = (texture) => {

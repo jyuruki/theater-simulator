@@ -1,0 +1,41 @@
+import assert from "node:assert/strict";
+import * as THREE from "three";
+import { findPlacementTarget, createPlacementPreview } from "../src/prop-placement.js";
+import { resolveHeldPose } from "../src/held-prop-pose.js";
+
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(70, 1.5, .05, 100);
+camera.position.set(0, 1.68, 0);
+const floor = new THREE.Mesh(new THREE.BoxGeometry(12, .1, 12), new THREE.MeshBasicMaterial()); floor.position.y = -.05; scene.add(floor);
+scene.updateMatrixWorld(true);
+const world = { root: scene, groundHeight: () => 0 }, size = [.6, .46, .46], colliders = [];
+const aim = (x, y, z) => { camera.lookAt(x, y, z); camera.updateMatrixWorld(true); };
+aim(0, 0, -1.5);
+let target = findPlacementTarget({ camera, world, colliders, size });
+assert.equal(target.valid, true); assert.ok(Math.abs(target.position.z + 1.5) < .001);
+const table = { id: "table", minX: -.8, maxX: .8, minZ: -2.1, maxZ: -.9, minY: 0, maxY: .85 };
+colliders.push(table); aim(0, .85, -1.5);
+target = findPlacementTarget({ camera, world, colliders, size });
+assert.equal(target.valid, true); assert.equal(target.supportId, "table"); assert.equal(target.position.y, .85);
+aim(.73, .85, -1.5); assert.equal(findPlacementTarget({ camera, world, colliders, size }).valid, false, "A carton cannot overhang the tabletop");
+colliders.length = 0; colliders.push({ id: "wall", minX: -2, maxX: 2, minZ: -.75, maxZ: -.65, minY: 0, maxY: 3 });
+aim(0, 0, -1.5); assert.equal(findPlacementTarget({ camera, world, colliders, size }).valid, false, "Placement cannot pass through a wall");
+colliders.length = 0;
+const preview = createPlacementPreview({ scene, camera, world, getColliders: () => colliders });
+preview.begin({ size }); assert.equal(preview.active, true); assert.equal(preview.snapshot.valid, true);
+assert.equal(preview.cancel(), true); assert.equal(preview.confirm(), null, "Cancelled previews cannot place an item");
+preview.begin({ size }); assert.ok(preview.confirm()?.isVector3); assert.equal(preview.active, false);
+preview.dispose();
+
+const prop = new THREE.Mesh(new THREE.BoxGeometry(.6, .46, .46), new THREE.MeshBasicMaterial()); scene.add(prop);
+const wall = { id: "wall", minX: -.8, maxX: .8, minY: 0, maxY: 3, minZ: -1, maxZ: -.58 };
+prop.position.set(.12, 1.2, -.65);
+let resolved = resolveHeldPose({ object: prop, camera, colliders: [wall] });
+assert.equal(resolved.clear, true); assert.equal(resolved.contact, true); assert.equal(prop.visible, true);
+let box = new THREE.Box3().setFromObject(prop); assert.ok(box.min.z >= wall.maxZ, "Retracted carton clears the wall with its full rotated bounds");
+prop.position.set(.12, 1.2, -1.4); resolved = resolveHeldPose({ object: prop, camera, colliders: [wall] });
+box = new THREE.Box3().setFromObject(prop); assert.equal(resolved.clear, true); assert.ok(box.min.z >= wall.maxZ, "A clear endpoint behind a thin wall is still blocked by the swept carry path");
+// Player is beside a wall: the prop slides away from it, still in hand.
+const side = { id: "side", minX: .26, maxX: 1, minY: 0, maxY: 3, minZ: -3, maxZ: 3 };
+prop.position.set(.3, 1.2, -.65); resolved = resolveHeldPose({ object: prop, camera, colliders: [side] });
+box = new THREE.Box3().setFromObject(prop); assert.equal(resolved.clear, true); assert.ok(box.max.x < side.minX); assert.equal(prop.visible, true);
+console.log("Placement valid: supported floor/table previews, no overhang or through-wall placement, confirm/cancel ownership, wall retraction and side-contact sliding.");

@@ -60,6 +60,7 @@ function characterFrom(scene, name) {
 /** Swap all six visual bodies atomically; actor roots/colliders/routes stay owned by the crowd. */
 export function createNpcAssets({
   actors,
+  variants = NPC_VARIANTS,
   url = `${import.meta.env?.BASE_URL ?? "/"}models/theater-npcs.glb`,
   loadModel = (source) => new GLTFLoader().loadAsync(source),
   onLoaded = () => {},
@@ -84,8 +85,8 @@ export function createNpcAssets({
         releaseResources();
         return { status: "disposed", actorCount: 0 };
       }
-      if (actors.length !== NPC_VARIANTS.length) throw new Error("The NPC asset expects six theater actors.");
-      const prepared = actors.map((actor, index) => ({ actor, ...characterFrom(scene, NPC_VARIANTS[index]) }));
+      if (actors.length !== variants.length || variants.some(name => !NPC_VARIANTS.includes(name))) throw new Error("Every theater actor needs an authored NPC variant.");
+      const prepared = actors.map((actor, index) => ({ actor, ...characterFrom(scene, variants[index]) }));
       for (const replacement of prepared) {
         const { actor, visual, limbs } = replacement;
         actor.group.add(visual);

@@ -14,7 +14,7 @@ export function createCleaningPlans(world) {
         const x = planToWorldX(layout.centerX - rowWidth / 2 + column * spacing);
         seats.push({ id: `${a.id}-recliner-${row.index}-${column}`, theaterId: a.id, row: row.index, column,
           label: `${row.label}${column + 1}`, instance, x, z: row.z, floorY: row.elevation, forward,
-          width: Math.min(.54, spacing - .13), rowColliderId: `${a.id}-seat-row-${row.index}`,
+          width: spacing - .095, rowColliderId: `${a.id}-seat-row-${row.index}`,
           stand: [x, row.elevation, row.z + forward * .73], floorBounds: planToWorldBounds(row.floorBounds) });
       }
     }

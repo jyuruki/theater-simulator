@@ -241,7 +241,7 @@ export function createTheaterCrowd({ scene, collisionWorld, world }) {
   };
 }
 
-/** All audio is synthesized locally, starts on a gesture, and can be muted. */
+/** Shared audio bus starts on a gesture and respects the sound settings. */
 export function createTheaterAudio() {
   let context, master, ambience, noiseBuffer;
   let enabled = true,
@@ -341,6 +341,8 @@ export function createTheaterAudio() {
   }
   return {
     start,
+    get context() { return context; },
+    get output() { return master; },
     get enabled() {
       return enabled;
     },

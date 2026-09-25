@@ -18,11 +18,17 @@ const collisionWorld=new AABBCollisionWorld({bounds:world.worldBounds});collisio
 const plans=createCleaningPlans(world), state=createUsherState();
 assert.equal(plans.length,14);
 for(const plan of plans) beginCleaningBreak(state,plan,1234);
-assert.ok(state.jobs.every(j=>j.seats.length>=3&&j.seats.length<=6));
+assert.ok(state.kit,"The usher starts with the portable tools");
+assert.ok(state.jobs.every(j=>j.seats.length===plans.find(p=>p.id===j.id).seats.length&&j.seats.every(s=>s.trayOpen)),"Every seat tray is open for inspection");
 const twin=createUsherState();for(const plan of plans) beginCleaningBreak(twin,plan,1234);
 assert.equal(serializeUsherState(state),serializeUsherState(twin),"Seeded layouts reproduce exactly");
 const varied=createUsherState();for(const plan of plans) beginCleaningBreak(varied,plan,9876);
-assert.notDeepEqual(state.jobs.map(j=>j.seats.map(s=>s.id)),varied.jobs.map(j=>j.seats.map(s=>s.id)),"New seeds vary used seats across all rooms");
+assert.notDeepEqual(state.jobs.map(j=>j.particles.map(p=>p.id)),varied.jobs.map(j=>j.particles.map(p=>p.id)),"New seeds vary actual messes across all rooms");
+const allSurfaces=state.jobs.flatMap(j=>j.surfaces).filter(s=>s.seatId);
+const spillFraction=allSurfaces.filter(s=>s.spill).length/allSurfaces.length;
+assert.ok(spillFraction>.10&&spillFraction<.23,`Most surfaces look clean (${spillFraction.toFixed(3)} have spills)`);
+const allSeats=state.jobs.flatMap(j=>j.seats), popcornSeats=new Set(state.jobs.flatMap(j=>j.particles).map(p=>p.seatId).filter(Boolean));
+assert.ok(popcornSeats.size/allSeats.length>.15&&popcornSeats.size/allSeats.length<.30,"Only a minority of seats contain popcorn");
 assert.ok(state.jobs.some(j=>j.seats.some(s=>s.column>0&&s.column<3)),"Interior seat columns are eligible");
 scene.updateMatrixWorld(true);const ray=new THREE.Raycaster();
 let standingChecks=0;
@@ -43,7 +49,7 @@ for(const plan of plans)for(const patch of plan.patches){
   ray.set(new THREE.Vector3(patch.x,patch.y+.2,patch.z),new THREE.Vector3(0,-1,0));ray.far=.4;
   assert.ok(ray.intersectObject(world.root,true).some(h=>Math.abs(h.point.y-patch.y)<.025),`${plan.id} rendered floor supports debris`);
 }
-const job=state.jobs.find(j=>j.id==="theater-2"), seat=job.seats[0];
+const job=state.jobs.find(j=>j.id==="theater-2"), seat=job.seats.find(s=>job.chairParticles.get(s.id).length);
 assert.equal(closeCleaningTray(job,seat),false,"Used tray cannot close before cleaning");
 state.heldTool="cloth";
 function wipe(surface) {
@@ -68,20 +74,33 @@ assert.equal(theaterSummary(job).floorUnlocked,false,"Floor work waits for all u
 assert.equal(beginCleaningBreak(state,plans.find(p=>p.id===job.id),"next-show"),false,"Next break cannot discard unfinished mess or pan contents");
 const saved=serializeUsherState(state), restored=restoreUsherState(saved,plans);
 assert.equal(serializeUsherState(restored),saved,"Partial seat workflow and per-theater seed survive reload");
+const quickState=createUsherState(), quickJob=beginCleaningBreak(quickState,plans[1],1234);
+const quickSeat=quickJob.seats.find(s=>!quickJob.surfacesById.get(`${s.id}-tray`).spill&&!quickJob.surfacesById.get(`${s.id}-seat`).spill);
+quickState.heldTool="cloth";
+for(const kind of ["tray","seat"]){
+  const surface=quickJob.surfacesById.get(`${quickSeat.id}-${kind}`);
+  const contact={cloth:{surfaceId:surface.id,from:{x:0,z:0},to:{x:0,z:0}}};
+  for(let i=0;i<60;i++)stepUsherState(quickState,1/120,contact);
+  assert.ok(surface.cells.every(c=>c.dirt>.45),"Half a second does not skip the sanitizing wipe");
+  for(let i=0;i<61;i++)stepUsherState(quickState,1/120,contact);
+  assert.ok(surface.cells.every(c=>c.dirt<=.001),"One second of stationary valid contact sanitizes a clean-looking surface");
+}
 
 const camera=new THREE.PerspectiveCamera(70,1.5,.05,200), hands={owner:null};let deposited=0;
 const game=createUsherGameplay({scene,world,camera,collisionWorld,hands,depositTrash:(_id,count)=>{const n=Math.min(2,count);deposited+=n;return n;}});
 for(const plan of plans) game.beginBreak(plan.id,1234);
 function aim(position,target,action=false,delta=1/60) {camera.position.set(...position);camera.lookAt(...target);camera.updateMatrixWorld(true);game.update(delta,{active:true,action});}
-aim([24.3,1.68,52.8],[24.3,1.4,54.4]);assert.equal(game.interact(),true);assert.equal(game.heldTool,"broom");assert.equal(hands.owner,"cleaning");
+aim([24.3,1.68,52.8],[24.3,1.4,54.4]);assert.equal(game.selectTool("broom"),true);assert.equal(game.heldTool,"broom");assert.equal(hands.owner,"cleaning");
+assert.equal(game.root.getObjectByName("usher-kit-instructions"),undefined,"There is no task board");
+assert.equal(collisionWorld.colliders.some(c=>c.id==="usher-cart"),false,"No cart blocks the theater entry");
 assert.equal(game.returnTool(),true);assert.equal(hands.owner,null,"Holstering frees hands anywhere");
 hands.owner="waste";assert.equal(game.selectTool("cloth"),false,"Carried bags/bins prevent tool pickup");hands.owner=null;assert.equal(game.selectTool("cloth"),true);
 for(const a of game.getSnapshot().anchors.seats){
   const position=[a.stand[0],a.stand[1]+1.68,a.stand[2]];
-  aim(position,a.tray);assert.equal(game.getSnapshot().target?.surfaceId,`${a.id}-tray`,`${a.id} open tray is physically reachable`);
-  aim(position,a.seat);assert.equal(game.getSnapshot().target?.surfaceId,`${a.id}-seat`,`${a.id} cushion is physically reachable`);
+  aim(position,a.tray);assert.equal(game.getSnapshot({details:false}).target?.surfaceId,`${a.id}-tray`,`${a.id} open tray is physically reachable`);
+  aim(position,a.seat);assert.equal(game.getSnapshot({details:false}).target?.surfaceId,`${a.id}-seat`,`${a.id} cushion is physically reachable`);
 }
-const anchor=game.getSnapshot().anchors.seats.find(a=>a.theaterId==="theater-2");
+const anchor=game.getSnapshot().anchors.seats.find(a=>a.id===seat.id);
 const realSeat=game.getSnapshot().state.jobs.find(j=>j.id==="theater-2").seats.find(s=>s.id===anchor.id);
 const standing=[anchor.stand[0],anchor.stand[1]+1.68,anchor.stand[2]];
 aim(standing,anchor.tray);
@@ -127,8 +146,10 @@ const floorGame=createUsherGameplay({scene,world,camera,collisionWorld,storage:m
   getBinTargets:()=>[{id:"test-rolling",position:[patch.x-.8,patch.y+1.12,patch.z+.8],radius:.4,ignoreColliderId:"test-rolling"}],
   depositTrash:(_id,count)=>{const n=Math.min(accepts,count);deposited+=n;return n;}});
 function floorAim(pos,target,action=false){camera.position.set(...pos);camera.lookAt(...target);camera.updateMatrixWorld(true);floorGame.update(1/60,{active:true,action});}
-const fp=[patch.x-.85,patch.y+1.68,patch.z];floorAim(fp,[patch.x,patch.y,patch.z]);floorGame.selectTool("broom");
-for(let i=0;i<300;i++)floorAim(fp,[patch.x,patch.y,patch.z],true);
+const fp=[patch.x-2.2,patch.y+1.68,patch.z];floorAim(fp,[patch.x,patch.y,patch.z]);floorGame.selectTool("broom");
+const shallowTarget=[fp[0]+10,fp[1]-.6,fp[2]];
+for(let i=0;i<300;i++)floorAim(fp,shallowTarget,true);
+assert.equal(floorGame.getSnapshot({details:false}).target.kind,"floor","A shallow six-degree downward gaze reaches the floor with the broom");
 assert.equal(floorGame.getSnapshot().summary.pan,3,`Pulling stroke collects floor kernels: ${JSON.stringify(floorGame.getSnapshot().state.jobs[0].particles.filter(p=>p.mode==="floor"))}`);
 const pose=floorGame.getSnapshot().contactPose;
 assert.ok(pose.pan[0]<patch.x,"Pan stays nearer the player than the dirty patch");
@@ -147,6 +168,23 @@ for(const surface of floorGame.getSnapshot().state.jobs[0].surfaces.filter(s=>s.
 assert.equal(floorGame.isTheaterReady("theater-2"),true,"Disposal plus both physically wiped floor patches complete the room");
 assert.equal(floorGame.beginBreak("theater-2","new-show"),true,"Completed theater can receive a fresh seeded show mess");
 assert.equal(floorGame.isTheaterReady("theater-2"),false);
+// The actual held geometry remains visible and stops against a nearby wall,
+// while the work ray cannot advance dirt behind that obstruction.
+const wall=collisionWorld.addBox({id:"test-held-wall",minX:fp[0]+.30,maxX:fp[0]+.32,minZ:fp[2]-3,maxZ:fp[2]+3,minY:patch.y,maxY:patch.y+3});
+const beforeWall=JSON.stringify(floorGame.getSnapshot().state.jobs[0].particles);
+for(const kind of ["broom","cloth"]){
+  floorGame.selectTool(kind);
+  for(let i=0;i<30;i++)floorAim(fp,shallowTarget,true);
+  const snapshot=floorGame.getSnapshot({details:false});
+  for(const name of kind==="broom"?["broom","pan"]:["cloth"]){
+    const object=floorGame.root.getObjectByName(`usher-${name}-held`), bounds=new THREE.Box3().setFromObject(object);
+    assert.equal(object.visible,true,`${name} stays visible at wall contact`);
+    assert.ok(bounds.max.x<=wall.minX-.001||bounds.min.x>=wall.maxX+.001,`${name} retracts outside the wall solid`);
+  }
+  assert.equal(snapshot.target,null,"No work target is acquired through a wall");
+}
+assert.equal(JSON.stringify(floorGame.getSnapshot().state.jobs[0].particles),beforeWall,"Wall contact cannot sweep unreachable popcorn");
+collisionWorld.remove(wall);
 floorGame.dispose();
 // A real chair-swept kernel must remain collectable after it lands beside the
 // row collider; testing only its 'floor' state missed a trapped edge contact.
@@ -163,4 +201,4 @@ pickup.update(1/60,{active:true});pickup.selectTool("broom");
 for(let i=0;i<300;i++)pickup.update(1/60,{active:true,action:true});
 assert.equal(pickup.getSnapshot().summary.pan,1,"Actual chair-fallen kernel can be swept from the row edge into the pan");
 pickup.dispose();world.dispose();
-console.log(`Usher v22 smoke passed: 14 seeded theaters, ${standingChecks} reachable rendered seat/deck positions, ordered tray/seat/sweep/close workflow, hands, persistence, pause, and bounded visuals.`);
+console.log(`Usher v23 smoke passed: all ${standingChecks} seat trays, seeded minority messes, one-second routine wipes, 14-room contact/navigation, shallow-angle sweeping, wall retraction, persistence, pause, and bounded visuals.`);

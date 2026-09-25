@@ -5,6 +5,7 @@ export function createEntranceDoors({ root, materials, entrance }) {
   const geometry = new THREE.BoxGeometry(1, 1, 1);
   const leaves = [];
   const colliders = [];
+  let additionalVisitors = () => [];
   const width = (entrance.doorWidth - 0.18) / 2;
   const parts = 8;
   const closedHeight = entrance.doorHeight - 0.12;
@@ -95,12 +96,12 @@ export function createEntranceDoors({ root, materials, entrance }) {
     }
 
   function update(delta, player = null) {
+    const visitors = [player, ...additionalVisitors()].filter(Boolean);
     for (const leaf of leaves) {
       const near =
-        player &&
-        player.y < entrance.doorHeight &&
-        Math.abs(player.z - entrance.facadeZ) < 4.4 &&
-        Math.abs(player.x - leaf.centerX) < entrance.doorWidth / 2 + 0.85;
+        visitors.some(visitor => visitor.y < entrance.doorHeight
+          && Math.abs(visitor.z - entrance.facadeZ) < 4.4
+          && Math.abs(visitor.x - leaf.centerX) < entrance.doorWidth / 2 + 0.85);
       const target = near ? 1.42 : 0;
       const change = Math.min(Math.max(delta, 0), 0.1) * 2.4;
       leaf.angle += THREE.MathUtils.clamp(target - leaf.angle, -change, change);
@@ -125,5 +126,5 @@ export function createEntranceDoors({ root, materials, entrance }) {
     }
   }
   update(0);
-  return { colliders, leaves, update, dispose: () => geometry.dispose() };
+  return { colliders, leaves, update, setAdditionalVisitors(provider) { additionalVisitors = typeof provider === "function" ? provider : () => []; }, dispose: () => geometry.dispose() };
 }

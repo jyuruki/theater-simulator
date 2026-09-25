@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { AUDITORIUMS, SERVICE_ROOMS } from "./layout-data.js";
 import { planToWorldX } from "./coordinates.js";
 import { segmentHitsBox } from "./visit-state.js";
+import { createPlacementPreview } from "./prop-placement.js";
+import { resolveHeldPose } from "./held-prop-pose.js";
 
 export const WASTE_CAPACITY = 120;
 export const WASTE_BIN_RADIUS = .46;
@@ -29,7 +31,7 @@ export function wasteParkingCandidates(id) {
 
 /** Three constrained rolling cans, removable liners, and ballistic full bags. */
 export function createUsherWaste({ scene, world, camera, collisionWorld, showToast = () => {}, hands = { owner: null }, storage,
-  getNextBreaks = () => ["theater-2", "theater-1", "theater-3"], getRoomReady = () => false }) {
+  getNextBreaks = () => ["theater-2", "theater-1", "theater-3"], getRoomReady = () => false, scheduledCustomers = false }) {
   const root = new THREE.Group(); root.name = "usher-rolling-waste"; scene.add(root);
   const geometries = new Set(), materials = new Set(), textures = new Set(), ownedColliders = [];
   const geometry = value => { geometries.add(value); return value; };
@@ -85,8 +87,14 @@ export function createUsherWaste({ scene, world, camera, collisionWorld, showToa
     && Number.isInteger(saved.nextBag) && saved.nextBag > 0 && Number.isInteger(saved.depositedBags) && saved.depositedBags >= 0) {
     state = { ...saved, breakQueue: Array.isArray(saved.breakQueue) ? saved.breakQueue.filter(q => roomById(q.room) && Number.isInteger(q.remaining) && q.remaining > 0 && q.remaining <= 6).map(q => ({ room: q.room, remaining: q.remaining })) : [] };
   }
-  const bins = [], bagModels = new Map();
+  state.looseLiners = Array.isArray(state.looseLiners) ? state.looseLiners.filter(item =>
+    typeof item.id === "string" && typeof item.open === "boolean" && Array.isArray(item.position)
+    && item.position.length === 3 && item.position.every(finite) && inBounds(item.position[0], item.position[2])
+    && item.position[1] >= -3 && item.position[1] < 10).slice(0, 48) : [];
+  state.nextLiner = Number.isInteger(state.nextLiner) ? Math.max(1, state.nextLiner) : 1;
+  const bins = [], bagModels = new Map(), linerModels = new Map();
   let held = null, focus = null, active = false, disposed = false, accumulator = 0, saveElapsed = 0, previousAction = false, charge = 0, actionWaitRelease = false;
+  const placement = createPlacementPreview({ scene: root, camera, world, getColliders: () => collisionWorld.colliders });
   const forward = new THREE.Vector3(), look = new THREE.Vector3(), ray = new THREE.Ray();
   const physicalLabel = () => {
     const canvas = typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(512, 256) : Object.assign(document.createElement("canvas"), { width: 512, height: 256 });
@@ -201,7 +209,7 @@ export function createUsherWaste({ scene, world, camera, collisionWorld, showToa
     if (hands.owner && hands.owner !== "waste") { showToast("Holster your cleaning tools before handling the bin."); return false; }
     hands.owner = "waste"; held = item; charge = 0; actionWaitRelease = true; return true;
   }
-  function release() { held = null; charge = 0; if (hands.owner === "waste") hands.owner = null; }
+  function release() { placement.cancel(); held = null; charge = 0; if (hands.owner === "waste") hands.owner = null; }
   function recommendation(bin) {
     const occupied = new Set(bins.filter(other => other !== bin).map(other => other.data.room));
     if (!getRoomReady(bin.data.room)) return bin.data.room;
@@ -222,9 +230,42 @@ export function createUsherWaste({ scene, world, camera, collisionWorld, showToa
   }
   function getBinTargets() { return bins.filter(bin => bin.data.lined).map(bin => ({ id: bin.data.id, position: [bin.data.x, BIN_TOP, bin.data.z], radius: .4, ignoreColliderId: bin.collider.id, capacity: WASTE_CAPACITY, fill: bin.data.fill })); }
   function onTheaterBreak(id) {
+    if (scheduledCustomers) return;
     const room = roomId(id);
     if (!roomById(room) || state.breakQueue.some(event => event.room === room)) return;
     state.breakQueue.push({ room, remaining: 6 }); save();
+  }
+  function enableScheduledCustomers() {
+    scheduledCustomers = true; state.breakQueue = [];
+    if (customer && !customer.external) { customer.bin.reserved -= customer.units; customer = null; }
+    syncVisuals();
+  }
+  function getCustomerDisposalTarget(position, theaterId = null) {
+    const p = position?.isVector3 ? position : new THREE.Vector3(...position);
+    const candidates = bins.filter(bin => bin.data.lined && bin.data.fill + bin.reserved < WASTE_CAPACITY && held?.id !== bin.data.id)
+      .sort((a, b) => (a.data.room === roomId(theaterId) ? -4 : 0) + Math.hypot(a.data.x - p.x, a.data.z - p.z)
+        - ((b.data.room === roomId(theaterId) ? -4 : 0) + Math.hypot(b.data.x - p.x, b.data.z - p.z)));
+    for (const bin of candidates) {
+      if (Math.hypot(bin.data.x - p.x, bin.data.z - p.z) > 18) continue;
+      for (const [dx, dz] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+        const stand = new THREE.Vector3(bin.data.x + dx * 1.04, 0, bin.data.z + dz * 1.04);
+        if (!collisionWorld.isOverlapping(stand, .23, 0, 1.7)
+          && clear(stand.clone().setY(1.3), new THREE.Vector3(bin.data.x, 1.12, bin.data.z), bin.collider))
+          return { binId: bin.data.id, position: [bin.data.x, BIN_TOP, bin.data.z], stand: stand.toArray(), room: bin.data.room };
+      }
+    }
+    return null;
+  }
+  function throwCustomerTrash({ binId, from, units = 8, shape = 0, sourceColliderId = null }) {
+    if (customer || !finite(units) || units <= 0) return false;
+    const bin = bins.find(item => item.data.id === binId), start = from?.isVector3 ? from.clone() : new THREE.Vector3(...from);
+    if (!bin?.data.lined || held?.id === binId || start.distanceTo(new THREE.Vector3(bin.data.x, BIN_TOP, bin.data.z)) > 2.1
+      || collisionWorld.colliders.some(c => c.enabled !== false && c !== bin.collider && c.id !== sourceColliderId
+        && segmentHitsBox(start, new THREE.Vector3(bin.data.x, BIN_TOP, bin.data.z), c))) return false;
+    const accepted = Math.min(units, WASTE_CAPACITY - bin.data.fill - bin.reserved); if (accepted <= 0) return false;
+    bin.reserved += accepted;
+    customer = { bin, units: accepted, start, shape: Math.abs(Math.round(shape)) % 3, t: 0, external: true };
+    syncVisuals(); return true;
   }
   function locateFocus() {
     focus = null; camera.getWorldDirection(look); ray.set(camera.position, look); let best = Infinity;
@@ -237,6 +278,8 @@ export function createUsherWaste({ scene, world, camera, collisionWorld, showToa
       candidates.push({ kind: "spare", bin, p: toWorld([.36, .74, -.20]), radius: .16, ignored: bin.collider });
     }
     for (const bag of state.bags) if (bag.phase === "ground") candidates.push({ kind: "bag", bag, p: new THREE.Vector3(bag.x, bag.y, bag.z), radius: .32, ignored: bagModels.get(bag.id).collider });
+    for (const liner of state.looseLiners) candidates.push({ kind: "loose-liner", liner,
+      p: new THREE.Vector3(...liner.position).add(new THREE.Vector3(0, .045, 0)), radius: .28 });
     candidates.push({ kind: "stock", p: new THREE.Vector3(WASTE_STOCK.x, WASTE_STOCK.y, WASTE_STOCK.z), radius: .33, ignored: ownedColliders.find(c => c.id === "waste-spare-stock") });
     for (const candidate of candidates) {
       const distance = camera.position.distanceTo(candidate.p);
@@ -257,6 +300,11 @@ export function createUsherWaste({ scene, world, camera, collisionWorld, showToa
       bag.lift = Math.min(1, (bag.lift ?? 0) + dt / .95);
       if (bag.lift < .48) target.set(bag.fromX, 1.57, bag.fromZ);
       else if (bag.lift >= 1) bag.phase = "held";
+    }
+    if (bag.phase === "held" && collisionWorld.isOverlapping(target, BAG_RADIUS, target.y - BAG_HALF_HEIGHT, BAG_HALF_HEIGHT * 2)) {
+      const object = bagModels.get(bag.id).group; object.position.copy(target);
+      const resolved = resolveHeldPose({ object, camera, colliders: collisionWorld.colliders, ignoreIds: [bag.id] });
+      target.copy(resolved.position);
     }
     const origin = new THREE.Vector3(bag.x, bag.y, bag.z), delta = target.sub(origin);
     if (delta.length() > 3 * dt) delta.setLength(3 * dt);
@@ -334,6 +382,7 @@ export function createUsherWaste({ scene, world, camera, collisionWorld, showToa
   }
   function guestStep(dt) {
     if (!customer) {
+      if (scheduledCustomers) return;
       const event = state.breakQueue.find(event => bins.some(bin => bin.data.room === event.room && roomNearby(event.room, bin.data.x, bin.data.z)));
       if (!event) return;
       const bin = bins.find(bin => bin.data.room === event.room && roomNearby(event.room, bin.data.x, bin.data.z));
@@ -350,15 +399,17 @@ export function createUsherWaste({ scene, world, camera, collisionWorld, showToa
       customerRoot.position.set(customer.start.x, 0, customer.start.z); customerRoot.lookAt(bin.data.x, 0, bin.data.z);
     }
     customer.t += dt;
-    const t = clamp((customer.t - .8) / .9, 0, 1);
+    const delay = customer.external ? 0 : .8, t = clamp((customer.t - delay) / .9, 0, 1);
     const end = new THREE.Vector3(customer.bin.data.x, .90, customer.bin.data.z);
     tossed.position.copy(customer.start).lerp(end, t); tossed.position.y += Math.sin(t * Math.PI) * .72;
     tossed.rotation.set(t * 3, t * 4, t * 2);
-    if (customer.t >= 1.7) {
+    if (customer.t >= delay + .9) {
       customer.bin.reserved -= customer.units;
       depositTrash(customer.bin.data.id, customer.units);
-      customer.event.remaining--;
-      if (customer.event.remaining <= 0) state.breakQueue.splice(state.breakQueue.indexOf(customer.event), 1);
+      if (customer.event) {
+        customer.event.remaining--;
+        if (customer.event.remaining <= 0) state.breakQueue.splice(state.breakQueue.indexOf(customer.event), 1);
+      }
       customer = null;
     }
   }
@@ -426,15 +477,26 @@ export function createUsherWaste({ scene, world, camera, collisionWorld, showToa
       if (held.phase === "installing") {
         const b = bins.find(bin => bin.data.id === held.binId).data;
         freshLiner.position.lerp(new THREE.Vector3(b.x, .88, b.z), clamp(charge / .75, 0, 1));
-      } else freshLiner.visible = clear(camera.position, freshLiner.position)
-        && !collisionWorld.isOverlapping(freshLiner.position, .32, freshLiner.position.y - .27, .54);
+      } else resolveHeldPose({ object: freshLiner, camera, colliders: collisionWorld.colliders });
     }
-    customerRoot.visible = tossed.visible = Boolean(customer);
+    for (const [id, model] of linerModels) if (!state.looseLiners.some(item => item.id === id)) { model.removeFromParent(); linerModels.delete(id); }
+    for (const liner of state.looseLiners) {
+      let model = linerModels.get(liner.id);
+      if (!model) {
+        model = new THREE.Group(); model.name = liner.id; root.add(model);
+        box(model, `${liner.id}-folded-clean-liner`, [0, .025, 0], [.32, .045, .24], mat.bag);
+        for (const x of [-.08, 0, .08]) box(model, `${liner.id}-fold`, [x, .049, 0], [.012, .008, .23], mat.gray);
+        linerModels.set(liner.id, model);
+      }
+      model.position.fromArray(liner.position);
+    }
+    customerRoot.visible = Boolean(customer && !customer.external); tossed.visible = Boolean(customer);
     if (customer) { tossCup.visible = customer.shape === 0; tossBox.visible = customer.shape === 1; tossBag.visible = customer.shape === 2; }
     root.updateMatrixWorld(true);
   }
   function interact() {
     if (!active || disposed) return false;
+    if (placement.active) return confirmPlacement();
     locateFocus(); if (!focus) return false;
     if (hands.owner && hands.owner !== "waste") return false;
     if (held?.kind === "bin") return returnTool();
@@ -460,42 +522,62 @@ export function createUsherWaste({ scene, world, camera, collisionWorld, showToa
       if (acquire({ kind: "liner", open: false, phase: "folded", sourceBinId: focus.bin?.data.id ?? null })) { if (focus.bin) focus.bin.data.spares--; showToast("Spare bag taken. Hold to shake it open."); }
     } else if (focus.kind === "bag") {
       if (acquire({ kind: "bag", id: focus.bag.id })) { focus.bag.phase = "held"; focus.bag.vx = focus.bag.vy = focus.bag.vz = 0; }
+    } else if (focus.kind === "loose-liner") {
+      const liner = focus.liner;
+      if (acquire({ kind: "liner", open: liner.open, phase: liner.open ? "opened" : "folded", sourceBinId: liner.sourceBinId }))
+        state.looseLiners = state.looseLiners.filter(item => item.id !== liner.id);
     }
     syncVisuals(); save(); return true;
   }
   function returnTool() {
     if (!held || hands.owner !== "waste") return false;
+    if (held.kind !== "bin") return togglePlacement();
     if (held.kind === "bin") {
       const bin = bins.find(bin => bin.data.id === held.id), next = recommendation(bin);
       if (next !== bin.data.room && roomNearby(next, bin.data.x, bin.data.z)) { bin.data.room = next; showToast(`Can parked beside Theater ${roomNumber(next)}.`); }
-    } else if (held.kind === "bag") { const bag = state.bags.find(bag => bag.id === held.id); bag.phase = "falling"; bag.vx = bag.vy = bag.vz = 0; }
-    else if (held.kind === "liner") {
-      // A clean folded liner returns only to a reachable physical stock point.
-      const bin = bins.find(bin => camera.position.distanceTo(new THREE.Vector3(bin.data.x, .85, bin.data.z)) < 1.7
-        && clear(camera.position, new THREE.Vector3(bin.data.x, .85, bin.data.z), bin.collider));
-      if (!bin) { showToast("Return this clean liner to a can's spare-bag pouch."); return false; }
-      bin.data.spares = Math.min(24, bin.data.spares + 1);
     }
     release(); syncVisuals(); save(); return true;
+  }
+  function beginPlacement() {
+    if (!active || !held || held.kind === "bin" || hands.owner !== "waste") return false;
+    if (held.kind === "liner" && state.looseLiners.length >= 48) { showToast("Use a placed spare liner before opening more."); return false; }
+    charge = 0; previousAction = false; actionWaitRelease = true;
+    if (held.kind === "liner") held.phase = held.open ? "opened" : "folded";
+    return placement.begin(held.kind === "bag" ? { size: [.60, .72, .60], shape: "round", ignoreIds: [held.id] } : { size: [.32, .06, .24] });
+  }
+  function cancelPlacement() { return placement.cancel(); }
+  function togglePlacement() { return placement.active ? cancelPlacement() : beginPlacement(); }
+  function confirmPlacement() {
+    if (!active || !placement.active || !held) return false;
+    const p = placement.confirm(); if (!p) { showToast(placement.snapshot.reason); return false; }
+    if (held.kind === "bag") {
+      const bag = state.bags.find(b => b.id === held.id); Object.assign(bag, { x: p.x, y: p.y + BAG_HALF_HEIGHT, z: p.z, phase: "ground", vx: 0, vy: 0, vz: 0 });
+    } else state.looseLiners.push({ id: `placed-liner-${state.nextLiner++}`, position: p.toArray(), open: held.open, sourceBinId: held.sourceBinId });
+    release(); syncVisuals(); save(); showToast("Placed. Aim at it to pick it up again."); return true;
   }
   function update(delta, input = {}) {
     if (disposed) return;
     if (input.cancelAction) { previousAction = false; charge = 0; actionWaitRelease = true; }
     active = Boolean(input.active);
     if (!active) { accumulator = 0; focus = null; previousAction = false; actionWaitRelease = true; return; }
-    const dt = finite(delta) ? clamp(delta, 0, .1) : 0, action = Boolean(input.action);
+    const dt = finite(delta) ? clamp(delta, 0, .1) : 0, action = Boolean(input.action && !placement.active);
     accumulator += dt;
     while (accumulator >= STEP - 1e-9) { moveBins(STEP); moveBags(STEP); actionStep(STEP, action); guestStep(STEP); accumulator -= STEP; }
-    previousAction = action; syncVisuals(); locateFocus();
+    previousAction = action; syncVisuals(); locateFocus(); placement.update();
     saveElapsed += dt; if (saveElapsed >= 1) { saveElapsed = 0; save(); }
   }
   syncVisuals();
   return {
     root, update, interact, returnTool, getBinTargets, depositTrash, onTheaterBreak,
+    getCustomerDisposalTarget, throwCustomerTrash, enableScheduledCustomers,
+    beginPlacement, togglePlacement, cancelPlacement, confirmPlacement,
+    get placementActive() { return placement.active; },
+    get canPlace() { return Boolean(held && held.kind !== "bin"); },
     get heldTool() { if (!held) return null; if (held.kind === "bin") return "rolling bin"; if (held.kind === "liner") return "fresh liner"; return state.bags.find(b => b.id === held.id)?.tied ? "tied trash bag" : "untied trash bag"; },
     get focusDistance() { return focus ? camera.position.distanceTo(focus.p) : Infinity; },
     get actionLabel() { return held?.kind === "bag" ? (state.bags.find(b => b.id === held.id)?.tied ? "HOLD / RELEASE TO THROW" : "HOLD TO TIE BAG") : held?.kind === "liner" ? "HOLD TO OPEN LINER" : "WALK TO PUSH"; },
     get focusedPrompt() {
+      if (placement.active) return placement.snapshot.reason;
       if (!focus || (hands.owner && hands.owner !== "waste")) return "";
       if (held?.kind === "bin") return "Release rolling can";
       if (held?.kind === "liner") return focus.kind === "mouth" && !focus.bin.data.lined ? held.open ? "Fit opened liner around rim" : "Open liner before fitting" : "";
@@ -504,19 +586,23 @@ export function createUsherWaste({ scene, world, camera, collisionWorld, showToa
       if (focus.kind === "spare") return "Take stored spare bag";
       if (focus.kind === "stock") return "Take fresh bag from trash-room stock";
       if (focus.kind === "bag") return focus.bag.tied ? "Lift tied trash bag" : "Lift bag to tie it";
+      if (focus.kind === "loose-liner") return "Pick up the spare liner";
       return !focus.bin.data.lined ? "Empty can · needs an opened liner" : focus.bin.data.fill >= 108 ? "Lift full trash bag" : `Inspect can · ${Math.round(focus.bin.data.fill / WASTE_CAPACITY * 100)}% full`;
     },
     get hint() {
+      if (placement.active) return placement.snapshot.reason;
       if (held?.kind === "bin") { const bin = bins.find(b => b.data.id === held.id), next = recommendation(bin); return `Walk to push · Q releases. ${next !== bin.data.room ? `Next: Theater ${roomNumber(next)}.` : "Park beside the doorway."}`; }
       if (held?.kind === "bag") return state.bags.find(b => b.id === held.id)?.tied ? "Carry to the trash-room gondola · hold, then release to throw · Q sets down." : "Hold to tie the lifted bag · Q sets it down.";
       if (held?.kind === "liner") return held.open ? "Aim at an empty can's rim and fit the opened liner." : "Hold to open the spare bag.";
       return "Three rolling cans · push them to upcoming theater breaks. Spare liners are on each can.";
     },
     getSnapshot() { return { bins: state.bins.map(b => ({ ...b, reserved: bins.find(bin => bin.data.id === b.id).reserved, recommendation: recommendation(bins.find(bin => bin.data.id === b.id)) })),
-      bags: state.bags.map(b => ({ ...b })), held: held ? { ...held } : null, focus: focus?.kind ?? null, depositedBags: state.depositedBags,
-      customer: customer ? { room: customer.event.room, progress: customer.t, units: customer.units, binId: customer.bin.data.id } : null,
+      bags: state.bags.map(b => ({ ...b })), looseLiners: state.looseLiners.map(item => ({ ...item, position: [...item.position] })),
+      held: held ? { ...held } : null, focus: focus?.kind ?? null, depositedBags: state.depositedBags, placement: placement.snapshot,
+      heldVisible: held?.kind === "liner" ? freshLiner.visible : held?.kind === "bag" ? bagModels.get(held.id)?.group.visible : Boolean(held),
+      customer: customer ? { room: customer.event?.room ?? customer.bin.data.room, external: Boolean(customer.external), progress: customer.t, units: customer.units, binId: customer.bin.data.id } : null,
       breakQueue: state.breakQueue.map(q => ({ ...q })), gondola: { ...WASTE_GONDOLA }, stock: { ...WASTE_STOCK } }; },
-    dispose() { if (disposed) return; disposed = true; save(); release(); root.removeFromParent(); for (const collider of ownedColliders) collisionWorld.remove(collider);
+    dispose() { if (disposed) return; disposed = true; save(); release(); placement.dispose(); root.removeFromParent(); for (const collider of ownedColliders) collisionWorld.remove(collider);
       for (const value of geometries) value.dispose(); for (const value of materials) value.dispose(); for (const value of textures) value.dispose(); },
   };
 }

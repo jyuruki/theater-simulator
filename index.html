@@ -4,6 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#09080d" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
     <meta
       name="description"
       content="Work an usher shift in a fourteen-screen neighborhood movie theater."
@@ -24,11 +29,13 @@
         <div class="eyebrow">BEHIND THE SCENES · 14 SCREENS</div>
         <h1 id="intro-title">MILILANI <span>14</span></h1>
         <p>
-          Pick up your cleaning kit, keep the break sheet handy, and work the
+          Your broom and cloth are ready. Keep the break sheet handy and work the
           fourteen theaters. Clean used trays and seats, sweep last, roll the
           cans to upcoming breaks, and keep the fountain supplies stocked.
         </p>
         <button id="enter-button" type="button">START YOUR SHIFT</button>
+        <button id="install-button" type="button" class="pause-options">ADD TO HOME SCREEN</button>
+        <p id="install-help" hidden>On iPhone, open this page in Safari, tap Share, then Add to Home Screen. Leave Open as Web App enabled if shown. Launch the Mililani 14 icon for the full-screen app. The first visit needs an internet connection.</p>
         <div class="control-list" aria-label="Controls">
           <span><b>WASD</b> Move</span>
           <span><b>Mouse</b> Look</span>
@@ -37,8 +44,9 @@
           <span><b>E</b> Interact</span>
           <span><b>Hold click / F</b> Clean</span>
           <span><b>B</b> Break sheet</span>
+          <span><b>T</b> Check watch</span>
           <span><b>1 / 2</b> Broom / cloth</span>
-          <span><b>Q</b> Stow / release</span>
+          <span><b>P / Q</b> Place / stow</span>
           <span><b>M</b> Map</span>
           <span><b>Esc</b> Pause</span>
         </div>
@@ -49,6 +57,7 @@
         <h2>Ready when you are.</h2>
         <button id="resume-button" type="button">RESUME SHIFT</button>
         <button id="pause-settings-button" class="pause-options" type="button">Sound &amp; atmosphere</button>
+        <button id="update-button" class="pause-options" type="button" hidden>UPDATE APP &amp; RESUME SAVED SHIFT</button>
       </section>
 
       <header id="hud" class="hud" hidden>
@@ -59,11 +68,12 @@
         </div>
         <div class="build-card">
           <span>USHER BUILD</span>
-          <strong>v0.22</strong>
+          <strong>v0.23</strong>
         </div>
         <nav class="visit-toolbar" aria-label="Shift controls">
           <button id="ticket-button" type="button" hidden>My ticket <kbd>I</kbd></button>
           <button id="breaksheet-button" type="button">Sheet <kbd>B</kbd></button>
+          <button id="watch-button" type="button">Watch <kbd>T</kbd></button>
           <button id="broom-button" type="button">Broom <kbd>1</kbd></button>
           <button id="cloth-button" type="button">Cloth <kbd>2</kbd></button>
           <button id="map-button" type="button">Map <kbd>M</kbd></button>
@@ -94,6 +104,7 @@
       <button id="interact-button" type="button" hidden></button>
       <button id="tool-action-button" type="button" hidden>HOLD TO CLEAN</button>
       <button id="tool-return-button" type="button" hidden>RETURN TOOL</button>
+      <button id="tool-place-button" type="button" hidden>PLACE</button>
       <p id="visit-status" aria-live="polite"></p>
       <dialog id="visit-dialog" aria-labelledby="visit-heading"></dialog>
 

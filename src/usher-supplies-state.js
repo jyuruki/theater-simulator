@@ -65,10 +65,10 @@ export function restoreSuppliesState(raw) {
 }
 
 /** Work time is real time; only simulated customer consumption uses the shift clock. */
-export function stepSuppliesState(state, delta, { active = false, timeScale = 5, pour = null, wash = false } = {}) {
+export function stepSuppliesState(state, delta, { active = false, timeScale = 2, pour = null, wash = false } = {}) {
   if (!active || !Number.isFinite(delta) || delta <= 0) return;
   const dt = Math.min(delta, .1);
-  const gameTime = dt * (Number.isFinite(timeScale) ? Math.max(0, Math.min(20, timeScale)) : 5);
+  const gameTime = dt * (Number.isFinite(timeScale) ? Math.max(0, Math.min(20, timeScale)) : 2);
   state.elapsed += gameTime;
   for (const bib of state.bibs) if (bib.installed && bib.connected) bib.level = Math.max(0, bib.level - gameTime / 5400);
   for (const item of state.stock) item.level = Math.max(0, item.level - gameTime / 3600);

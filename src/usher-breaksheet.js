@@ -6,7 +6,9 @@ export function createUsherBreaksheet({ scene, camera, schedule }) {
     : Object.assign(document.createElement("canvas"), { width: 800, height: 1600 });
   const ctx = canvas.getContext("2d"), texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
-  const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, depthTest: false, depthWrite: false, toneMapped: false });
+  // Transparent queue runs after every opaque world sign. renderOrder alone
+  // cannot move an opaque handheld into that later queue.
+  const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide, depthTest: false, depthWrite: false, toneMapped: false });
   const geometry = new THREE.PlaneGeometry(.40, .80), paper = new THREE.Mesh(geometry, material);
   paper.name = "handheld-usher-break-sheet"; paper.renderOrder = 1000; paper.visible = false; scene.add(paper);
   let signature = "", visible = false;

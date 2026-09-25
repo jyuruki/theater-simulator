@@ -6,6 +6,7 @@ import {
   sampleBowlFloorCandidate,
   sampleSideStairHeight,
   sampleTierHeight,
+  SEAT_BACK_RISER_OFFSET,
 } from "../src/layout-geometry.js";
 import { createMaterialLibrary } from "../src/materials.js";
 import { createTheaterWorld } from "../src/world.js";
@@ -126,7 +127,7 @@ collision.addBoxes(world.colliders);
 const dom = { ownerDocument: { defaultView: { addEventListener() {}, removeEventListener() {} },
   addEventListener() {}, removeEventListener() {}, getElementById() { return null; } },
   addEventListener() {}, removeEventListener() {} };
-function walk(x, z, yaw, frames, feetY = 0) {
+function walk(x, z, yaw, frames, feetY = 0, stopX = Infinity) {
   const player = new FirstPersonController({ camera: new THREE.PerspectiveCamera(), domElement: dom,
     collisionWorld: collision, spawn: [planToWorldX(x), feetY, z], initialYaw: yaw,
     groundSampler: world.groundHeight, ceilingSampler: world.ceilingHeight, touchMode: false });
@@ -140,18 +141,20 @@ function walk(x, z, yaw, frames, feetY = 0) {
     player.update(1 / 60);
     maximumStep = Math.max(maximumStep, player.position.y - previousY);
     maximumDrop = Math.max(maximumDrop, previousY - player.position.y);
+    if (worldToPlanX(player.position.x) >= stopX) break;
   }
   const result = { x: worldToPlanX(player.position.x), z: player.position.z, y: player.position.y, maximumStep, maximumDrop };
   player.dispose();
   return result;
 }
 let stairWalks = 0;
+let rowPassageSamples = 0;
 const ray = new THREE.Raycaster();
 function assertRenderedFloor(x, z, elevation, label) {
   ray.set(new THREE.Vector3(planToWorldX(x), elevation + 0.15, z), new THREE.Vector3(0, -1, 0));
   ray.near = 0.001;
   ray.far = 0.2;
-  const hit = ray.intersectObject(world.root, true)[0];
+  const hit = ray.intersectObject(world.root, true).find(hit => Math.abs(hit.point.y - elevation) < .001);
   assert.ok(hit, `${label}: rendered floor missing below walkable surface`);
   close(hit.point.y, elevation, `${label}: physical floor agrees with sampler`, 0.0001);
 }
@@ -195,6 +198,28 @@ for (const number of revisedNumbers) {
 }
 for (const room of AUDITORIUMS) {
   const layout = world.auditoriumLayouts.get(room.id);
+  for (let index = 1; index < layout.rows.length; index++) {
+    const row = layout.rows[index], previous = layout.rows[index - 1];
+    close((layout.tierRisers[index - 1].z - previous.z) * layout.direction, SEAT_BACK_RISER_OFFSET,
+      `${room.id} row ${previous.label}: riser meets the seat back`);
+    // Sample the whole useful passage depth, not just its midpoint. A midpoint
+    // alone missed the two competing levels in the v22 row aisle.
+    const available = Math.abs(row.z - previous.z);
+    for (let distance = .8; distance <= available - .8; distance += .07) {
+      const z = previous.z + layout.direction * distance;
+      for (const x of [layout.centerX, ...Object.values(layout.sideAisles).map(aisle => aisle.centerX)]) {
+        close(world.groundHeight(planToWorldX(x), z, row.elevation), row.elevation,
+          `${room.id} row ${row.label} aisle has a single walking level`);
+        assertRenderedFloor(x, z, row.elevation, `${room.id} row ${row.label} passage`);
+        rowPassageSamples++;
+      }
+    }
+    const walkZ = (row.z + previous.z) / 2;
+    const passage = walk(layout.sideAisles.west.centerX, walkZ, Math.PI / 2, 420, row.elevation, layout.sideAisles.east.centerX);
+    assert.ok(passage.x >= layout.sideAisles.east.centerX - .15, `${room.id} row ${row.label}: cross-row cleaning passage blocked`);
+    close(passage.maximumStep, 0, `${room.id} row ${row.label}: no sideways step while crossing`);
+    close(passage.maximumDrop, 0, `${room.id} row ${row.label}: no sideways drop while crossing`);
+  }
   if (layout.rearEntryClearance) {
     const rearWalkZ = layout.backRowZ + 0.39 + layout.rearEntryClearance.current / 2;
     const crossing = walk(layout.sideAisles.west.centerX, rearWalkZ, Math.PI / 2, 210);
@@ -223,4 +248,4 @@ for (const room of AUDITORIUMS) {
 }
 world.dispose();
 materials.dispose();
-console.log(`Seating valid: A/B separately lowered, C at ground · eight doubled rear-entry gaps with fixed seat banks and working outer/side portals · 14 raised, taller screens · four clear B/C crosswalks · ${stairWalks} complete A–H stair climbs and C–A descents · ${storageSamples} storage-clearance samples · all 1,093 seats retained.`);
+console.log(`Seating valid: ${rowPassageSamples} rendered single-level row-passage samples and complete cross-row walks · A/B separately lowered, C at ground · eight rear-entry routes · 14 raised screens · ${stairWalks} complete A–H stair climbs · ${storageSamples} storage-clearance samples · all 1,093 seats retained.`);

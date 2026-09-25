@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { createUsherShift } from "../src/usher-shift.js";
 import { USHER_SPAWN } from "../src/usher-gameplay.js";
 import { SHIFT_START_MINUTE, SHIFT_TIME_SCALE } from "../src/usher-schedule.js";
+import { AUDITORIUMS } from "../src/layout-data.js";
 import { createTheaterWorld } from "../src/world.js";
 import { createMaterialLibrary } from "../src/materials.js";
 import { AABBCollisionWorld } from "../src/player.js";
@@ -82,8 +83,7 @@ assert.equal(shift.cleaning.getSnapshot().anchors.bins.length, 3, "Cleaning sees
 
 // Interactions go through the orchestrator, without assigning hands directly.
 aim([24.3, 1.68, 52.8], [24.3, 1.38, 54.4]);
-assert.match(shift.focusedPrompt, /cleaning kit/);
-assert.equal(shift.interact(), true);
+assert.equal(shift.selectTool("broom"), true, "The usher starts with a portable kit");
 assert.equal(shift.hands.owner, "cleaning"); assert.equal(shift.heldTool, "broom");
 supplyAim("stock:salt");
 assert.equal(shift.interact(), false, "A focused stock box cannot steal occupied cleaning hands");
@@ -94,6 +94,12 @@ assert.equal(shift.interact(), true); assert.equal(shift.heldTool, "refill:salt"
 assert.equal(shift.hands.owner, "supplies");
 assert.equal(shift.selectTool("cloth"), false, "Selecting a cleaning tool cannot overwrite a carried supply");
 assert.equal(shift.cleaning.heldTool, null); assert.equal(shift.heldTool, "refill:salt");
+shift.update(0, { active: true });
+for (const place of ["held", "holstered"]) for (const tool of ["broom", "pan", "cloth"]) {
+  assert.equal(shift.cleaning.root.getObjectByName(`usher-${tool}-${place}`).visible, false,
+    `A carried carton cannot render simultaneously with a ${place} ${tool}`);
+}
+assert.equal(shift.supplies.getSnapshot().heldVisible, true, "The actual supply carton remains rendered");
 
 supplyAim("dispenser:salt");
 frames(.4, { active: true, action: true });
@@ -108,15 +114,24 @@ const reading = shift.supplies.getSnapshot().state;
 assert.equal(reading.held.amount, beforeSheet.held.amount, "The sheet blocks an ongoing held refill action");
 assert.equal(reading.stock.find(s => s.id === "salt").delivered, beforeSheet.stock.find(s => s.id === "salt").delivered);
 assert.ok(Math.abs(shift.schedule.minute - minuteBeforeSheet - 2 * SHIFT_TIME_SCALE / 60) < 1e-8,
-  "Reading the break sheet leaves the real 5x shift clock running");
-assert.ok(Math.abs(reading.elapsed - beforeSheet.elapsed - 10) < 1e-8,
+  "Reading the break sheet leaves the real 2x shift clock running");
+assert.ok(Math.abs(reading.elapsed - beforeSheet.elapsed - 4) < 1e-8,
   "Supplies and the schedule use the same active game-time scale");
 assert.equal(shift.interact(), true, "E folds the physical sheet before routing any underlying interaction");
 assert.equal(shift.sheet.visible, false); assert.equal(shift.heldTool, "refill:salt");
+assert.equal(shift.toggleWatch(), true); const watchTime = shift.schedule.minute;
+frames(2, { active: false }); assert.equal(shift.watch.visible, true, "Pause leaves the raised watch in place");
+frames(2); assert.equal(shift.watch.visible, true); assert.ok(shift.schedule.minute > watchTime);
+assert.equal(shift.hands.owner, "supplies", "Checking a wristwatch does not discard a carried item");
+assert.equal(shift.heldTool, null, "Watch check temporarily blocks work inputs");
+frames(3.1); assert.equal(shift.watch.visible, false, "The watch lowers after five active seconds");
 frames(.3, { active: true, action: true });
 assert.ok(shift.supplies.getSnapshot().state.held.amount < reading.held.amount);
-assert.equal(shift.returnTool(), true); assert.equal(shift.hands.owner, null);
-assert.equal(shift.supplies.getSnapshot().state.loose.length, 1, "Q sets the actual partial box down safely");
+camera.lookAt(camera.position.x, 0, camera.position.z - 1.1); camera.updateMatrixWorld(true);
+assert.equal(shift.returnTool(), true); shift.update(0, { active: true });
+assert.equal(shift.placementActive, true); assert.equal(shift.hands.owner, "supplies", "Preview preserves the held box");
+assert.equal(shift.confirmPlacement(), true); assert.equal(shift.hands.owner, null);
+assert.equal(shift.supplies.getSnapshot().state.loose.length, 1, "Confirm places the actual partial box safely");
 
 // The Theater 2 can is still receiving exiting guests; use the next parked can.
 const movingBinIndex = 1;
@@ -127,6 +142,9 @@ aim([bin.x, 1.68, bin.z + 1.25], handle);
 assert.match(shift.focusedPrompt, /Push Theater 1 can/);
 assert.equal(shift.interact(), true); assert.equal(shift.hands.owner, "waste");
 assert.equal(shift.heldTool, "rolling bin");
+shift.update(0, { active: true });
+assert.equal(shift.cleaning.root.getObjectByName("usher-broom-holstered").visible, false,
+  "Belt broom stays stowed while the usher's hands push a can");
 assert.equal(shift.selectTool("broom"), false, "The rolling can owns the same hands as the cleaning kit");
 const binStart = { ...bin };
 for (let frame = 0; frame < 70; frame++) {
@@ -161,14 +179,14 @@ for (const [index, event] of firstBreaks.entries()) {
     }
     assert.equal(shift.cleaning.getTheaterSummary(event.theaterId).active, false, `${event.theaterId} does not break early`);
     assert.equal(shift.schedule.getSnapshot().done.includes(event.id), false);
-    shift.update(.05, { active: true });
+    shift.update(.08, { active: true });
   }
   const jobs = shift.cleaning.getSnapshot().state.jobs;
   assert.equal(jobs.length, index + 1, `${event.theaterId} creates exactly one cleaning job at its break`);
   assert.equal(jobs.filter(j => j.id === event.theaterId).length, 1);
   const job = jobs.find(j => j.id === event.theaterId);
-  assert.ok(job.seats.length >= 3 && job.seats.length <= 6 && job.seats.every(s => s.trayOpen),
-    `${event.theaterId}'s schedule event creates dirty, visibly used seats`);
+  assert.equal(job.seats.length, AUDITORIUMS.find(r => r.id === event.theaterId).seats);
+  assert.ok(job.seats.every(s => s.trayOpen), `${event.theaterId}'s break opens every tray`);
   assert.equal(shift.schedule.getSnapshot().done.filter(id => id === event.id).length, 1);
   assert.equal(toasts.filter(t => t.startsWith(`Theater ${event.number} is breaking.`)).length, 1);
   assert.equal(shift.doors.getSnapshot().find(d => d.id === event.theaterId).targetOpen, true,
@@ -196,4 +214,4 @@ assert.equal(resumed.waste.getSnapshot().bins.length, 3);
 resumed.dispose();
 assert.deepEqual(collisionWorld.colliders, baselineColliders);
 assert.deepEqual(scene.children, baselineChildren);
-console.log("Usher shift passed: shared physical hands, sheet/pause gating, 5x clock, 14 scheduled breaks, save/reload and complete collider disposal.");
+console.log("Usher shift passed: shared physical hands, sheet/pause gating, 2x clock, 14 scheduled breaks, save/reload and complete collider disposal.");

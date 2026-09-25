@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { SERVICE_ROOMS, FOUNTAIN_PLAN } from "./layout-data.js";
 import { planToWorldX } from "./coordinates.js";
 import { segmentHitsBox } from "./visit-state.js";
+import { createPlacementPreview } from "./prop-placement.js";
+import { resolveHeldPose } from "./held-prop-pose.js";
 import { BIB_TYPES, SUPPLY_TYPES, SUPPLY_SAVE_KEY, createSuppliesState,
   restoreSuppliesState, serializeSuppliesState, stepSuppliesState } from "./usher-supplies-state.js";
 
@@ -13,7 +15,7 @@ const owner = "supplies";
 
 /** Physical stock handling. The caller supplies input, one shared hand owner, and a small contextual prompt. */
 export function createUsherSupplies({ scene, world, camera, collisionWorld, showToast = () => {},
-  hands = { owner: null }, storage, timeScale = 5 }) {
+  hands = { owner: null }, storage, timeScale = 2 }) {
   let state;
   try { state = restoreSuppliesState(storage?.getItem(SUPPLY_SAVE_KEY)); } catch { state = createSuppliesState(); }
   const root = new THREE.Group(); root.name = "usher-BIB-and-supplies"; scene.add(root);
@@ -181,8 +183,9 @@ export function createUsherSupplies({ scene, world, camera, collisionWorld, show
   let heldView = null, heldUid = null, active = false, disposed = false, focus = null, saveTimer = 0, phase = 0;
   let pouring = false, washing = false, safeTimer = 0;
   const look = new THREE.Vector3(), horizontal = new THREE.Vector3(), right = new THREE.Vector3(), viewRay = new THREE.Ray(), floorRay = new THREE.Raycaster();
-  const heldBounds = new THREE.Box3();
   const blockers = () => collisionWorld?.colliders ?? world.colliders ?? [];
+  const placement = createPlacementPreview({ scene: root, camera, world, getColliders: blockers });
+  let heldContact = false;
   function clearSegment(from, to, ignore = "") {
     return !blockers().some(c => c.enabled !== false && c.id !== ignore && segmentHitsBox(from, to, c));
   }
@@ -211,7 +214,9 @@ export function createUsherSupplies({ scene, world, camera, collisionWorld, show
   // A stale or edited save cannot place cartons in walls or beyond real floors.
   state.loose = state.loose.filter(item => {
     const p = new THREE.Vector3(...item.position), floor = floorAt(p.x, p.z, p.y);
-    if (floor && freeVolume(floor)) return true;
+    const support = blockers().some(c => c.enabled !== false && Math.abs(c.maxY - p.y) < .025
+      && p.x - .305 >= c.minX && p.x + .305 <= c.maxX && p.z - .23 >= c.minZ && p.z + .23 <= c.maxZ);
+    if ((floor || support) && freeVolume(p.clone().add(new THREE.Vector3(0, .008, 0)), item.kind === "tray" ? .07 : .46, .30)) return true;
     // Recover quantities if an old save's resting point is now occupied. Do
     // not lose stock or trays, or re-create an object inside a wall/cabinet.
     if (item.kind === "tray") state[item.dirt > .001 ? "dirtyTrays" : "cleanTrays"]++;
@@ -263,6 +268,7 @@ export function createUsherSupplies({ scene, world, camera, collisionWorld, show
       }
       v.model.group.visible = true;
       v.model.group.position.fromArray(item.position); v.model.group.position.y += item.kind === "tray" ? .035 : .23;
+      v.model.group.rotation.set(0, 0, 0);
       v.model.set(item.kind === "tray" ? item.dirt : item.amount);
     }
     if (state.held?.uid !== heldUid) {
@@ -296,9 +302,10 @@ export function createUsherSupplies({ scene, world, camera, collisionWorld, show
     const floor = safeDrop(); if (!floor) { showToast("Stand in the clear aisle to pick this up."); return false; }
     item.uid ??= state.nextId++; item.position = floor.toArray(); state.held = item; hands.owner = owner; return true;
   }
-  function release() { state.held = null; if (hands.owner === owner) hands.owner = null; }
+  function release() { placement.cancel(); state.held = null; if (hands.owner === owner) hands.owner = null; }
   function interact() {
     if (disposed || !active) return false;
+    if (placement.active) return confirmPlacement();
     locateFocus(); if (!focus) return false;
     if (hands.owner && hands.owner !== owner) { showToast("Set down the tool in your hands first."); return true; }
     const [kind, id, part] = focus.id.split(":");
@@ -350,11 +357,21 @@ export function createUsherSupplies({ scene, world, camera, collisionWorld, show
     sync(); poseHeld(); save(); return true;
   }
   function returnTool() {
+    return togglePlacement();
+  }
+  function beginPlacement() {
     if (disposed || !active || !state.held || hands.owner !== owner) return false;
     if (state.loose.length >= 32) { showToast("Recycle empty cartons to clear floor space first."); return false; }
-    const p = safeDrop(); if (!p) { showToast("Move into a clear aisle to set this down safely."); return false; }
+    pouring = washing = false;
+    return placement.begin({ size: state.held.kind === "tray" ? [.61, .07, .46] : [.61, .46, .46] });
+  }
+  function cancelPlacement() { return placement.cancel(); }
+  function togglePlacement() { return placement.active ? cancelPlacement() : beginPlacement(); }
+  function confirmPlacement() {
+    if (!active || !placement.active || !state.held) return false;
+    const p = placement.confirm(); if (!p) { showToast(placement.snapshot.reason); return false; }
     state.held.position = p.toArray(); state.loose.push(state.held); release(); pouring = washing = false;
-    sync(); save(); showToast("Set down nearby. Aim at it to pick it up again."); return true;
+    sync(); save(); showToast("Placed. Aim at it to pick it up again."); return true;
   }
   function poseHeld() {
     if (!heldView || !state.held) return;
@@ -371,28 +388,31 @@ export function createUsherSupplies({ scene, world, camera, collisionWorld, show
         mesh.material = colors[state.held.id];
       });
     } else if (washing) { group.position.copy(washPosition); group.position.z += Math.sin(phase * 8) * .065; group.rotation.set(0, .1 * Math.sin(phase * 6), 0); }
-    group.updateWorldMatrix(true, true); heldBounds.setFromObject(group);
-    group.visible = !blockers().some(c => c.enabled !== false && heldBounds.max.x > c.minX + .002 && heldBounds.min.x < c.maxX - .002
-      && heldBounds.max.y > c.minY + .002 && heldBounds.min.y < c.maxY - .002 && heldBounds.max.z > c.minZ + .002 && heldBounds.min.z < c.maxZ - .002);
+    const resolved = resolveHeldPose({ object: group, camera, colliders: blockers(),
+      ignoreIds: washing ? [benchId] : pouring ? [focus?.ignore] : [] });
+    heldContact = resolved.contact;
   }
   function update(delta, input = {}) {
     if (disposed) return; active = Boolean(input.active);
     if (!active) { focus = null; pouring = washing = false; waterStream.visible = false; supplyFlow.forEach(mesh => { mesh.visible = false; }); return; }
     locateFocus();
     const dt = Number.isFinite(delta) ? Math.max(0, Math.min(.1, delta)) : 0; phase += dt;
-    pouring = Boolean(input.action && hands.owner === owner && state.held?.kind === "refill" && focus?.id === `dispenser:${state.held.id}` && state.held.amount > .001);
-    washing = Boolean(input.action && hands.owner === owner && state.held?.kind === "tray" && focus?.id === "tray:sink" && state.held.dirt > 0);
+    pouring = Boolean(!placement.active && input.action && hands.owner === owner && state.held?.kind === "refill" && focus?.id === `dispenser:${state.held.id}` && state.held.amount > .001);
+    washing = Boolean(!placement.active && input.action && hands.owner === owner && state.held?.kind === "tray" && focus?.id === "tray:sink" && state.held.dirt > 0);
     stepSuppliesState(state, dt, { active: true, timeScale, pour: pouring ? state.held.id : null, wash: washing });
     safeTimer += dt;
     if (state.held && safeTimer >= .5) { safeTimer = 0; const p = safeDrop(); if (p) state.held.position = p.toArray(); }
-    sync(); poseHeld();
+    sync(); poseHeld(); placement.update();
     saveTimer += dt; if (saveTimer >= 1) { saveTimer = 0; save(); }
   }
   sync();
-  return { root, update, interact, returnTool,
+  return { root, update, interact, returnTool, beginPlacement, togglePlacement, cancelPlacement, confirmPlacement,
+    get placementActive() { return placement.active; },
+    get canPlace() { return Boolean(state.held); },
     get heldTool() { return state.held ? `${state.held.kind}:${state.held.id}` : null; },
     get focusDistance() { return focus ? focus.position.distanceTo(camera.position) : Infinity; },
     get focusedPrompt() {
+      if (placement.active) return placement.snapshot.reason;
       if (!focus) return "";
       const [kind, id, part] = focus.id.split(":");
       if (kind === "bib") {
@@ -407,18 +427,19 @@ export function createUsherSupplies({ scene, world, camera, collisionWorld, show
       return ({ recycle: "Recycle depleted carton", "tray:dirty": "Pick up dirty kitchen tray", "tray:sink": "Hold to rinse and scrub tray", "tray:clean": "Place clean tray on drying stack" })[focus.id] ?? "";
     },
     get hint() {
+      if (placement.active) return placement.snapshot.reason;
       if (state.held?.kind === "refill") return `Carry to the matching dispenser · ${Math.round(state.held.amount * 100)}% left · Q set down`;
       if (state.held?.kind === "bib") return state.held.used ? "Carry depleted box to the recycling crate · Q set down" : "Place in the matching empty BIB slot, then connect its hose · Q set down";
       if (state.held?.kind === "tray") return state.held.dirt > 0 ? `Hold under the faucet to wash · ${Math.round((1 - state.held.dirt) * 100)}% clean` : "Place the washed tray on the clean stack";
       return "Check BIB gauges and fountain supplies. Stock and tray washing are behind the soda fountains.";
     },
     getSnapshot() { return { state: clone(state), heldTool: this.heldTool, focus: focus?.id ?? null, focusDistance: this.focusDistance,
-      pouring, washing, heldVisible: heldView?.group.visible ?? false,
+      pouring, washing, placement: placement.snapshot, heldContact, heldVisible: heldView?.group.visible ?? false,
       heldPosition: heldView?.group.position.toArray() ?? null,
       anchors: targets.map(t => ({ id: t.id, position: t.position.toArray(), stand: t.stand.toArray() })),
       colliders: ownColliders.map(c => ({ ...c })), room: clone(room.bounds) }; },
     dispose() {
-      if (disposed) return; disposed = true; save(); root.removeFromParent();
+      if (disposed) return; disposed = true; save(); placement.dispose(); root.removeFromParent();
       if (hands.owner === owner) hands.owner = null;
       ownColliders.forEach(c => collisionWorld?.remove(c));
       geometries.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); textures.forEach(t => t.dispose());

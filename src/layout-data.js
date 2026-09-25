@@ -832,6 +832,11 @@ export const LOBBY_PLAN = Object.freeze({
   customerCounter: CUSTOMER_COUNTER,
   customerCounterSections: CUSTOMER_COUNTER_SECTIONS,
   counterServiceGate: COUNTER_SERVICE_GATE,
+  barServiceGate: Object.freeze({
+    id: "bar-service-gate", height: 1.24,
+    wall: Object.freeze({ x: CUSTOMER_COUNTER[0].x, z: BACK_BAR_BOUNDS.zMin - .08 }),
+    counter: Object.freeze({ x: CUSTOMER_COUNTER[0].x, z: CUSTOMER_COUNTER[0].z + .65 }),
+  }),
   expo: Object.freeze({
     sectionId: "customer-counter-expo", segmentIndex: 1,
     position: Object.freeze({ x: (CUSTOMER_COUNTER[1].x + CUSTOMER_COUNTER[2].x) / 2, z: (CUSTOMER_COUNTER[1].z + CUSTOMER_COUNTER[2].z) / 2 }),

@@ -125,6 +125,24 @@ for (const direction of [-1, 1]) for (let step = 0; step <= 18; step++) {
   });
 }
 const resources = [customerTop, officeTop, ...bases].map(mesh => mesh.geometry);
+const barGate = world.barServiceGate, barPlan = LOBBY_PLAN.barServiceGate;
+assert.equal(barGate.leaves.length, 2, "Bar entrance has the same double-action service leaves");
+const barCenter = new THREE.Vector3(planToWorldX(barPlan.wall.x), 0, (barPlan.wall.z + barPlan.counter.z) / 2);
+sync(0, null);
+assert.ok(collision.isOverlapping(barCenter, .34, 0, 1.78), "Closed bar gate blocks staff passage");
+for (const travel of [-1, 1]) {
+  const player = barCenter.clone().add(new THREE.Vector3(-travel * 2, 0, 0));
+  assert.ok(!collision.isOverlapping(player, .34, 0, 1.78), "Bar gate approach is clear");
+  for (let frame = 0; frame < 280 && (player.x - barCenter.x) * travel < 2; frame++) {
+    sync(1 / 60, player);
+    collision.moveCircle(player, travel * .03, 0, .34, 0, 1.78);
+    assert.ok(!collision.isOverlapping(player, .335, 0, 1.78), "Bar leaf cannot close through the player");
+  }
+  assert.ok((player.x - barCenter.x) * travel >= 1.95, "Bar gate admits staff in both directions");
+  for (let frame = 0; frame < 100; frame++) sync(1 / 60, player);
+  assert.ok(barGate.leaves.every(leaf => Math.abs(leaf.angle) < .001), "Bar gates return closed");
+  gateWalks++;
+}
 const disposed = new Set();
 resources.forEach(geometry => geometry.addEventListener("dispose", () => disposed.add(geometry)));
 world.dispose();
