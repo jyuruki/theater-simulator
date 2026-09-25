@@ -301,10 +301,18 @@ export function createUsherWaste({ scene, world, camera, collisionWorld, control
       if (bag.lift < .48) target.set(bag.fromX, 1.57, bag.fromZ);
       else if (bag.lift >= 1) bag.phase = "held";
     }
-    if (bag.phase === "held" && collisionWorld.isOverlapping(target, BAG_RADIUS, target.y - BAG_HALF_HEIGHT, BAG_HALF_HEIGHT * 2)) {
+    if (bag.phase === "held") {
+      // A carried bag is constrained to the hand, not a slow free body that
+      // the player can outrun. Resolve the whole grip-to-bag sweep, including
+      // thin walls whose far side would be a clear endpoint. Contact shortens
+      // the reach; only an explicit throw or confirmed placement releases it.
       const object = bagModels.get(bag.id).group; object.position.copy(target);
-      const resolved = resolveHeldPose({ object, camera, colliders: collisionWorld.colliders, ignoreIds: [bag.id] });
-      target.copy(resolved.position);
+      const nearby = collisionWorld.colliders.filter(c => c.maxX > camera.position.x - 2 && c.minX < camera.position.x + 2
+        && c.maxZ > camera.position.z - 2 && c.minZ < camera.position.z + 2);
+      const resolved = resolveHeldPose({ object, camera, colliders: nearby, anchor: camera.position.clone().add(new THREE.Vector3(0, -.52, 0)), ignoreIds: [bag.id] });
+      bag.x = resolved.position.x; bag.y = resolved.position.y; bag.z = resolved.position.z;
+      bag.vx = bag.vy = bag.vz = 0;
+      return;
     }
     const origin = new THREE.Vector3(bag.x, bag.y, bag.z), delta = target.sub(origin);
     if (delta.length() > 3 * dt) delta.setLength(3 * dt);
@@ -314,9 +322,6 @@ export function createUsherWaste({ scene, world, camera, collisionWorld, control
       !collisionWorld.isOverlapping(next, BAG_RADIUS, next.y - BAG_HALF_HEIGHT, BAG_HALF_HEIGHT * 2)));
     if (valid && clear({ x: bag.x, y: bag.y, z: bag.z }, next, ignored)) {
       bag.x = next.x; bag.y = next.y; bag.z = next.z;
-    }
-    if (Math.hypot(camera.position.x - bag.x, camera.position.z - bag.z) > 2.1) {
-      bag.phase = "falling"; bag.vx = bag.vy = bag.vz = 0; release(); showToast("The bag caught on the doorway and was set down.");
     }
   }
   function moveBins(dt) {
@@ -612,7 +617,7 @@ export function createUsherWaste({ scene, world, camera, collisionWorld, control
     get hint() {
       if (placement.active) return placement.snapshot.reason;
       if (held?.kind === "bin") { const bin = bins.find(b => b.data.id === held.id), next = recommendation(bin); return `Walk to push · Q releases. ${next !== bin.data.room ? `Next: Theater ${roomNumber(next)}.` : "Park beside the doorway."}`; }
-      if (held?.kind === "bag") return state.bags.find(b => b.id === held.id)?.tied ? "Carry to the trash-room gondola · hold, then release to throw · Q sets down." : "Hold to tie the lifted bag · Q sets it down.";
+      if (held?.kind === "bag") return state.bags.find(b => b.id === held.id)?.tied ? "Carry to the trash-room gondola · hold, then release to throw · G places." : "Hold to tie the lifted bag · G places.";
       if (held?.kind === "liner") return held.open ? "Aim at an empty can's rim and fit the opened liner." : "Hold to open the spare bag.";
       return "Three rolling cans · push them to upcoming theater breaks. Spare liners are on each can.";
     },

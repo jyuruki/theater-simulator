@@ -531,6 +531,20 @@ input[type="range"] { width: 100%; accent-color: #e05a74; }
   #visit-status { top: max(180px, calc(env(safe-area-inset-top) + 170px)); }
 }
 .shift-time { position: absolute; top: 0; left: 50%; transform: translateX(-50%); padding: 10px 17px; text-align: center; background: #0b0d14e8; border: 1px solid #ffffff24; border-radius: 10px; }
+.shift-speed-label { display: flex; align-items: center; justify-content: center; gap: 12px; color: #bdc5cf; font-size: 12px; margin: 14px auto; }
+.shift-speed-label select { width: 170px; padding: 9px 12px; }
+.new-day-note { display: block; max-width: 310px; color: #85909d; font-size: 10px; margin: 7px auto 0; line-height: 1.4; }
+.intro-panel .shift-save-note { font-size: 12px; margin: 0 0 12px; }
+.sheet-controls { position: fixed; z-index: 13; display: flex; align-items: center; gap: 8px; left: 50%; bottom: max(12px, env(safe-area-inset-bottom)); transform: translateX(-50%); white-space: nowrap; }
+.sheet-controls button { min-height: 44px; min-width: 44px; padding: 9px 14px; color: #f5efdf; background: #11131ef5; border: 1px solid #b6a486; border-radius: 7px; font-size: 12px; touch-action: manipulation; cursor: pointer; }
+.sheet-controls button:disabled { opacity: .4; cursor: default; }
+.sheet-controls span { color: #f5efdf; background: #11131edc; border-radius: 5px; padding: 6px; font: 12px system-ui; }
+.reading-sheet .location-card, .reading-sheet .visit-toolbar, .reading-sheet .build-card,
+.reading-sheet #touch-controls, .reading-sheet #crosshair, .reading-sheet #visit-status, .reading-sheet .toast { visibility: hidden; }
+.sheet-controls { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+@media (max-height: 780px) { .intro-panel { overflow-y: auto; align-content: start; padding-top: 24px; padding-bottom: 24px; } .intro-panel::before { display: none; } .intro-panel p { margin: 14px 0; } .intro-panel .control-list { margin-top: 18px; } }
+@media (max-height: 600px) { .pause-card { max-height: calc(100dvh - 24px); overflow-y: auto; padding: 20px; } }
+@media (max-height: 600px) { .reading-sheet #hud { visibility: hidden; } }
 .shift-time span { display: block; font-size: 8px; font-weight: 700; letter-spacing: .15em; color: #b7bec9; }
 #shift-clock { display: block; font-size: 25px; color: #fff0c8; font-variant-numeric: tabular-nums; line-height: 1.35; }
 @media (max-width: 520px) { .shift-time { left: auto; right: 0; transform: none; padding: 8px 11px; } #shift-clock { font-size: 21px; } .location-card { max-width: calc(100vw - 145px); } }

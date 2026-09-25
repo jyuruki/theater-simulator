@@ -2,15 +2,16 @@ import { AUDITORIUMS } from "./layout-data.js";
 import { createUsherGameplay } from "./usher-gameplay.js";
 import { createUsherWaste } from "./usher-waste.js";
 import { createUsherSupplies } from "./usher-supplies.js";
-import { createUsherSchedule, SHIFT_TIME_SCALE } from "./usher-schedule.js";
+import { createUsherSchedule, consumeNewUsherDay } from "./usher-schedule.js";
 import { createUsherBreaksheet } from "./usher-breaksheet.js";
 import { createUsherDoors } from "./usher-doors.js";
 
 export function createUsherShift(options) {
   const { scene, camera, collisionWorld, storage, showToast = () => {} } = options;
+  const newDay = consumeNewUsherDay(storage);
   const hands = { owner: null };
   let cleaning, waste, doors;
-  const schedule = createUsherSchedule({ storage, seed: options.seed,
+  const schedule = createUsherSchedule({ storage, seed: options.seed, timeScale: newDay?.timeScale,
     onBreak(event, seed) {
       cleaning.beginBreak(event.theaterId, seed, { cycle: event.cycle });
       waste.onTheaterBreak(event.theaterId);
@@ -23,7 +24,7 @@ export function createUsherShift(options) {
   doors = createUsherDoors({ scene, camera, collisionWorld, storage, showToast });
   waste = createUsherWaste({ ...options, hands, getNextBreaks: () => schedule.getNextBreaks(),
     getRoomReady: id => cleaning?.isTheaterReady(id) ?? false });
-  const supplies = createUsherSupplies({ ...options, hands, timeScale: SHIFT_TIME_SCALE });
+  const supplies = createUsherSupplies({ ...options, hands, timeScale: () => schedule.timeScale });
   cleaning = createUsherGameplay({ ...options, hands, schedule,
     getBinTargets: () => waste.getBinTargets(), depositTrash: (id, count) => waste.depositTrash(id, count) });
   const sheet = createUsherBreaksheet({ scene, camera, schedule });
@@ -80,16 +81,20 @@ export function createUsherShift(options) {
       cancelAction = true; sheet.hide(); return cleaning.selectTool(kind);
     },
     toggleSheet() { if (active) { cancelAction = true; modules[hands.owner]?.cancelPlacement?.(); return sheet.toggle(); } return false; },
+    turnSheetPage(direction) { return active && sheet.visible ? sheet.turnPage(direction) : false; },
     togglePlacement() { if (!active) return false; cancelAction = true; sheet.hide(); return modules[hands.owner]?.togglePlacement?.() ?? false; },
     confirmPlacement() { if (!active) return false; cancelAction = true; return modules[hands.owner]?.confirmPlacement?.() ?? false; },
     get placementActive() { return Boolean(modules[hands.owner]?.placementActive); },
     get canPlace() { return active && !sheet.visible && Boolean(modules[hands.owner]?.canPlace); },
     get heldTool() { return sheet.visible ? null : modules[hands.owner]?.heldTool ?? null; },
+    get sheetVisible() { return sheet.visible; },
+    get sheetPage() { return sheet.page; },
+    get sheetPageCount() { return sheet.pageCount; },
     get actionLabel() { const owner = modules[hands.owner]; return owner?.actionLabel ?? (owner?.heldTool === "cloth" ? "HOLD TO WIPE" : "HOLD TO SWEEP"); },
     get focusedPrompt() { return sheet.visible ? "Fold break sheet" : selected?.focusedPrompt ?? ""; },
     get time() { return schedule.time; },
     get hint() {
-      if (sheet.visible) return "Bold rows start: close doors. Regular rows break: clean the theater. B folds the sheet.";
+      if (sheet.visible) return "Bold rows start: close doors. Regular rows break: clean the theater. Arrow keys turn pages; B folds the sheet.";
       const owner = modules[hands.owner]; if (owner) return owner.hint;
       const due = doors.due;
       if (due.length) return `${schedule.time} · Close show-start doors: ${due.join(", ")} · B break sheet`;

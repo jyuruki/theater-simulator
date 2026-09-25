@@ -4,13 +4,14 @@ import { AUDITORIUMS } from "../src/layout-data.js";
 import { auditoriumDoorLayout } from "../src/auditorium-door-layout.js";
 import { auditoriumAcoustics, auditoriumInteriorContains } from "../src/auditorium-acoustics.js";
 import { createFeatureProgram, featurePhase, FEATURE_DURATION } from "../src/feature-program.js";
-import { createBreakEvents, SHIFT_TIME_SCALE } from "../src/usher-schedule.js";
+import { createBreakEvents, createLegacyBreakEvents, SHIFT_TIME_SCALE } from "../src/usher-schedule.js";
+import { FEATURE_FILMS, filmForShow } from "../src/feature-catalog.js";
 import { HULA_DURATION } from "../src/show-start-media.js";
 import { planToWorldX } from "../src/coordinates.js";
 
 const settle = () => new Promise(resolve => setImmediate(resolve));
 const near = (a, b, message, epsilon = .00001) => assert.ok(Math.abs(a - b) < epsilon, `${message}: ${a} vs ${b}`);
-const events = createBreakEvents(2);
+const events = createLegacyBreakEvents(2);
 for (const room of AUDITORIUMS) {
   const roomEvents = events.filter(e => e.theaterId === room.id), first = roomEvents[0], start = roomEvents[1], nextBreak = roomEvents[2];
   assert.ok(featurePhase(events, room, first.time - .01), `${room.id}: preceding show is already running`);
@@ -19,11 +20,21 @@ for (const room of AUDITORIUMS) {
   const phase = featurePhase(events, room, start.time + (HULA_DURATION + 10) * SHIFT_TIME_SCALE / 60);
   near(phase.offset, 10, "Real-time feature offset follows the accelerated schedule");
   assert.equal(phase.show, start.id);
-  near(featurePhase(events, room, start.time + (HULA_DURATION + FEATURE_DURATION + 12) * SHIFT_TIME_SCALE / 60).offset, 12, "Full feature loops until scheduled break");
+  near(featurePhase(events, room, start.time + (HULA_DURATION + phase.film.duration + 12) * SHIFT_TIME_SCALE / 60).offset, 12, "Full feature loops until scheduled break");
   assert.equal(featurePhase(events, room, nextBreak.time), null);
 }
 assert.equal(featurePhase([], AUDITORIUMS[0], 100), null);
 assert.equal(featurePhase(events, AUDITORIUMS[0], NaN), null);
+const dailyEvents = createBreakEvents();
+for (const room of AUDITORIUMS) {
+  const start = dailyEvents.find(e => e.theaterId === room.id && e.kind === "start");
+  assert.equal(featurePhase(dailyEvents, room, start.time - .01), null, "New day starts with idle auditoriums");
+  const phase = featurePhase(dailyEvents, room, start.time + 10, { secondsSince: () => HULA_DURATION + 15 });
+  near(phase.offset, 15, "Playback follows actual elapsed seconds across speed changes");
+  assert.equal(phase.film, filmForShow(room, start));
+  assert.equal(new Set([0,1,2,3].map(cycle => filmForShow(room, { audienceCycle: cycle }).id)).size, 4);
+}
+assert.equal(FEATURE_FILMS.length, 4);
 
 // Sample both sides of every real threshold, including closed-door muffling.
 // The T3–5 approaches belong to their auditoriums before reaching the bowl.
@@ -91,15 +102,15 @@ const camera = new THREE.PerspectiveCamera(), context = audioContext(), audio = 
 const testEvents = AUDITORIUMS.flatMap(room => [{ theaterId: room.id, kind: "start", time: 100, id: `${room.id}-start` },
   { theaterId: room.id, kind: "break", time: 200, id: `${room.id}-break` }]).sort((a, b) => a.time - b.time);
 const schedule = { minute: 104, events: testEvents }, videos = [], errors = [], trailers = new Set();
-let deferNext = false;
+let deferNext = false, trailerDecoders = 0;
 const program = createFeatureProgram({ world: { root }, camera, audio, schedule,
-  baseUrl: "/theater-simulator/", trailer: { isPlaying: id => trailers.has(id) }, onError: e => errors.push(e),
+  baseUrl: "/theater-simulator/", trailer: { isPlaying: id => trailers.has(id), get decoderCount() { return trailerDecoders; } }, onError: e => errors.push(e),
   makeVideo: () => { const video = new Video(); video.defer = deferNext; deferNext = false; videos.push(video); return video; },
 });
 const go = room => { const entry = auditoriumDoorLayout(room); camera.position.set(...entry.route.inside); camera.position.y = 1.68; };
 go(AUDITORIUMS[1]); program.update(.3, true); await settle();
 assert.ok(program.getSnapshot().decoders > 0 && program.getSnapshot().decoders <= 2);
-assert.equal(videos[0].src, "/theater-simulator/media/big-buck-bunny.mp4");
+assert.equal(videos[0].src, "/theater-simulator/media/sintel.mp4");
 assert.ok(videos[0].loop && videos[0].playsInline && videos[0].attributes.has("webkit-playsinline"));
 schedule.minute += 4 * SHIFT_TIME_SCALE / 60;
 videos[0].dispatchEvent(new Event("loadedmetadata")); near(videos[0].currentTime, 124 - HULA_DURATION, "Metadata delay joins the current clock, not a stale creation offset");
@@ -116,6 +127,11 @@ trailers.add("theater-2"); program.suspend("theater-2"); program.update(.3, true
 assert.equal(root.getObjectByName("theater-2-screen").material, originals.get("theater-2"));
 assert.ok(!program.getSnapshot().films.some(f => f.room === "theater-2"), "Active Hula owns its screen exclusively");
 trailers.clear();
+trailerDecoders = 2; program.update(0, true);
+assert.equal(program.getSnapshot().decoders, 0, "Hula and features share a two-decoder budget immediately");
+trailerDecoders = 1; program.update(.3, true); await settle();
+assert.ok(program.getSnapshot().decoders <= 1);
+trailerDecoders = 0;
 for (const room of AUDITORIUMS) {
   go(room); program.update(.3, true); await settle();
   const snapshot = program.getSnapshot(); assert.ok(snapshot.films.some(f => f.room === room.id));

@@ -2,12 +2,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { Window } from "happy-dom";
 import * as THREE from "three";
-import { createUsherUI } from "../src/usher-ui.js";
+import { createUsherUI, createShiftSetupUI } from "../src/usher-ui.js";
 import { createVisitUI } from "../src/visit-ui.js";
 import { createUsherShift } from "../src/usher-shift.js";
 import { createTheaterWorld } from "../src/world.js";
 import { createMaterialLibrary } from "../src/materials.js";
-import { AABBCollisionWorld } from "../src/player.js";
+import { AABBCollisionWorld, FirstPersonController } from "../src/player.js";
+import { createUsherSchedule, NEW_DAY_REQUEST_KEY } from "../src/usher-schedule.js";
 
 const dom = new Window({ url: "https://example.test/", settings: {
   disableJavaScriptEvaluation: true, disableCSSFileLoading: true, disableJavaScriptFileLoading: true,
@@ -76,6 +77,9 @@ key("keydown", "Digit2"); assert.equal(calls.at(-1), "select:cloth"); assert.equ
 key("keydown", "KeyB"); key("keydown", "KeyB", true); ui.update(.016);
 assert.equal(inputs.at(-1).cancelAction, true, "Opening the sheet cancels the current work gesture");
 assert.equal(gameplay.sheetVisible, true); assert.equal(calls.filter(c => c === "sheet").length, 1, "B cannot flicker the sheet on key repeat");
+assert.equal(document.querySelector("#interact-button").hidden, true, "Floating interaction prompt never covers paper text");
+assert.equal(document.querySelector("#sheet-controls").hidden, false, "Reading has dedicated page/fold controls below the paper");
+assert.equal(document.body.classList.contains("reading-sheet"), true);
 key("keydown", "Digit1"); assert.equal(gameplay.sheetVisible, false, "Selecting the cleaning tool folds the paper");
 const input = document.createElement("input"); document.body.append(input);
 commandStart = calls.length;
@@ -208,4 +212,41 @@ assert.equal(shift.confirmPlacement(), true);
 assert.equal(shift.hands.owner, null); assert.equal(shift.waste.getSnapshot().bags[0].phase, "ground", "Confirmation physically places the bag and frees both hands");
 shift.dispose(); world.dispose(); shiftMaterials.dispose();
 dom.happyDOM.abort();
+// A real touch controller reaches all shift settings without a keyboard.
+const touchDom = new Window({ url: "https://example.test/", settings: {
+  disableJavaScriptEvaluation: true, disableCSSFileLoading: true, disableJavaScriptFileLoading: true,
+} });
+globalThis.window = touchDom; globalThis.document = touchDom.document;
+document.write(readFileSync(new URL("../index.html", import.meta.url), "utf8"));
+const touchCamera = new THREE.PerspectiveCamera(), pauseCard = document.querySelector("#pause-card");
+let touchVisit;
+const touchController = new FirstPersonController({ camera: touchCamera, domElement: document.querySelector("#game-canvas"),
+  collisionWorld: new AABBCollisionWorld(), touchMode: true,
+  onLockChange(active) { pauseCard.hidden = active || Boolean(touchVisit?.isOpen); },
+});
+touchVisit = createVisitUI({ controller: touchController, camera: touchCamera, employeeMode: true,
+  collisionWorld: { colliders: [] }, showToast() {}, onSound() {}, audio: { enabled: true, volume: .5 }, crowd: { enabled: true }, toggleMap() {} });
+const shiftValues = new Map(), shiftStorage = { getItem: key => shiftValues.get(key), setItem: (key, value) => shiftValues.set(key, value) };
+const touchSchedule = createUsherSchedule({ storage: shiftStorage }); let newDayReloads = 0;
+const touchSetup = createShiftSetupUI({ schedule: touchSchedule, storage: shiftStorage, document, restart: () => newDayReloads++ });
+document.querySelector("#resume-button").addEventListener("click", () => touchController.resume());
+touchController.start();
+assert.equal(touchController.active, true); assert.equal(pauseCard.hidden, true);
+assert.equal(document.querySelector("#settings-button").getAttribute("aria-label"), "Pause and shift options");
+document.querySelector("#settings-button").click();
+assert.equal(touchController.active, false); assert.equal(pauseCard.hidden, false, "Touch Options opens the common shift pause card");
+assert.equal(touchVisit.isOpen, false, "Sound settings no longer intercept the touch pause entry point");
+const touchSpeed = document.querySelector("#shift-speed-pause");
+assert.ok(pauseCard.contains(touchSpeed) && pauseCard.contains(document.querySelector("#new-day-pause")));
+touchSpeed.value = "5"; touchSpeed.dispatchEvent(new touchDom.Event("change")); assert.equal(touchSchedule.timeScale, 5);
+document.querySelector("#pause-settings-button").click();
+assert.equal(touchVisit.isOpen, true, "Sound & atmosphere remains available from the pause card");
+assert.ok(document.querySelector("#visit-dialog input[type=range]"));
+document.querySelector("#visit-dialog").close();
+assert.equal(touchController.active, true, "Closing sound settings returns to the theater");
+document.querySelector("#settings-button").click(); document.querySelector("#resume-button").click();
+assert.equal(touchController.active, true); assert.equal(pauseCard.hidden, true, "Touch Resume closes the pause card and restores controls");
+document.querySelector("#settings-button").click(); document.querySelector("#new-day-pause").click();
+assert.equal(newDayReloads, 1); assert.equal(JSON.parse(shiftValues.get(NEW_DAY_REQUEST_KEY)).timeScale, 5);
+touchSetup.dispose(); touchController.dispose(); touchDom.happyDOM.abort();
 console.log("Usher controls valid: physical E, 1/2/B and touch shortcuts, multitouch cancellation, shared hands, real charged-bag sheet/tool/pause isolation, owner labels and complete listener cleanup.");

@@ -1,3 +1,30 @@
+import { requestNewUsherDay } from "./usher-schedule.js";
+
+/** Short startup/pause settings; the actual work remains in the world. */
+export function createShiftSetupUI({ schedule, storage, restart = () => window.location.reload(),
+  document: doc = document }) {
+  const selects = [doc.querySelector("#shift-speed-intro"), doc.querySelector("#shift-speed-pause")].filter(Boolean);
+  const buttons = [doc.querySelector("#new-day-intro"), doc.querySelector("#new-day-pause")].filter(Boolean);
+  const listeners = [];
+  const enter = doc.querySelector("#enter-button");
+  if (enter) enter.textContent = schedule.restored && schedule.started ? "CONTINUE SAVED SHIFT" : "START YOUR SHIFT";
+  const savedNote = doc.querySelector("#saved-shift-note");
+  if (savedNote) { savedNote.hidden = !(schedule.restored && schedule.started); savedNote.textContent = `Continue at ${schedule.time}, or start a fresh day below.`; }
+  for (const select of selects) {
+    select.value = String(schedule.timeScale);
+    const change = () => { if (schedule.setTimeScale(Number(select.value))) for (const sibling of selects) sibling.value = String(schedule.timeScale); };
+    select.addEventListener("change", change); listeners.push(() => select.removeEventListener("change", change));
+  }
+  for (const button of buttons) {
+    const click = () => {
+      if (requestNewUsherDay(storage, { timeScale: schedule.timeScale })) { button.disabled = true; restart(); }
+      else { button.textContent = "Storage unavailable — your current shift is safe"; }
+    };
+    button.addEventListener("click", click); listeners.push(() => button.removeEventListener("click", click));
+  }
+  return { dispose() { listeners.forEach(remove => remove()); } };
+}
+
 /** Input bindings for tools in the world. Work state stays on the clipboard. */
 export function createUsherUI({ gameplay, controller, canvas, isBlocked = () => false,
   document: doc = document, window: win = window }) {
@@ -10,6 +37,11 @@ export function createUsherUI({ gameplay, controller, canvas, isBlocked = () => 
   const clothButton = doc.querySelector("#cloth-button");
   const clock = doc.querySelector("#shift-clock");
   const placeButton = doc.querySelector("#tool-place-button");
+  const sheetControls = doc.querySelector("#sheet-controls");
+  const sheetPrevious = doc.querySelector("#sheet-previous");
+  const sheetNext = doc.querySelector("#sheet-next");
+  const sheetFold = doc.querySelector("#sheet-fold");
+  const sheetPage = doc.querySelector("#sheet-page");
   const heldInputs = new Set();
   let toolPointerId = null;
   let cancelled = false;
@@ -26,6 +58,7 @@ export function createUsherUI({ gameplay, controller, canvas, isBlocked = () => 
     if (!available() || /^(INPUT|TEXTAREA|SELECT)$/.test(event.target?.tagName ?? "")) return;
     if (event.code === "KeyF") { event.preventDefault(); if (event.repeat || !gameplay.heldTool) return; if (gameplay.placementActive) { clear(); gameplay.confirmPlacement?.(); return; } heldInputs.add("keyboard"); }
     if (event.repeat) return;
+    if (gameplay.sheetVisible && ["ArrowLeft", "ArrowRight"].includes(event.code)) { event.preventDefault(); clear(); gameplay.turnSheetPage?.(event.code === "ArrowLeft" ? -1 : 1); }
     if (event.code === "KeyE") { event.preventDefault(); interact(); }
     if (event.code === "KeyQ") { event.preventDefault(); returnTool(); }
     if (event.code === "KeyB") { event.preventDefault(); clear(); gameplay.toggleSheet?.(); }
@@ -55,7 +88,9 @@ export function createUsherUI({ gameplay, controller, canvas, isBlocked = () => 
   if (broomButton) listen(broomButton, "click", () => { if (available()) { clear(); gameplay.selectTool?.("broom"); } });
   if (clothButton) listen(clothButton, "click", () => { if (available()) { clear(); gameplay.selectTool?.("cloth"); } });
   if (placeButton) listen(placeButton, "click", () => { if (available()) { clear(); gameplay.togglePlacement?.(); } });
-  for (const target of [canvas, prompt, actionButton, returnButton, placeButton, sheetButton, broomButton, clothButton].filter(Boolean)) {
+  if (sheetFold) listen(sheetFold, "click", () => { if (available() && gameplay.sheetVisible) { clear(); gameplay.toggleSheet?.(); } });
+  for (const [button, direction] of [[sheetPrevious, -1], [sheetNext, 1]]) if (button) listen(button, "click", () => { if (available() && gameplay.sheetVisible) { clear(); gameplay.turnSheetPage?.(direction); } });
+  for (const target of [canvas, prompt, actionButton, returnButton, placeButton, sheetButton, broomButton, clothButton, sheetFold, sheetPrevious, sheetNext].filter(Boolean)) {
     listen(target, "contextmenu", event => event.preventDefault());
     listen(target, "selectstart", event => event.preventDefault());
   }
@@ -79,7 +114,16 @@ export function createUsherUI({ gameplay, controller, canvas, isBlocked = () => 
       gameplay.update(delta, { active, action: active && heldInputs.size > 0, cancelAction: cancelled });
       cancelled = false;
       const label = active ? gameplay.focusedPrompt : "";
-      prompt.hidden = !label;
+      const reading = active && Boolean(gameplay.sheetVisible);
+      doc.body.classList.toggle("reading-sheet", reading);
+      if (sheetControls) sheetControls.hidden = !reading;
+      if (reading) {
+        if (sheetPrevious) sheetPrevious.disabled = !(gameplay.sheetPage > 0);
+        if (sheetNext) sheetNext.disabled = gameplay.sheetPage >= gameplay.sheetPageCount - 1;
+        const label = `${(gameplay.sheetPage ?? 0) + 1} / ${gameplay.sheetPageCount ?? 1}`;
+        if (sheetPage && sheetPage.textContent !== label) sheetPage.textContent = label;
+      }
+      prompt.hidden = !label || reading;
       if (label) prompt.textContent = `${controller.isTouchMode ? "Tap" : "E"} · ${label}`;
       const hasTool = Boolean(gameplay.heldTool);
       actionButton.hidden = !(active && controller.isTouchMode && hasTool);
@@ -91,6 +135,6 @@ export function createUsherUI({ gameplay, controller, canvas, isBlocked = () => 
       const hint = controller.started ? gameplay.hint : "";
       if (status.textContent !== hint) status.textContent = hint;
     },
-    dispose() { clear(); listeners.forEach(remove => remove()); },
+    dispose() { clear(); doc.body.classList.remove("reading-sheet"); listeners.forEach(remove => remove()); },
   };
 }

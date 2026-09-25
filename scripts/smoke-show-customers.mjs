@@ -27,7 +27,8 @@ const customers = createShowCustomers({ scene, world, camera, collisionWorld, do
 const bytes = readFileSync(new URL("../public/models/theater-npcs.glb", import.meta.url));
 const preparing = performance.now();
 const loaded = await customers.loadAssets({ loadModel: () => new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), "") });
-assert.equal(loaded.status, "ready"); assert.equal(loaded.actorCount, 14 * MAX_SHOW_AUDIENCE); assert.equal(loaded.routes, 14);
+assert.equal(loaded.status, "ready"); assert.equal(loaded.actorCount, 14 * MAX_SHOW_AUDIENCE); assert.equal(loaded.routes, 0, "No auditorium routes are solved during startup");
+assert.equal(customers.navigation.stats.searches, 1, "Startup only solves the short lobby exit route");
 const prepareMs = performance.now() - preparing;
 const nav = customers.navigation;
 const counts = new Set(), partySizes = new Set();
@@ -46,9 +47,10 @@ assert.ok(counts.size >= 6 && Math.max(...counts) > 16 && Math.min(...counts) < 
 assert.ok(partySizes.has(1) && partySizes.has(2) && partySizes.has(5), "Audiences include individuals, couples and families");
 assert.ok(nav.path(PATRON_LOBBY, PATRON_EXIT)?.length, "Customers can leave through the existing glass doors");
 let sawFormation = false, updateMs = 0, updateCount = 0, maxUpdateMs = 0;
-function advance(seconds) {
+async function advance(seconds) {
   if(process.env.CROWD_DEBUG) console.log("advance",seconds,customers.getSnapshot().stats);
   for (let i = 0; i < seconds * 20; i++) {
+    if (i % 10 === 0) await new Promise(resolve => setTimeout(resolve, 0));
     world.entranceDoors.update(.05, camera.position); doors.update(.05, { active: true });
     waste.update(.05, { active: true });
     const start = performance.now(); customers.update(.05, true);
@@ -65,22 +67,21 @@ function advance(seconds) {
   }
   if(process.env.CROWD_DEBUG) console.log("done",customers.getSnapshot().stats,customers.getSnapshot().actors.map(a=>({room:a.room,index:a.index,state:a.state,p:a.position,waypoint:a.waypoint})));
 }
-const door = doors.doors.find(d => d.id === "theater-2"); door.targetOpen = false; advance(2);
+const door = doors.doors.find(d => d.id === "theater-2"); door.targetOpen = false; await advance(2);
 assert.ok(door.angle < .002, "The test auditorium door is physically closed");
 customers.onStart({ id: "start-test-2", theaterId: "theater-2", time: 1020 });
 assert.equal(customers.onStart({ id: "start-test-2", theaterId: "theater-2", time: 1020 }), false, "Duplicate clock dispatch cannot duplicate an audience");
-advance(100);
-assert.equal(customers.getSnapshot().stats.entered, 0, "Customers cannot pass through the closed red door");
-assert.ok(customers.getSnapshot().actors.some(a => a.waiting), "Customers visibly wait at blocked doors");
+await advance(100);
+assert.ok(customers.getSnapshot().stats.entered > 0, "Guests open a previously closed red door themselves and enter");
 const paused = JSON.stringify(customers.getSnapshot()); customers.update(10, false); assert.equal(JSON.stringify(customers.getSnapshot()), paused);
-doors.onBreak("theater-2"); advance(100);
+doors.onBreak("theater-2"); await advance(100);
 const count2 = createShowAttendance(nav.seatPlans.find(plan => plan.id === "theater-2"), {cycle: 1}).count;
 const count6 = createShowAttendance(nav.seatPlans.find(plan => plan.id === "theater-6"), {cycle: 0}).count;
 assert.equal(customers.getSnapshot().actors.filter(a => a.room === "theater-2" && a.state === "seated").length, count2, JSON.stringify(customers.getSnapshot()));
 customers.onBreak({ id: "break-test-2", theaterId: "theater-2", time: 1100, cycle: 1 });
 assert.ok(sawFormation, "Companions actually walk abreast where the hallway has space");
 customers.onBreak({ id: "break-initial-6", theaterId: "theater-6", time: 1100 }); doors.onBreak("theater-6");
-advance(240);
+await advance(280);
 assert.equal(customers.getSnapshot().stats.exited, count2 + count6, JSON.stringify(customers.getSnapshot()));
 assert.ok(customers.getSnapshot().stats.tossed >= 3, "Departing customers carry packaging to the actual rolling can");
 assert.ok(waste.getSnapshot().bins.every(bin => bin.fill <= 120), "Physical rubbish cannot overflow the can");
@@ -93,7 +94,7 @@ const hallwayPath = nav.theaterPath("theater-14");
 let longest = 1;
 for (let i = 2; i < hallwayPath.length; i++) if (hallwayPath[i].distanceTo(hallwayPath[i - 1]) > hallwayPath[longest].distanceTo(hallwayPath[longest - 1])) longest = i;
 camera.position.copy(hallwayPath[longest]).lerp(hallwayPath[longest - 1], .5); camera.position.y += 1.68;
-advance(380);
+await advance(380);
 for (const number of [13, 14]) {
   const expected = createShowAttendance(nav.seatPlans.find(plan => plan.id === `theater-${number}`), {cycle: 1});
   const seated = customers.getSnapshot().actors.filter(actor => actor.room === `theater-${number}` && actor.state === "seated");
@@ -110,4 +111,4 @@ if (process.env.CROWD_DEBUG) console.log({ prepareMs, restoreMs: performance.now
 customers.setEnabled(false); assert.ok(customers.actors.every(a => !a.collider.enabled));
 customers.dispose(); waste.dispose(); doors.dispose();
 world.dispose(); materials.dispose();
-console.log("Customers valid: varied 2–24-person audiences and 1–5-person parties, all14 theater routes and occupied seats, closed-door waiting, pause, stadium-row standing clearance, 32-person departure, adjacent T13/T14 turnover, stationary-player avoidance, physical bin tosses and complete front-door exits.");
+console.log("Customers valid: varied 2–24-person audiences and 1–5-person parties, all14 theater routes and occupied seats, guest-opened doors, pause, stadium-row standing clearance, 32-person departure, adjacent T13/T14 turnover, stationary-player avoidance, physical bin tosses and complete front-door exits.");

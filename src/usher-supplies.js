@@ -399,7 +399,7 @@ export function createUsherSupplies({ scene, world, camera, collisionWorld, show
     const dt = Number.isFinite(delta) ? Math.max(0, Math.min(.1, delta)) : 0; phase += dt;
     pouring = Boolean(!placement.active && input.action && hands.owner === owner && state.held?.kind === "refill" && focus?.id === `dispenser:${state.held.id}` && state.held.amount > .001);
     washing = Boolean(!placement.active && input.action && hands.owner === owner && state.held?.kind === "tray" && focus?.id === "tray:sink" && state.held.dirt > 0);
-    stepSuppliesState(state, dt, { active: true, timeScale, pour: pouring ? state.held.id : null, wash: washing });
+    stepSuppliesState(state, dt, { active: true, timeScale: typeof timeScale === "function" ? timeScale() : timeScale, pour: pouring ? state.held.id : null, wash: washing });
     safeTimer += dt;
     if (state.held && safeTimer >= .5) { safeTimer = 0; const p = safeDrop(); if (p) state.held.position = p.toArray(); }
     sync(); poseHeld(); placement.update();

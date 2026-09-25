@@ -34,6 +34,8 @@ export function createCustomerNavigation(world, getObstacles = () => []) {
   const fixed = world.colliders.filter(c => !dynamic.has(c));
   const buckets = new Map(), nodes = new Map(), cachedRoutes = new Map();
   const seatPlans = createCleaningPlans(world), cachedSeats = new Map(), clearanceCache = new Map();
+  const pendingRoutes = new Map(), pendingSeats = new Map(); let cancelled = false;
+  const stats = { searches: 0, expanded: 0, slices: 0, maxSliceMs: 0, active: 0 };
   for (const c of fixed) for (let x = Math.floor((c.minX - PATRON_RADIUS) / HASH); x <= Math.floor((c.maxX + PATRON_RADIUS) / HASH); x++)
     for (let z = Math.floor((c.minZ - PATRON_RADIUS) / HASH); z <= Math.floor((c.maxZ + PATRON_RADIUS) / HASH); z++) {
       const key = `${x},${z}`; if (!buckets.has(key)) buckets.set(key, []); buckets.get(key).push(c);
@@ -92,7 +94,8 @@ export function createCustomerNavigation(world, getObstacles = () => []) {
     for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) { const n = node(ix + dx, iz + dz); if (n && clearSegment(p, n) && dynamicSegment(p, n, obstacles)) candidates.push(n); }
     return candidates.sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0] ?? null;
   }
-  function path(from, to, options = {}) {
+  function* pathSteps(from, to, options = {}) {
+    stats.searches++;
     const startPoint = vector(from), endPoint = vector(to);
     const obstacles = [...getObstacles(), ...(options.obstacles ?? [])];
     const segment = (a, b) => clearSegment(a, b) && dynamicSegment(a, b, obstacles);
@@ -122,12 +125,13 @@ export function createCustomerNavigation(world, getObstacles = () => []) {
         const smooth = [result[0]]; let at = 0;
         while (at < result.length - 1) {
           let next = Math.min(result.length - 1, at + 60);
-          while (next > at + 1 && !comfortable(result[at], result[next])) next--;
-          smooth.push(result[next]); at = next;
+          while (next > at + 1 && !comfortable(result[at], result[next])) { next--; if (next % 8 === 0) yield; }
+          smooth.push(result[next]); at = next; yield;
         }
         return smooth;
       }
-      closed.add(current.key);
+      closed.add(current.key); stats.expanded++;
+      if (closed.size % 32 === 0) yield;
       for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
         const next = node(current.ix + dx, current.iz + dz); if (!next || closed.has(next.key) || !segment(current, next)) continue;
         // Prefer the middle of a usable aisle even when a wall-skimming corner
@@ -138,6 +142,44 @@ export function createCustomerNavigation(world, getObstacles = () => []) {
       }
     }
     return null;
+  }
+  function path(from, to, options = {}) {
+    const search = pathSteps(from, to, options); let result;
+    do { result = search.next(); } while (!result.done);
+    return result.value;
+  }
+  async function pathAsync(from, to, options = {}) {
+    stats.active++;
+    const search = pathSteps(from, to, options); let result;
+    try {
+      do {
+        if (cancelled) return null;
+        const began = performance.now();
+        do { result = search.next(); } while (!result.done && performance.now() - began < 2);
+        const elapsed = performance.now() - began;
+        stats.slices++; stats.maxSliceMs = Math.max(stats.maxSliceMs, elapsed);
+        if (!result.done) await new Promise(resolve => setTimeout(resolve, 0));
+      } while (!result.done);
+      return result.value;
+    } finally { stats.active--; }
+  }
+  async function theaterPathAsync(id) {
+    if (cachedRoutes.has(id)) return cachedRoutes.get(id)?.map(p => p.clone()) ?? null;
+    if (!pendingRoutes.has(id)) pendingRoutes.set(id, (async () => {
+      const target = theaterDestination(id), route = target ? await pathAsync(PATRON_LOBBY, target) : null;
+      if (route) cachedRoutes.set(id, route); return route;
+    })());
+    const route = await pendingRoutes.get(id); pendingRoutes.delete(id); return route?.map(p => p.clone()) ?? null;
+  }
+  async function theaterSeatAsync(id, seatId) {
+    if (cachedSeats.has(seatId)) return cachedSeats.get(seatId);
+    if (!pendingSeats.has(seatId)) pendingSeats.set(seatId, (async () => {
+      const plan = seatPlans.find(plan => plan.id === id), seat = plan?.seats.find(seat => seat.id === seatId);
+      const base = await theaterPathAsync(id); if (!seat || !base) return null;
+      const tail = await pathAsync(base.at(-1), seat.stand); if (!tail) return null;
+      const item = { seat, route: [...base, ...tail.slice(1)] }; cachedSeats.set(seatId, item); return item;
+    })());
+    const item = await pendingSeats.get(seatId); pendingSeats.delete(seatId); return item;
   }
   function theaterDestination(id) {
     const room = AUDITORIUMS.find(room => room.id === id), layout = world.auditoriumLayouts.get(id);
@@ -177,7 +219,9 @@ export function createCustomerNavigation(world, getObstacles = () => []) {
     }
     return results;
   }
-  return { path, theaterPath, theaterSeats, theaterDestination, clearPoint, clearance, seatPlans,
+  return { path, pathAsync, theaterPath, theaterPathAsync, theaterSeats, theaterSeatAsync, theaterDestination, clearPoint, clearance, seatPlans, stats,
     clearSegment: (a, b) => clearSegment(a, b) && dynamicSegment(a, b, getObstacles()),
+    clearLivePoint: (x, z, y) => clearPoint(x, z, y) && dynamicClear({ x, z, y }, getObstacles()),
+    dispose() { cancelled = true; pendingRoutes.clear(); pendingSeats.clear(); },
     get cachedNodes() { return nodes.size; } };
 }

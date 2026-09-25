@@ -78,12 +78,35 @@ update(1.7); update(.03, false); update(1.2, true);
 assert.equal(game.heldTool, "tied trash bag", `Physical tie completes: ${JSON.stringify(game.getSnapshot().bags)} ${toasts}`);
 assert.equal(game.getSnapshot().depositedBags, 0);
 
+// A thin wall can have a clear endpoint beyond it. Carrying must retract on
+// the player's side, stay held during contact, and follow full walking speed.
+const carryOrigin = camera.position.clone();
+const contactWall = collisions.addBox({ id: "test-carried-bag-wall", minX: carryOrigin.x - 1, maxX: carryOrigin.x + 1,
+  minZ: carryOrigin.z - .43, maxZ: carryOrigin.z - .39, minY: 0, maxY: 3 });
+camera.lookAt(carryOrigin.x, carryOrigin.y, carryOrigin.z - 1); camera.updateMatrixWorld(true);
+update(1);
+assert.equal(game.heldTool, "tied trash bag", "Wall contact never drops a held bag");
+let heldBounds = new THREE.Box3().setFromObject(named(game.getSnapshot().bags[0].id));
+assert.ok(heldBounds.min.z >= contactWall.maxZ, "The held bag retracts to the player's side of a thin wall");
+for (let i = 1; i <= 100; i++) {
+  camera.position.copy(carryOrigin).add(new THREE.Vector3(i * .05, 0, 0));
+  camera.lookAt(camera.position.x + 1, camera.position.y, camera.position.z); camera.updateMatrixWorld(true);
+  game.update(1 / 120, { active: true });
+  const bag = game.getSnapshot().bags[0];
+  assert.equal(game.heldTool, "tied trash bag", "Walking faster than the old bag spring cannot release the grip");
+  assert.ok(Math.hypot(camera.position.x - bag.x, camera.position.z - bag.z) < 1,
+    "Carried bag follows the player's hand instead of lagging meters behind");
+}
+camera.position.copy(carryOrigin); camera.lookAt(carryOrigin.x, carryOrigin.y, carryOrigin.z - 1); camera.updateMatrixWorld(true);
+collisions.remove(contactWall); update(.2);
+
 // Carry through the existing trash-room door using actual capsule collision.
 let feet = { x: camera.position.x, y: 0, z: camera.position.z };
 const carryTo = (x, z) => {
   for (let i = 0; i < 1000 && Math.hypot(feet.x - x, feet.z - z) > .025; i++) {
     const dx = x - feet.x, dz = z - feet.z, distance = Math.hypot(dx, dz);
-    collisions.moveCircle(feet, dx / distance * .014, dz / distance * .014, .28, 0, 1.8);
+    const travel = Math.min(distance, 5.46 / 120);
+    collisions.moveCircle(feet, dx / distance * travel, dz / distance * travel, .28, 0, 1.8);
     camera.position.set(feet.x, 1.68, feet.z); camera.lookAt(feet.x + dx / distance, 1.68, feet.z + dz / distance); camera.updateMatrixWorld(true);
     game.update(1 / 120, { active: true });
   }

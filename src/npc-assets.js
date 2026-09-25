@@ -26,7 +26,7 @@ function ownResources(scene) {
   };
 }
 
-function characterFrom(scene, name) {
+function characterFrom(scene, name, validated) {
   const source = scene.getObjectByName(name);
   if (!source) throw new Error(`Missing NPC variant ${name}.`);
   const visual = source.clone(true);
@@ -40,13 +40,16 @@ function characterFrom(scene, name) {
     if (!arm?.isMesh || !leg?.isMesh) throw new Error(`Missing ${name} articulated limbs.`);
     return { arm, leg, side };
   });
-  visual.updateMatrixWorld(true);
-  const bounds = new THREE.Box3().setFromObject(visual);
-  const size = bounds.getSize(new THREE.Vector3());
-  if (![...size.toArray(), bounds.min.y].every(Number.isFinite)
+  if (!validated.has(name)) {
+    visual.updateMatrixWorld(true);
+    const bounds = new THREE.Box3().setFromObject(visual);
+    const size = bounds.getSize(new THREE.Vector3());
+    if (![...size.toArray(), bounds.min.y].every(Number.isFinite)
       || Math.abs(bounds.min.y) > 0.03 || size.y < 1.6 || size.y > 1.85
       || size.x < 0.35 || size.x > 0.72 || size.z > 0.48) {
-    throw new Error(`NPC ${name} violates its meter-scale character envelope.`);
+      throw new Error(`NPC ${name} violates its meter-scale character envelope.`);
+    }
+    validated.add(name);
   }
   visual.traverse((object) => {
     if (!object.isMesh) return;
@@ -86,7 +89,17 @@ export function createNpcAssets({
         return { status: "disposed", actorCount: 0 };
       }
       if (actors.length !== variants.length || variants.some(name => !NPC_VARIANTS.includes(name))) throw new Error("Every theater actor needs an authored NPC variant.");
-      const prepared = actors.map((actor, index) => ({ actor, ...characterFrom(scene, variants[index]) }));
+      const prepared = [], validated = new Set();
+      for (const [index, actor] of actors.entries()) {
+        prepared.push({ actor, ...characterFrom(scene, variants[index], validated) });
+        // Hundreds of customer bodies share just three authored variants. Give
+        // loading text/input a turn between batches instead of one long clone
+        // and bounds-validation task on the first playable frame.
+        if (index % 12 === 11 && index + 1 < actors.length) {
+          await new Promise(resolve => setTimeout(resolve, 0));
+          if (disposed) { releaseResources(); return { status: "disposed", actorCount: 0 }; }
+        }
+      }
       for (const replacement of prepared) {
         const { actor, visual, limbs } = replacement;
         actor.group.add(visual);

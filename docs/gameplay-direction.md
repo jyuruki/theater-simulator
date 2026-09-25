@@ -52,7 +52,7 @@ remain accessible with keyboard and touch as well as mouse input.
 
 ## Current implementation boundary
 
-Version 0.24 supplies all fourteen theaters with seeded audiences and used-seat
+Version 0.25 supplies all fourteen theaters with seeded audiences and used-seat
 cleanup. Only seats occupied by that show's customers leave their trays open;
 trays swing outward toward the row aisle. Wipe the tray and cushion, brush any
 chair popcorn onto the floor using the cloth/hand action, then close the tray.
@@ -61,7 +61,8 @@ Most used seats have no spill or popcorn: routine wiping takes about one second,
 and spills take about six broad swipes. The broom pulls into a left-hand dustpan.
 
 The portable kit is available immediately. A prominent on-screen clock replaces
-the watch and advances two game minutes per real minute. The pocket sheet reads
+the watch. Shift speed is selectable at 1×, 2×, 3× or 5×. A fresh day begins at
+11:45 before staggered starts across all fourteen theaters. The pocket sheet reads
 time, theater number, title; entire start rows are bold with times flush left,
 while regular break times are indented. G previews placing a carried item;
 click or E confirms it, and G or Q cancels.
@@ -77,15 +78,18 @@ Scheduled audiences vary from 2–24 patrons per show in parties of 1–5. Membe
 walk alongside each other where space permits, avoid obstructions and yield at
 narrow entrances; the population limit keeps the browser simulation bounded.
 One shared seeded attendance plan drives both visible patrons and used trays.
-The Hula start cue leads into the complete licensed Big Buck Bunny, looping for
-the fictional show's remaining time. At most two nearby feature videos decode,
+Parties trickle in early through the trailer, opening closed doors and holding
+them for following traffic. Guest-opened doors close once the flow clears.
+The Hula start cue leads into four complete licensed films rotating by room/show,
+looping for the fictional show's remaining time. At most two nearby videos decode,
 with streamed spatial audio and a continuous doorway-to-auditorium sound level.
-There is not yet a feature-film catalog or realistic full-capacity audience.
+Feature movies stream on demand; saving them offline is optional. There is not
+yet a realistic full-capacity audience.
 
 The visitor ticket/order prototype remains disabled. Bathroom cleaning, ICEE
 servicing, sound/picture checks, career progression, food preparation and physical
 POS workflows remain future work. Preserve the minimal-menu approach while
-extending the complete physical tasks. See [v0.24 notes](v24-notes.md).
+extending the complete physical tasks. See [v0.25 notes](v25-notes.md).
 
 Theater 3's full-height anteroom leads through doors to legitimately lower
 under-seat storage. The lower inner ceiling is intentional, per the user's
