@@ -28,6 +28,10 @@ const gameplay = { tool: "broom", sheetVisible: false, denySelection: false, foc
   update(delta, input) { inputs.push(input); }, interact() { calls.push("interact"); }, returnTool() { calls.push("return"); },
   selectTool(kind) { calls.push(`select:${kind}`); if (this.denySelection) return false; this.tool = kind; this.sheetVisible = false; return true; },
   toggleSheet() { calls.push("sheet"); this.sheetVisible = !this.sheetVisible; },
+  toggleWatch() { calls.push("watch"); },
+  canPlace: false, placementActive: false,
+  togglePlacement() { calls.push("place"); this.placementActive = !this.placementActive; },
+  confirmPlacement() { calls.push("confirm"); this.placementActive = false; },
 };
 const canvas = document.querySelector("#game-canvas");
 const ui = createUsherUI({ gameplay, controller, canvas, isBlocked: () => legacy.isOpen,
@@ -121,6 +125,35 @@ ui.update(.016); assert.equal(action.textContent, "HOLD / RELEASE TO THROW", "Wa
 clothButton.click(); ui.update(.016); assert.equal(gameplay.heldTool, "tied trash bag", "UI cannot steal ownership when the module rejects a tool change");
 gameplay.denySelection = false; delete gameplay.actionLabel; gameplay.tool = "broom";
 
+key("keydown", "KeyT"); key("keydown", "KeyT", true); assert.equal(calls.filter(c => c === "watch").length, 1);
+document.querySelector("#watch-button").click(); assert.equal(calls.filter(c => c === "watch").length, 2);
+gameplay.canPlace = true; key("keydown", "KeyP"); ui.update(.016);
+assert.equal(gameplay.placementActive, true); assert.equal(action.textContent, "CONFIRM PLACEMENT");
+pointer(action, "pointerdown", "touch"); ui.update(.016);
+assert.equal(gameplay.placementActive, false); assert.equal(calls.at(-1), "confirm");
+assert.equal(inputs.at(-1).action, false, "Confirming a placement must not also start pouring or throwing");
+key("keydown", "KeyP"); pointer(canvas, "pointerdown"); ui.update(.016);
+assert.equal(calls.at(-1), "confirm"); assert.equal(inputs.at(-1).action, false);
+key("keydown", "KeyP"); key("keydown", "KeyF"); key("keydown", "KeyF", true); ui.update(.016);
+assert.equal(calls.at(-1), "confirm"); key("keyup", "KeyF");
+const callout = new dom.Event("contextmenu", { cancelable: true }); action.dispatchEvent(callout);
+assert.equal(callout.defaultPrevented, true, "Holding the touch tool cannot open the browser callout");
+gameplay.canPlace = false;
+
+key("keydown", "KeyF"); ui.update(.016); assert.equal(inputs.at(-1).action, true);
+key("keydown", "KeyE"); ui.update(.016);
+assert.equal(inputs.at(-1).action, false, "Picking up or operating a new item cannot inherit a held F gesture");
+assert.equal(inputs.at(-1).cancelAction, true, "Discrete interactions cancel the previous charged action");
+pointer(canvas, "pointerdown"); ui.update(.016); key("keydown", "KeyQ"); ui.update(.016);
+assert.equal(inputs.at(-1).action, false, "Q placement/cancel transitions clear a held mouse action");
+key("keydown", "KeyB"); ui.update(.016);
+key("keydown", "KeyF"); pointer(canvas, "pointerdown"); ui.update(.016);
+assert.equal(inputs.at(-1).action, false, "Reading the sheet cannot arm a future work gesture");
+key("keydown", "KeyB"); ui.update(.016); assert.equal(inputs.at(-1).action, false);
+gameplay.tool = null; key("keydown", "KeyF"); pointer(canvas, "pointerdown"); ui.update(.016);
+gameplay.tool = "cloth"; ui.update(.016);
+assert.equal(inputs.at(-1).action, false, "Empty-handed button holds do not spill into a later pickup");
+
 key("keydown", "KeyO"); ui.update(.016);
 assert.equal(legacy.isOpen, true, "Minimal settings remain available");
 assert.equal(inputs.at(-1).active, false);
@@ -170,7 +203,10 @@ const beforePause = shift.getSnapshot(); shift.update(10, { active: false, actio
 assert.equal(shift.schedule.minute, beforePause.schedule.minute, "Pause freezes the shift clock");
 assert.deepEqual(shift.waste.getSnapshot().bags, beforePause.waste.bags, "Pause freezes held/ballistic waste state");
 runShift(.02, false); shift.returnTool();
-assert.equal(shift.hands.owner, null); assert.equal(shift.waste.getSnapshot().bags[0].phase, "falling", "Second Q physically sets the bag down and frees both hands");
+assert.equal(shift.placementActive, true); assert.equal(shift.hands.owner, "waste", "Q previews without losing the bag");
+shiftCamera.lookAt(can.x + 1.4, 0, can.z + 1.4); shiftCamera.updateMatrixWorld(true); runShift(.02);
+assert.equal(shift.confirmPlacement(), true);
+assert.equal(shift.hands.owner, null); assert.equal(shift.waste.getSnapshot().bags[0].phase, "ground", "Confirmation physically places the bag and frees both hands");
 shift.dispose(); world.dispose(); shiftMaterials.dispose();
 dom.happyDOM.abort();
 console.log("Usher controls valid: physical E, 1/2/B and touch shortcuts, multitouch cancellation, shared hands, real charged-bag sheet/tool/pause isolation, owner labels and complete listener cleanup.");

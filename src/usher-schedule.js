@@ -1,7 +1,7 @@
 import { AUDITORIUMS } from "./layout-data.js";
 import { SHOWS } from "./showtimes.js";
 
-export const SHIFT_TIME_SCALE = 5;
+export const SHIFT_TIME_SCALE = 2;
 export const SHIFT_START_MINUTE = 17 * 60;
 const ORDER = [2, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
 export function formatShiftTime(minutes) {

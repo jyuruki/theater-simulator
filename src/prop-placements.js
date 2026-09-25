@@ -109,7 +109,7 @@ export function createPropPlacements({ root, auditoriumLayouts, furnishings = []
       for (let column = 0; column < row.seatCount; column++) {
         const x = layout.centerX - rowWidth / 2 + column * spacing;
         put(`${auditorium.id}-recliner-${row.index}-${column}`, "recliner", [planToWorldX(x), row.elevation, row.z],
-          [Math.min(0.54, spacing - 0.13), 1.36, 0.74], yaw, originals, { parent: named(`${auditorium.id}-interior`) });
+          [spacing - 0.095, 1.36, 0.74], yaw, originals, { parent: named(`${auditorium.id}-interior`) });
       }
       for (let divider = 0; divider <= row.seatCount; divider++) {
         const x = layout.centerX - rowWidth / 2 - spacing / 2 + divider * spacing;

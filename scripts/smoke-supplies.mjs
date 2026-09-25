@@ -83,7 +83,13 @@ contact("recycle"); assert.equal(game.heldTool, null); assert.equal(hands.owner,
 contact("bib:diet:spare");
 contact("bib:cola:box"); assert.equal(game.getSnapshot().state.bibs[0].installed, false, "Wrong flavor cannot bypass the keyed syrup connection");
 const cameraBeforeDrop = camera.position.clone();
-assert.equal(game.returnTool(), true, "Q safely sets the wrong-flavor carton down nearby");
+camera.lookAt(camera.position.x, .05, camera.position.z - 1); camera.updateMatrixWorld(true);
+assert.equal(game.returnTool(), true, "Q previews where the wrong-flavor carton will be placed");
+assert.equal(game.heldTool, "bib:diet", "Preview retains physical ownership until confirmation");
+assert.equal(game.getSnapshot().state.loose.length, 0);
+assert.equal(game.getSnapshot().placement.valid, true, JSON.stringify(game.getSnapshot().placement));
+assert.equal(game.cancelPlacement(), true); assert.equal(game.heldTool, "bib:diet", "Cancel never loses the held item");
+assert.equal(game.beginPlacement(), true); assert.equal(game.confirmPlacement(), true);
 const dropped = game.getSnapshot().state.loose[0];
 assert.ok(Math.hypot(dropped.position[0] - cameraBeforeDrop.x, dropped.position[2] - cameraBeforeDrop.z) < 1.3, "Q never teleports a carton to its source");
 contact("bib:cola:spare"); contact("bib:cola:box");
@@ -154,7 +160,13 @@ assert.equal(resumed.interact(), true); assert.equal(resumed.heldTool, "refill:s
 assert.equal(resumed.getSnapshot().state.loose.some(item => item.uid === carried.uid), false);
 const block = collisionWorld.addBox({ id: "temporary-drop-block", minX: camera.position.x - 2, maxX: camera.position.x + 2,
   minY: 0, maxY: .5, minZ: camera.position.z - 2, maxZ: camera.position.z + 2 });
-assert.equal(resumed.returnTool(), false, "Q refuses an obstructed nearby floor rather than losing or teleporting the supply");
+assert.equal(resumed.returnTool(), true, "Q begins a preview even when the target is invalid");
+// A full-height obstruction cannot become a low tabletop support.
+block.maxY = 3; resumed.update(1 / 60, { active: true });
+assert.equal(resumed.getSnapshot().placement.valid, false);
+assert.equal(resumed.confirmPlacement(), false, "Confirmation rejects obstructed placement without losing the supply");
+assert.equal(resumed.getSnapshot().heldVisible, true, "A held item remains visible under wall contact");
+resumed.cancelPlacement();
 assert.equal(resumed.heldTool, "refill:straws"); collisionWorld.remove(block);
 resumed.dispose();
 const unavailableStorage = createUsherSupplies({ scene, world, camera, collisionWorld,

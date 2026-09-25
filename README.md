@@ -6,9 +6,19 @@ A first-person browser recreation of Consolidated Theatres Mililani 14, built fr
 
 This is an independent recreation with approximate dimensions, not an official architectural survey or ticket service.
 
-The game starts as an usher with a portable cleaning kit and a handheld break sheet. Follow the fivefold shift clock through all fourteen theaters, clean used trays and seats, sweep into a left-hand dustpan, move three rolling trash cans, replace full bags, service soda BIBs, refill supplies and wash kitchen trays. The [employee gameplay direction](docs/gameplay-direction.md) records the broader career and minimal-menu approach.
+The game starts as an usher with a portable cleaning kit and a handheld break sheet. Follow the twofold shift clock through all fourteen theaters, clean trays and seats, sweep into a left-hand dustpan, move three rolling trash cans, replace full bags, service soda BIBs, refill supplies and wash kitchen trays. The [employee gameplay direction](docs/gameplay-direction.md) records the broader career and minimal-menu approach.
 
-## Version 0.22
+## Version 0.23
+
+- Single outward red doors at the small theaters' inner cubbies, level row walkways, wider Blender seats and bar service gates.
+- Twofold shift time, a wristwatch, immediate broom/cloth access, more forgiving sweeping and held props that retract at walls.
+- All trays open at breaks, occasional spills and popcorn, one-second routine wipes, and a confirmable placement preview for carried items.
+- Scheduled customers, physical rubbish disposal, and the supplied Hula opening video with auditorium-local audio.
+- iPhone long-press fixes and an installable home-screen app with an offline cache. In Safari, use Share → Add to Home Screen.
+
+See [v0.23 controls, behavior and limits](docs/v23-notes.md). Development inspection is available at `/shift-review.html`.
+
+## Version 0.22 (historical)
 
 - **Used-seat cleaning:** each break generates different used seats and messes. Wipe the open tray and cushion, sweep chair popcorn down, close the tray, then clean the floor. The right-hand broom pulls toward the left-hand pan.
 - **Physical shift schedule:** a pocket sheet follows the supplied three-column reference. Bold rows start movies; regular rows break. Close auditorium doors at starts. One real minute equals five game minutes.

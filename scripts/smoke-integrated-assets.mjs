@@ -117,8 +117,12 @@ for (const auditorium of AUDITORIUMS) {
       check(box.min.x >= room.xMin && box.max.x <= room.xMax && box.min.z >= room.zMin && box.max.z <= room.zMax, `Chair outside room: ${placement.id}`);
     }
     const byX = inRow.map(({ id }) => ({ id, box: actual.get(id) })).sort((a, b) => a.box.min.x - b.box.min.x);
-    for (let index = 1; index < byX.length; index++) check(byX[index - 1].box.max.x <= byX[index].box.min.x + .001,
-      `Neighboring seat bodies/arms overlap: ${byX[index - 1].id} / ${byX[index].id}`);
+    for (let index = 1; index < byX.length; index++) {
+      check(byX[index - 1].box.max.x <= byX[index].box.min.x + .001,
+        `Neighboring seat bodies/arms overlap: ${byX[index - 1].id} / ${byX[index].id}`);
+      check(near(byX[index - 1].box.max.x, byX[index].box.min.x, .001),
+        `Upholstered seat body must meet the shared armrest: ${byX[index - 1].id} / ${byX[index].id}`);
+    }
     testedRows++;
   }
 }

@@ -503,7 +503,7 @@ export function createVisitUI({
       node(
         "p",
         employeeMode
-          ? "WASD to move · E to use · hold Left Mouse or F to work · B break sheet · 1 broom / 2 cloth · Q stow or release · M map · R usher station"
+          ? "WASD to move · E to use · hold Left Mouse or F to work · B break sheet · T watch · 1 broom / 2 cloth · P place, click/E confirm · Q cancel/stow · M map · R usher station"
           : "WASD to move · E to interact · I for your ticket · M for the map · R to return to the entrance",
         "muted",
       ),

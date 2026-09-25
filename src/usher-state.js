@@ -6,7 +6,7 @@ export function seededRandom(seed) {
   return () => { n += 0x6d2b79f5; let t = n; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 }
 export function createUsherState() {
-  const state = { version: 22, jobs: [], heldTool: null, kit: false, pouring: 0, pourTarget: null, elapsed: 0 };
+  const state = { version: 23, jobs: [], heldTool: null, kit: true, pouring: 0, pourTarget: null, elapsed: 0 };
   Object.defineProperty(state, "particles", { get: () => state.jobs.flatMap(j => j.particles) });
   Object.defineProperty(state, "surfaces", { get: () => state.jobs.flatMap(j => j.surfaces) });
   return state;
@@ -19,16 +19,14 @@ export function beginCleaningBreak(state, plan, seed) {
   const existing = state.jobs.find(j => j.id === plan.id);
   if (existing && (existing.seed === String(seed) || !theaterSummary(existing).complete)) return false;
   const random = seededRandom(`${plan.id}/${seed}`);
-  const shuffled = plan.seats.map(s => ({ s, score: random() })).sort((a, b) => a.score - b.score);
-  const count = 3 + Math.floor(random() * 4);
   const job = { id: plan.id, number: plan.number, seed: String(seed), seats: [], surfaces: [], particles: [], completed: false };
-  for (const { s } of shuffled.slice(0, count)) {
+  for (const s of plan.seats) {
     const seat = { ...s, trayOpen: true, trayAngle: -1.8, trayTarget: -1.8 };
     job.seats.push(seat);
     for (const kind of ["tray", "seat"]) job.surfaces.push({ id: `${s.id}-${kind}`, seatId: s.id, kind,
       width: kind === "tray" ? .36 : s.width * .82, depth: kind === "tray" ? .25 : .39,
-      spill: random() < .5, cells: cells(kind === "tray" ? .36 : s.width * .82, kind === "tray" ? .25 : .39) });
-    const kernels = 2 + Math.floor(random() * 4);
+      spill: random() < (kind === "tray" ? .20 : .12), cells: cells(kind === "tray" ? .36 : s.width * .82, kind === "tray" ? .25 : .39) });
+    const kernels = random() < .22 ? 2 + Math.floor(random() * 4) : 0;
     for (let i = 0; i < kernels; i++) job.particles.push({ id: `${s.id}-kernel-${i}`, seatId: s.id,
       x: s.x + (random() - .5) * s.width * .55, z: s.z + (random() - .5) * .22,
       y: s.floorY + .625, floorY: s.floorY, vx: 0, vz: 0, vy: 0, mode: "chair", bounds: s.floorBounds });
@@ -41,14 +39,21 @@ export function beginCleaningBreak(state, plan, seed) {
       z: patch.z + (random() - .5) * .4, y: patch.y + .035, floorY: patch.y, vx: 0, vz: 0, vy: 0,
       mode: "floor", bounds: patch.bounds });
   });
+  // Keep lookup tables out of serialized state. Every seat is now inspected,
+  // so repeated linear searches in the 120 Hz contact loop are avoidable work.
+  Object.defineProperties(job, {
+    surfacesById: { value: new Map(job.surfaces.map(s => [s.id, s])) },
+    seatsById: { value: new Map(job.seats.map(s => [s.id, s])) },
+    chairParticles: { value: new Map(job.seats.map(s => [s.id, job.particles.filter(p => p.seatId === s.id)])) },
+  });
   if (existing) state.jobs.splice(state.jobs.indexOf(existing), 1, job); else state.jobs.push(job);
   return job;
 }
 export const surfaceClean = surface => surface.cells.every(c => c.dirt <= .001);
 export function seatStage(job, seat) {
-  if (!surfaceClean(job.surfaces.find(s => s.id === `${seat.id}-tray`))) return "wipe tray";
-  if (!surfaceClean(job.surfaces.find(s => s.id === `${seat.id}-seat`))) return "wipe seat";
-  if (job.particles.some(p => p.seatId === seat.id && ["chair", "falling"].includes(p.mode))) return "sweep seat";
+  if (!surfaceClean(job.surfacesById.get(`${seat.id}-tray`))) return "wipe tray";
+  if (!surfaceClean(job.surfacesById.get(`${seat.id}-seat`))) return "wipe seat";
+  if (job.chairParticles.get(seat.id).some(p => ["chair", "falling"].includes(p.mode))) return "sweep seat";
   if (seat.trayOpen || Math.abs(seat.trayAngle) > .02) return "close tray";
   return "ready";
 }
@@ -99,17 +104,22 @@ export function stepUsherState(state, seconds, contact = {}) {
     const floorUnlocked = theaterSummary(job).floorUnlocked;
     const { brush, pan, cloth } = contact;
     if (cloth && state.heldTool === "cloth") {
-      const surface = job.surfaces.find(s => s.id === cloth.surfaceId);
-      const seat = surface?.seatId && job.seats.find(s => s.id === surface.seatId);
+      const surface = job.surfacesById.get(cloth.surfaceId);
+      const seat = surface?.seatId && job.seatsById.get(surface.seatId);
       const allowed = surface && (surface.kind === "floor" ? floorUnlocked : surface.kind === "tray" || seatStage(job, seat) !== "wipe tray");
       const travel = Math.hypot(cloth.to.x - cloth.from.x, cloth.to.z - cloth.from.z);
-      if (allowed && travel > .00005 && travel < .15) for (const c of surface.cells) {
+      const touching = surface && Math.abs(cloth.to.x) <= surface.width / 2 + .035 && Math.abs(cloth.to.z) <= surface.depth / 2 + .035;
+      if (allowed && touching && !surface.spill) {
+        // A normally used surface needs a quick sanitizing wipe, even without
+        // a stain. Held contact makes this equally practical on touch screens.
+        for (const c of surface.cells) c.dirt = Math.max(0, c.dirt - dt);
+      } else if (allowed && travel > .00005 && travel < .15) for (const c of surface.cells) {
         if (segmentDistance(c, cloth.from, cloth.to) < .12) c.dirt = Math.max(0, c.dirt - travel * 7.0);
       }
     }
     for (const p of job.particles) {
       if (!["floor", "chair", "falling"].includes(p.mode)) continue;
-      const seat = p.seatId && job.seats.find(s => s.id === p.seatId), chair = p.mode === "chair";
+      const seat = p.seatId && job.seatsById.get(p.seatId), chair = p.mode === "chair";
       const canSweep = chair ? seatStage(job, seat) === "sweep seat" : floorUnlocked;
       if (brush && state.heldTool === "broom" && canSweep && p.mode !== "falling"
         && (chair ? brush.seatId === p.seatId : !brush.seatId) && Math.abs(brush.y - p.y) < .12) {
@@ -159,7 +169,7 @@ export function beginUsherPour(state, target, acceptedCount) {
   state.pourTarget = target; state.pouring = .85; return true;
 }
 export function serializeUsherState(state) {
-  return JSON.stringify({ version: 22, kit: state.kit, jobs: state.jobs.map(j => ({ id: j.id, seed: j.seed,
+  return JSON.stringify({ version: 23, kit: true, jobs: state.jobs.map(j => ({ id: j.id, seed: j.seed,
     seats: j.seats.map(s => ({ id: s.id, trayOpen: s.trayOpen })),
     surfaces: j.surfaces.map(s => ({ id: s.id, dirt: s.cells.map(c => c.dirt) })),
     particles: j.particles.map(p => ({ id: p.id, x: p.x, y: p.y, z: p.z, mode: p.mode === "pouring" ? "trash" : p.mode })),
@@ -169,12 +179,22 @@ export function restoreUsherState(raw, plans = []) {
   const state = createUsherState();
   try {
     const saved = JSON.parse(raw);
-    if (saved?.version !== 22 || !Array.isArray(saved.jobs) || saved.jobs.length > 14) return state;
-    state.kit = saved.kit === true;
+    if (![22, 23].includes(saved?.version) || !Array.isArray(saved.jobs) || saved.jobs.length > 14) return state;
     for (const data of saved.jobs) {
       const plan = plans.find(p => p.id === data.id); if (!plan || state.jobs.some(j => j.id === data.id) || typeof data.seed !== "string") continue;
       const job = beginCleaningBreak(state, plan, data.seed);
-      if (!job || data.particles?.length !== job.particles.length || data.surfaces?.length !== job.surfaces.length) continue;
+      if (!job || !Array.isArray(data.particles) || !Array.isArray(data.surfaces)) continue;
+      // Previously completed rooms remain completed when upgrading from the
+      // sampled-seat v22 jobs to a full-room inspection.
+      if (saved.version === 22 && data.seats?.length && data.seats.every(s => s.trayOpen === false)
+        && data.surfaces.every(s => s.dirt?.every(v => Number.isFinite(v) && v <= .001))
+        && data.particles.every(p => p.mode === "trash")) {
+        for (const s of job.surfaces) for (const cell of s.cells) cell.dirt = 0;
+        for (const s of job.seats) { s.trayOpen = false; s.trayAngle = s.trayTarget = 0; }
+        for (const p of job.particles) p.mode = "trash";
+        job.completed = true;
+        continue;
+      }
       for (const s of job.surfaces) {
         const source = data.surfaces.find(d => d.id === s.id);
         if (source?.dirt.length === s.cells.length && source.dirt.every(v => Number.isFinite(v) && v >= 0 && v <= 1)) source.dirt.forEach((v, i) => { s.cells[i].dirt = v; });

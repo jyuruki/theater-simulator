@@ -109,6 +109,17 @@ b = bin();
 aim([b.x, 1.68, b.z + 1.3], part(`${b.id}-stored-spare-liners`));
 assert.equal(game.getSnapshot().focus, "spare"); game.interact(); assert.equal(game.heldTool, "fresh liner");
 const sparesAfterTake = bin().spares;
+camera.lookAt(b.x + 1.0, 0, b.z + 1.2); camera.updateMatrixWorld(true);
+assert.equal(game.beginPlacement(), true); assert.equal(game.heldTool, "fresh liner");
+assert.equal(game.cancelPlacement(), true); assert.equal(bin().spares, sparesAfterTake, "Cancelling a placement never consumes another liner");
+game.beginPlacement();
+assert.equal(game.getSnapshot().placement.valid, true, JSON.stringify(game.getSnapshot().placement));
+assert.equal(game.confirmPlacement(), true); assert.equal(game.heldTool, null);
+const placedLiner = game.getSnapshot().looseLiners[0]; assert.ok(placedLiner);
+aim([b.x, 1.68, b.z + 1.3], [placedLiner.position[0], placedLiner.position[1] + .04, placedLiner.position[2]]);
+assert.equal(game.getSnapshot().focus, "loose-liner"); game.interact();
+assert.equal(game.heldTool, "fresh liner"); assert.equal(game.getSnapshot().looseLiners.length, 0);
+assert.equal(bin().spares, sparesAfterTake, "Picking up a placed liner does not take stock again");
 aim([b.x, 1.68, b.z + 1.3], [b.x, 1.02, b.z]); game.interact(); assert.equal(bin().lined, false, "A folded bag cannot instantly line a bin");
 update(.02, false); update(.9, true); update(.02, false); game.interact(); update(.85);
 assert.equal(bin().lined, true); assert.equal(bin().fill, 0); assert.equal(bin().spares, sparesAfterTake); assert.equal(game.heldTool, null);
@@ -121,6 +132,15 @@ assert.equal(named("guest-waste-disposal").visible, true); assert.equal(named("g
 update(.6); assert.equal(game.getSnapshot().bins.find(b => b.id === target).fill, loadBeforeLanding, "No fullness increase before visible litter arrives");
 const customerPause = game.getSnapshot().customer.progress; game.update(3, { active: false }); assert.equal(game.getSnapshot().customer.progress, customerPause);
 update(1.2); assert.ok(game.getSnapshot().bins.find(b => b.id === target).fill > loadBeforeLanding);
+game.enableScheduledCustomers();
+assert.equal(game.getSnapshot().customer, null); assert.equal(named("guest-waste-disposal").visible, false);
+const disposal = game.getCustomerDisposalTarget([bin(1).x, 0, bin(1).z], "theater-1"); assert.ok(disposal);
+const patronHand = new THREE.Vector3(...disposal.stand).setY(1.3);
+const guestFill = game.getSnapshot().bins.find(item => item.id === disposal.binId).fill;
+assert.equal(game.throwCustomerTrash({ binId: disposal.binId, from: patronHand, units: 7 }), true);
+assert.equal(named("guest-waste-disposal").visible, false, "Scheduled patrons supply their own character rather than spawning a dummy");
+update(.4); assert.equal(game.getSnapshot().bins.find(item => item.id === disposal.binId).fill, guestFill);
+update(.6); assert.equal(game.getSnapshot().bins.find(item => item.id === disposal.binId).fill, guestFill + 7);
 ready.add("theater-2"); assert.equal(bin().recommendation, "theater-4", "Leapfrog recommendation excludes rooms assigned to the other two cans");
 
 // Push the actual can across the main hall and through the existing trash-room

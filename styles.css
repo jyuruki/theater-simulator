@@ -445,6 +445,19 @@ button {
 }
 
 [hidden] { display: none !important; }
+/* Long holds are tool input, never text-selection or image-callout gestures. */
+#game-canvas, .hud, .touch-controls, #interact-button, #tool-action-button,
+#tool-return-button, #tool-place-button, #visit-status {
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+}
+.visit-toolbar button, #interact-button, #tool-place-button { touch-action: manipulation; }
+html, body { overscroll-behavior: none; }
+.visit-toolbar { flex-wrap: wrap; max-width: calc(100vw - 40px); }
+#install-help { max-width: 520px; font-size: 12px; line-height: 1.6; }
+#tool-place-button { position: fixed; z-index: 12; right: 24px; bottom: 108px;
+  border: 1px solid #87bba9; border-radius: 8px; color: #e0f8eb; background: #18342de8;
+  padding: 10px 14px; font: 700 11px system-ui; }
+@media (max-width: 520px) { .visit-toolbar { gap: 4px; } .visit-toolbar button { padding: 8px 9px; } }
 button:focus-visible, select:focus-visible, input:focus-visible { outline: 3px solid #77d7db; outline-offset: 4px; }
 .visit-toolbar { position: absolute; top: 87px; left: 0; display: flex; gap: 6px; pointer-events: auto; }
 .visit-toolbar button { border: 1px solid #ffffff24; border-radius: 7px; background: #10121cdd; color: #efebe4; padding: 9px 11px; cursor: pointer; font-size: 11px; }

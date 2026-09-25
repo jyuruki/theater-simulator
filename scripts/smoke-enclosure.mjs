@@ -134,6 +134,20 @@ for (const room of AUDITORIUMS) {
   }
 }
 assert.ok(wallHugChecks >= 100, "Exercise the reachable side margin with both player capsule radii");
+// The rear landing must meet the rear wall's inside face. Its old 20 cm
+// setback left an 11 cm sky slot visible beyond the new inner cubby door.
+let cubbyRearSeals = 0;
+for (const room of AUDITORIUMS.filter(room => room.entry.type === "trash-cubby")) {
+  const layout = world.auditoriumLayouts.get(room.id), z = room.bounds.zMax - .095;
+  for (let x = room.bounds.xMin + .3; x < room.bounds.xMax - .2; x += .24) {
+    const hit = cast(x, layout.backElevation + .12, z, 0, -1, 0, .2)
+      .find(hit => Math.abs(hit.point.y - layout.backElevation) < .001);
+    assert.ok(hit && Math.abs(hit.point.y - layout.backElevation) < .001,
+      `${room.id}: rear cubby wall exposes outside sky through the floor at ${x},${z}`);
+    cubbyRearSeals++;
+  }
+}
+assert.ok(cubbyRearSeals > 200);
 // Move the real player sideways from the authored T2 aisle into its narrow
 // outer margin. The lower step must not snap upward to the hall's zero floor.
 const t2 = world.auditoriumLayouts.get("theater-2"), t2Tread = t2.sideStairTreads[0];
@@ -226,4 +240,4 @@ for (const [x, z] of [[-22.2, 2.9], [-24.7, 13], [-22.3, 18.1]]) {
   assert.ok(firstSurface?.object.castShadow, `Light leaks through the room shell at ${x}, ${z}`);
 }
 world.dispose(); materials.dispose();
-console.log(`Enclosure regression valid: ${enclosureApproaches} elevated-edge walks blocked · ${stairClosureRays} solid risers and ${wallMarginRays} closed wall margins · ${wallHugChecks} reachable capsule margins match the floor · T2 cleaning sky leaks closed · T3 upper shell closed · 1,093 seats without adjacent mesh overlap · stacked zones, visible signs and interior shadow occlusion correct.`);
+console.log(`Enclosure regression valid: ${enclosureApproaches} elevated-edge walks blocked · ${stairClosureRays} solid risers and ${wallMarginRays} closed wall margins · ${cubbyRearSeals} rear-cubby floor seals · ${wallHugChecks} reachable capsule margins match the floor · T2 cleaning sky leaks closed · T3 upper shell closed · 1,093 seats without adjacent mesh overlap · stacked zones, visible signs and interior shadow occlusion correct.`);
