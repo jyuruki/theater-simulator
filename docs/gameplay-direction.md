@@ -52,23 +52,40 @@ remain accessible with keyboard and touch as well as mouse input.
 
 ## Current implementation boundary
 
-Version 0.23 supplies all fourteen theaters with seeded used-seat cleanup,
-a ready-to-use portable kit, a three-column break sheet, a wristwatch and a twofold
-shift clock. Bold start rows mean close the auditorium doors; regular rows mean
-a theater break. All trays open at breaks; actual spills and popcorn occur at a minority of seats. Trays stay open until the usher wipes tray then cushion,
-sweeps chair debris to the floor, closes the tray, and cleans the floor last.
-The broom pulls toward a left-hand dustpan.
+Version 0.24 supplies all fourteen theaters with seeded audiences and used-seat
+cleanup. Only seats occupied by that show's customers leave their trays open;
+trays swing outward toward the row aisle. Wipe the tray and cushion, brush any
+chair popcorn onto the floor using the cloth/hand action, then close the tray.
+Never use the dirty broom on a chair. Floor popcorn may be swept at any time.
+Most used seats have no spill or popcorn: routine wiping takes about one second,
+and spills take about six broad swipes. The broom pulls into a left-hand dustpan.
+
+The portable kit is available immediately. A prominent on-screen clock replaces
+the watch and advances two game minutes per real minute. The pocket sheet reads
+time, theater number, title; entire start rows are bold with times flush left,
+while regular break times are indented. G previews placing a carried item;
+click or E confirms it, and G or Q cancels.
 
 Three wheeled gray cans leapfrog the next unserved breaks. Customer packaging
 lands in them; full bags are lifted, tied and thrown into the trash-room gondola.
-Spare liners are carried on each can. The fountain service room holds keyed BIB
+The gripped can and player follow one handle constraint while both remain solid
+against walls. Spare liners are carried on each can. The fountain service room holds keyed BIB
 exchanges, straw/lid/ketchup/salt stock and the kitchen-tray washing station.
 Keep future furnishings compatible with these physical routes and hand use.
+
+Scheduled audiences vary from 2–24 patrons per show in parties of 1–5. Members
+walk alongside each other where space permits, avoid obstructions and yield at
+narrow entrances; the population limit keeps the browser simulation bounded.
+One shared seeded attendance plan drives both visible patrons and used trays.
+The Hula start cue leads into the complete licensed Big Buck Bunny, looping for
+the fictional show's remaining time. At most two nearby feature videos decode,
+with streamed spatial audio and a continuous doorway-to-auditorium sound level.
+There is not yet a feature-film catalog or realistic full-capacity audience.
 
 The visitor ticket/order prototype remains disabled. Bathroom cleaning, ICEE
 servicing, sound/picture checks, career progression, food preparation and physical
 POS workflows remain future work. Preserve the minimal-menu approach while
-extending the complete physical tasks. See [v0.23 notes](v23-notes.md).
+extending the complete physical tasks. See [v0.24 notes](v24-notes.md).
 
 Theater 3's full-height anteroom leads through doors to legitimately lower
 under-seat storage. The lower inner ceiling is intentional, per the user's

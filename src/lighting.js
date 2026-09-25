@@ -7,7 +7,10 @@ export const THEATER_LIGHTING = Object.freeze({
   hall: Object.freeze({ hemisphere: 0.44, sun: 0.16, environment: 0.065 }),
   transitionMeters: 6,
   adaptationSeconds: 0.24,
-  downlight: Object.freeze({ color: 0xffd3a0, intensity: 70, distance: 9, angle: 0.88, penumbra: 0.62 }),
+  // Broad overlapping diffuser light, with the old average floor brightness.
+  // The local range still bounds spill; the soft cutoff replaces point-source
+  // inverse-square hotspots beneath each ceiling panel.
+  downlight: Object.freeze({ color: 0xffd3a0, intensity: 1.69, distance: 10, angle: 1.30, penumbra: 0.30, decay: 0 }),
 });
 
 const smoothstep = (min, max, value) => {
@@ -44,14 +47,19 @@ for (const [section, bounds, offset] of [["narrow", HALL_PLAN.narrow, 6], ["wide
     fixtures.push(Object.freeze({ id: `hall-${section}-downlight-${x}`, x, y: 4.405, z: (bounds.zMin + bounds.zMax) / 2 }));
   }
 }
+// The shortened west corridor otherwise leaves a 16 m fixture gap at the
+// width transition. Bridge that gap without increasing the regular spacing.
+const west = fixtures[0], next = fixtures[1];
+fixtures.splice(1, 0, Object.freeze({ id: "hall-transition-downlight", x: (west.x + next.x) / 2,
+  y: 4.405, z: (HALL_PLAN.narrow.zMin + HALL_PLAN.narrow.zMax) / 2 }));
 export const HALL_DOWNLIGHTS = Object.freeze(fixtures);
 
-// Fixed short-range pools under the modeled ceiling fixtures. They do not
+// Fixed overlapping pools under the modeled ceiling fixtures. They do not
 // cast shadows: the existing sun remains the only shadow map in the scene.
 export function createHallLightPools({ parent }) {
   const lights = HALL_DOWNLIGHTS.map((fixture) => {
     const config = THEATER_LIGHTING.downlight;
-    const light = new THREE.SpotLight(config.color, config.intensity, config.distance, config.angle, config.penumbra, 2);
+    const light = new THREE.SpotLight(config.color, config.intensity, config.distance, config.angle, config.penumbra, config.decay);
     light.name = `${fixture.id}-pool`;
     light.position.set(planToWorldX(fixture.x), fixture.y, fixture.z);
     light.target.name = `${light.name}-target`;

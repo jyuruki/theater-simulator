@@ -530,3 +530,7 @@ input[type="range"] { width: 100%; accent-color: #e05a74; }
   .visit-toolbar button { padding: 8px 9px; }
   #visit-status { top: max(180px, calc(env(safe-area-inset-top) + 170px)); }
 }
+.shift-time { position: absolute; top: 0; left: 50%; transform: translateX(-50%); padding: 10px 17px; text-align: center; background: #0b0d14e8; border: 1px solid #ffffff24; border-radius: 10px; }
+.shift-time span { display: block; font-size: 8px; font-weight: 700; letter-spacing: .15em; color: #b7bec9; }
+#shift-clock { display: block; font-size: 25px; color: #fff0c8; font-variant-numeric: tabular-nums; line-height: 1.35; }
+@media (max-width: 520px) { .shift-time { left: auto; right: 0; transform: none; padding: 8px 11px; } #shift-clock { font-size: 21px; } .location-card { max-width: calc(100vw - 145px); } }

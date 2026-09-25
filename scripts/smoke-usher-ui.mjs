@@ -23,12 +23,11 @@ const legacy = createVisitUI({ controller, camera, employeeMode: true,
   audio: { enabled: true, volume: .5 }, crowd: { enabled: true }, toggleMap() {},
 });
 const inputs = [], calls = [];
-const gameplay = { tool: "broom", sheetVisible: false, denySelection: false, focusedPrompt: "Read the shift sheet", hint: "USHER · Cleaning tools",
+const gameplay = { time: "17:28", tool: "broom", sheetVisible: false, denySelection: false, focusedPrompt: "Read the shift sheet", hint: "USHER · Cleaning tools",
   get heldTool() { return this.sheetVisible ? null : this.tool; },
   update(delta, input) { inputs.push(input); }, interact() { calls.push("interact"); }, returnTool() { calls.push("return"); },
   selectTool(kind) { calls.push(`select:${kind}`); if (this.denySelection) return false; this.tool = kind; this.sheetVisible = false; return true; },
   toggleSheet() { calls.push("sheet"); this.sheetVisible = !this.sheetVisible; },
-  toggleWatch() { calls.push("watch"); },
   canPlace: false, placementActive: false,
   togglePlacement() { calls.push("place"); this.placementActive = !this.placementActive; },
   confirmPlacement() { calls.push("confirm"); this.placementActive = false; },
@@ -36,6 +35,8 @@ const gameplay = { tool: "broom", sheetVisible: false, denySelection: false, foc
 const canvas = document.querySelector("#game-canvas");
 const ui = createUsherUI({ gameplay, controller, canvas, isBlocked: () => legacy.isOpen,
   document, window: dom });
+ui.update(0);
+assert.equal(document.querySelector("#shift-clock").textContent, "17:28");
 const key = (type, code, repeat = false) => dom.dispatchEvent(new dom.KeyboardEvent(type, { code, repeat }));
 const pointer = (target, type, pointerType = "mouse") => target.dispatchEvent(new dom.PointerEvent(type, {
   button: 0, pointerId: 1, pointerType, bubbles: true,
@@ -125,16 +126,14 @@ ui.update(.016); assert.equal(action.textContent, "HOLD / RELEASE TO THROW", "Wa
 clothButton.click(); ui.update(.016); assert.equal(gameplay.heldTool, "tied trash bag", "UI cannot steal ownership when the module rejects a tool change");
 gameplay.denySelection = false; delete gameplay.actionLabel; gameplay.tool = "broom";
 
-key("keydown", "KeyT"); key("keydown", "KeyT", true); assert.equal(calls.filter(c => c === "watch").length, 1);
-document.querySelector("#watch-button").click(); assert.equal(calls.filter(c => c === "watch").length, 2);
-gameplay.canPlace = true; key("keydown", "KeyP"); ui.update(.016);
+gameplay.canPlace = true; key("keydown", "KeyG"); ui.update(.016);
 assert.equal(gameplay.placementActive, true); assert.equal(action.textContent, "CONFIRM PLACEMENT");
 pointer(action, "pointerdown", "touch"); ui.update(.016);
 assert.equal(gameplay.placementActive, false); assert.equal(calls.at(-1), "confirm");
 assert.equal(inputs.at(-1).action, false, "Confirming a placement must not also start pouring or throwing");
-key("keydown", "KeyP"); pointer(canvas, "pointerdown"); ui.update(.016);
+key("keydown", "KeyG"); pointer(canvas, "pointerdown"); ui.update(.016);
 assert.equal(calls.at(-1), "confirm"); assert.equal(inputs.at(-1).action, false);
-key("keydown", "KeyP"); key("keydown", "KeyF"); key("keydown", "KeyF", true); ui.update(.016);
+key("keydown", "KeyG"); key("keydown", "KeyF"); key("keydown", "KeyF", true); ui.update(.016);
 assert.equal(calls.at(-1), "confirm"); key("keyup", "KeyF");
 const callout = new dom.Event("contextmenu", { cancelable: true }); action.dispatchEvent(callout);
 assert.equal(callout.defaultPrevented, true, "Holding the touch tool cannot open the browser callout");

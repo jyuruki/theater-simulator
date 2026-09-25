@@ -19,7 +19,7 @@ export function createUsherDoors({ scene, camera, collisionWorld, showToast = ()
     const open = typeof previous?.open === "boolean" ? previous.open : true;
     const door = { ...spec,
       targetOpen: open, angle: open ? Math.PI / 2 : 0, startDue: Boolean(previous?.startDue), leaves: [] };
-    for (const sign of spec.small ? [-1] : [-1, 1]) {
+    for (const sign of spec.small ? [spec.hingeSide] : [-1, 1]) {
       const hinge = new THREE.Group(); hinge.name = `${room.id}-usher-door-${sign}`;
       const offset = sign * (width / 2 - (spec.small ? .065 : .15));
       hinge.position.set(x + Math.cos(spec.yaw) * offset, 0, z - Math.sin(spec.yaw) * offset); root.add(hinge);

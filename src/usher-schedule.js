@@ -8,6 +8,10 @@ export function formatShiftTime(minutes) {
   const whole = Math.floor(minutes + 1e-7);
   return `${String(Math.floor(whole / 60) % 24).padStart(2, "0")}:${String(whole % 60).padStart(2, "0")}`;
 }
+export function formatSheetTime(minutes) {
+  const whole = Math.floor(minutes + 1e-7), hour = Math.floor(whole / 60) % 24;
+  return `${hour % 12 || 12}:${String(whole % 60).padStart(2, "0")} ${hour < 12 ? "AM" : "PM"}`;
+}
 export function createBreakEvents(cycles = 8) {
   const events = [];
   for (const [index, number] of ORDER.entries()) {
@@ -66,7 +70,7 @@ export function createUsherSchedule({ storage, onBreak = () => {}, onStart = () 
     },
     sheetRows() {
       const upcomingIndex = Math.max(0, events.findIndex(e => e.time >= minute) - 4);
-      return events.slice(upcomingIndex, upcomingIndex + 24).map(e => ({ ...e, textTime: formatShiftTime(e.time), bold: e.kind === "start" }));
+      return events.slice(upcomingIndex, upcomingIndex + 24).map(e => ({ ...e, textTime: formatSheetTime(e.time), bold: e.kind === "start" }));
     },
     currentBreak,
     hasBroken(id) { return Boolean(latestBreak(id)); },

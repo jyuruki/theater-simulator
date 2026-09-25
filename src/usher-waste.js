@@ -30,7 +30,7 @@ export function wasteParkingCandidates(id) {
 }
 
 /** Three constrained rolling cans, removable liners, and ballistic full bags. */
-export function createUsherWaste({ scene, world, camera, collisionWorld, showToast = () => {}, hands = { owner: null }, storage,
+export function createUsherWaste({ scene, world, camera, collisionWorld, controller, showToast = () => {}, hands = { owner: null }, storage,
   getNextBreaks = () => ["theater-2", "theater-1", "theater-3"], getRoomReady = () => false, scheduledCustomers = false }) {
   const root = new THREE.Group(); root.name = "usher-rolling-waste"; scene.add(root);
   const geometries = new Set(), materials = new Set(), textures = new Set(), ownedColliders = [];
@@ -321,24 +321,38 @@ export function createUsherWaste({ scene, world, camera, collisionWorld, showToa
   }
   function moveBins(dt) {
     for (const bin of bins) {
-      const b = bin.data, gripping = held?.kind === "bin" && held.id === b.id;
+      const b = bin.data; let gripping = held?.kind === "bin" && held.id === b.id;
+      let dx, dz;
       if (gripping) {
-        if (Math.hypot(camera.position.x - b.x, camera.position.z - b.z) > 2.15 || camera.position.y > 2.3) { release(); showToast("Your grip released. Walk back to the bin handle."); }
+        if (Math.hypot(camera.position.x - b.x, camera.position.z - b.z) > 4 || camera.position.y > 2.3) { release(); gripping = false; showToast("Your grip released. Walk back to the bin handle."); }
         else {
           camera.getWorldDirection(look); forward.set(look.x, 0, look.z).normalize();
           const tx = camera.position.x + forward.x * 1.03, tz = camera.position.z + forward.z * 1.03;
-          b.vx += clamp((tx - b.x) * 11 - b.vx * 4, -5, 5) * dt;
-          b.vz += clamp((tz - b.z) * 11 - b.vz * 4, -5, 5) * dt;
+          // A constrained grip follows walking immediately, without a slow
+          // spring or a speed cap below the player's walking pace.
+          dx = tx - b.x; dz = tz - b.z;
         }
       } else { b.vx *= Math.exp(-5 * dt); b.vz *= Math.exp(-5 * dt); }
       const speed = Math.hypot(b.vx, b.vz);
       if (speed > 2.15) { b.vx *= 2.15 / speed; b.vz *= 2.15 / speed; }
       const oldX = b.x, oldZ = b.z, candidate = { x: b.x, y: 0, z: b.z };
-      withoutCollider(bin.collider, () => collisionWorld.moveCircle(candidate, b.vx * dt, b.vz * dt, WASTE_BIN_RADIUS, .025, BIN_TOP));
+      withoutCollider(bin.collider, () => collisionWorld.moveCircle(candidate, dx ?? b.vx * dt, dz ?? b.vz * dt, WASTE_BIN_RADIUS, .025, BIN_TOP));
       if (Math.abs(groundAt(candidate.x, candidate.z) ?? Infinity) > .06
         || Math.hypot(candidate.x - camera.position.x, candidate.z - camera.position.z) < .735) { b.vx = b.vz = 0; }
       else { b.x = candidate.x; b.z = candidate.z; if (Math.abs(b.x - oldX) < .000001) b.vx = 0; if (Math.abs(b.z - oldZ) < .000001) b.vz = 0; }
       const moved = Math.hypot(b.x - oldX, b.z - oldZ);
+      if (gripping) {
+        b.vx = clamp((b.x - oldX) / dt, -4.8, 4.8); b.vz = clamp((b.z - oldZ) / dt, -4.8, 4.8);
+        // When the can hits a wall, hold the player's end of the handle too.
+        // Both bodies remain swept against the world instead of clipping.
+        const handle = { x: b.x - forward.x * 1.03, y: 0, z: b.z - forward.z * 1.03 };
+        const feet = { x: camera.position.x, y: 0, z: camera.position.z };
+        updateBinCollider(bin);
+        if (controller && Math.hypot(handle.x - feet.x, handle.z - feet.z) > .015) {
+          collisionWorld.moveCircle(feet, handle.x - feet.x, handle.z - feet.z, controller.radius ?? .28, 0, controller.bodyHeight ?? 1.8);
+          if (Math.abs(groundAt(feet.x, feet.z) ?? Infinity) < .06) controller.setPosition([feet.x, 0, feet.z], { resetVelocity: false, depenetrate: false });
+        }
+      }
       if (moved > .00001) {
         if (gripping) b.yaw = Math.atan2(forward.x, forward.z);
         for (const wheel of bin.wheels) { wheel.caster.rotation.y = Math.atan2(b.vx, b.vz) - b.yaw; wheel.wheel.rotation.x -= moved / .085; }
@@ -508,7 +522,13 @@ export function createUsherWaste({ scene, world, camera, collisionWorld, showToa
     if (held) return false;
     if (focus.kind === "handle") {
       if (customer?.bin === focus.bin) { showToast("Let the guest finish the toss before moving the can."); return true; }
-      if (acquire({ kind: "bin", id: focus.bin.data.id })) showToast("Handle gripped. Walk to push; Q releases the brake-free casters.");
+      if (acquire({ kind: "bin", id: focus.bin.data.id })) {
+        const b = focus.bin.data; camera.getWorldDirection(look); forward.set(look.x, 0, look.z).normalize();
+        const feet = { x: camera.position.x, y: 0, z: camera.position.z };
+        collisionWorld.moveCircle(feet, b.x - forward.x * 1.03 - feet.x, b.z - forward.z * 1.03 - feet.z, controller?.radius ?? .28, 0, 1.8);
+        if (controller && Math.abs(groundAt(feet.x, feet.z) ?? Infinity) < .06) controller.setPosition([feet.x, 0, feet.z], { depenetrate: false });
+        showToast("Handle gripped. The can follows your movement; Q releases.");
+      }
     } else if (focus.kind === "mouth") {
       const bin = focus.bin, b = bin.data;
       if (!b.lined) { showToast("Take a stored spare bag from the side, open it, then fit the rim."); return true; }

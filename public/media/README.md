@@ -16,3 +16,17 @@ FFmpeg 7.1 (imageio-ffmpeg 0.6.0 distribution) was used with `scale=960:-2`,
 
 This user-provided third-party media is separate from the original geometry
 and fictional poster artwork authored for this project.
+
+# Feature program: Big Buck Bunny
+
+Copyright 2008, Blender Foundation / https://www.bigbuckbunny.org/.
+Licensed under [Creative Commons Attribution 3.0](https://creativecommons.org/licenses/by/3.0/).
+Official [license and attribution](https://peach.blender.org/about/) and
+[download page](https://peach.blender.org/download/).
+Source: https://download.blender.org/peach/bigbuckbunny_movies/big_buck_bunny_480p_h264.mov.zip
+
+The complete 596.46-second film, including its full ending credits, is included.
+Changes: re-encoded at 854×480, 24 fps, H.264 Main, stereo AAC 64 kbps for browser
+playback. The film loops during fictional simulator showtimes after the opening
+trailer. Screen playback is enabled near the player to bound decoder/GPU cost.
+This film is licensed separately from the game's original code and assets.

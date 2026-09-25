@@ -5,7 +5,7 @@ import { createPropAssets } from "./prop-assets.js";
 import { createPropPlacements, addTheaterFurnishings } from "./prop-placements.js";
 import { createCounterBuilder } from "./counter-geometry.js";
 import { createServiceGate } from "./service-gate.js";
-import { auditoriumDoorLayout } from "./auditorium-door-layout.js";
+import { auditoriumDoorLayout, auditoriumCubbyBounds, auditoriumBlindAlcove } from "./auditorium-door-layout.js";
 import { createHallLightPools, HALL_DOWNLIGHTS } from "./lighting.js";
 import {
   AUDITORIUMS,
@@ -904,14 +904,8 @@ export function createTheaterWorld({ scene, materials }) {
 
   const addSmallTheaterCubby = (auditorium, layout) => {
     const { bounds, entry } = auditorium;
-    const halfWidth = entry.cubbyHalfWidth ?? 1.6;
     const depth = entry.cubbyDepth ?? 2.2;
-    const cubby = entry.cubbyBounds ?? {
-      xMin: entry.center - halfWidth,
-      xMax: entry.center + halfWidth,
-      zMin: bounds.zMax - depth,
-      zMax: bounds.zMax,
-    };
+    const cubby = auditoriumCubbyBounds(auditorium), blindAlcove = auditoriumBlindAlcove(auditorium);
     const westX = cubby.xMin;
     const eastX = cubby.xMax;
     const southZ = cubby.zMin;
@@ -920,19 +914,30 @@ export function createTheaterWorld({ scene, materials }) {
     // The rear landing already extends through this footprint. A second floor
     // here was coplanar with it and caused visible flicker at every small-room
     // entrance.
-    addWallX(`${auditorium.id}-cubby-back`, westX, eastX, southZ, { material: materials.darkWall });
+    const wallOptions = { material: materials.darkWall, height: layout.presentation.ceilingY };
+    addWallX(`${auditorium.id}-cubby-back`, Math.min(westX, blindAlcove?.xMin ?? westX),
+      Math.max(eastX, blindAlcove?.xMax ?? eastX), southZ, wallOptions);
+    if (blindAlcove) {
+      const fill = { xMin: blindAlcove.xMin + WALL_THICKNESS / 2, xMax: blindAlcove.xMax - WALL_THICKNESS / 2,
+        zMin: southZ + WALL_THICKNESS / 2, zMax: bounds.zMax - WALL_THICKNESS / 2 };
+      const width = fill.xMax - fill.xMin, depth = fill.zMax - fill.zMin, height = layout.presentation.ceilingY;
+      addBox({ id: `${auditorium.id}-sealed-blind-alcove`, x: (fill.xMin + fill.xMax) / 2, y: height / 2,
+        z: (fill.zMin + fill.zMax) / 2, width, height, depth, material: materials.darkWall });
+      addPlanCollider(`${auditorium.id}-sealed-blind-alcove`, (fill.xMin + fill.xMax) / 2, height / 2,
+        (fill.zMin + fill.zMax) / 2, width, height, depth);
+    }
     if (entry.turnSide === "west") {
-      addWallZWithOpenings(`${auditorium.id}-cubby-west`, westX, southZ, bounds.zMax, [{ center: doorZ, width: innerDoorWidth, baseY: layout.backElevation }], { material: materials.darkWall });
+      addWallZWithOpenings(`${auditorium.id}-cubby-west`, westX, southZ, bounds.zMax, [{ center: doorZ, width: innerDoorWidth, baseY: layout.backElevation }], wallOptions);
       if (entry.sharedBoundarySide !== "east" && Math.abs(eastX - bounds.xMax) > EPSILON) {
-        addWallZ(`${auditorium.id}-cubby-east`, eastX, southZ, bounds.zMax, { material: materials.darkWall });
+        addWallZ(`${auditorium.id}-cubby-east`, eastX, southZ, bounds.zMax, wallOptions);
       }
       addDoorTrim(`${auditorium.id}-inner`, "west", westX, doorZ, { width: innerDoorWidth, baseY: layout.backElevation });
       addTrashCan(`${auditorium.id}-trash`, eastX - 0.52, southZ + 0.55);
     } else {
       if (entry.sharedBoundarySide !== "west" && Math.abs(westX - bounds.xMin) > EPSILON) {
-        addWallZ(`${auditorium.id}-cubby-west`, westX, southZ, bounds.zMax, { material: materials.darkWall });
+        addWallZ(`${auditorium.id}-cubby-west`, westX, southZ, bounds.zMax, wallOptions);
       }
-      addWallZWithOpenings(`${auditorium.id}-cubby-east`, eastX, southZ, bounds.zMax, [{ center: doorZ, width: innerDoorWidth, baseY: layout.backElevation }], { material: materials.darkWall });
+      addWallZWithOpenings(`${auditorium.id}-cubby-east`, eastX, southZ, bounds.zMax, [{ center: doorZ, width: innerDoorWidth, baseY: layout.backElevation }], wallOptions);
       addDoorTrim(`${auditorium.id}-inner`, "east", eastX, doorZ, { width: innerDoorWidth, baseY: layout.backElevation });
       addTrashCan(`${auditorium.id}-trash`, westX + 0.52, southZ + 0.55);
     }

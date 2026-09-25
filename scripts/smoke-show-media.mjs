@@ -52,15 +52,17 @@ assert.ok(videos[0].muted && videos[0].playsInline && videos[0].attributes.has("
 assert.deepEqual(requested, ["/theater-simulator/media/hula-start.m4a"]);
 assert.equal(context.sources.length, 1); assert.equal(context.sources[0].offset, 0);
 assert.equal(context.gains[0].target, audio.output, "Sound obeys the shared game volume output");
-assert.equal(context.gains[0].gain.value, .38, "Open doorway source can be heard from the cubby");
+const doorwayGain = context.gains[0].gain.value;
+assert.ok(doorwayGain > .58 && doorwayGain <= .62, "Open doorway source can be heard from the cubby");
 assert.deepEqual(context.panners[0].position, [door.x, 1.8, door.z]);
 assert.equal(context.panners[0].panningModel, "HRTF");
 closed = true; media.update(.016, true);
-assert.equal(context.gains[0].gain.value, .045, "Closed inner door muffles listeners in the small-room cubby");
+assert.ok(context.gains[0].gain.value < .045 && context.gains[0].gain.value > .04, "Closed inner door muffles listeners in the small-room cubby");
 assert.equal(context.filters[0].frequency.value, 550);
 camera.position.set(...door.route.inside); camera.position.y = 1.68; media.update(.016, true);
-assert.equal(context.gains[0].gain.value, .85, "Inside listener hears full auditorium level");
-assert.equal(context.filters[0].frequency.value, 18000);
+assert.ok(context.gains[0].gain.value >= doorwayGain, "Entering cannot suddenly make the soundtrack quieter");
+assert.equal(context.panners[0].rolloffFactor, 0, "Screen distance no longer doubles the auditorium attenuation");
+assert.ok(context.filters[0].frequency.value > 4800);
 camera.position.set(300, 1.68, 300); media.update(.016, true); assert.equal(context.gains[0].gain.value, 0, "Distant auditoriums are silent");
 assert.equal(context.listener.positionX.value, 300);
 
@@ -91,7 +93,7 @@ const lifecycleWindow = new EventTarget();
 const lifecycleController = { pauses: 0, pause() { this.pauses++; } };
 const lifecycleInteractions = { isOpen: false };
 runInNewContext(lifecycleSource, { document: lifecycleDocument, window: lifecycleWindow, entered: true,
-  interactions: lifecycleInteractions, controller: lifecycleController, startMedia: media });
+  interactions: lifecycleInteractions, controller: lifecycleController, startMedia: media, features: { update() {} } });
 lifecycleDocument.hidden = true;
 lifecycleDocument.dispatchEvent(new Event("visibilitychange"));
 assert.ok(videos[0].paused && context.sources.at(-1).stopped, "Backgrounding synchronously pauses picture and sound without a render frame");

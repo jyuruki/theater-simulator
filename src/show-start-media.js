@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { AUDITORIUMS } from "./layout-data.js";
 import { AUDITORIUM_SCREEN_SPEC } from "./layout-geometry.js";
-import { auditoriumDoorLayout } from "./auditorium-door-layout.js";
+import { auditoriumAcoustics } from "./auditorium-acoustics.js";
 
 export const HULA_DURATION = 82.04;
 export const HULA_ASPECT = 960 / 520;
@@ -38,7 +38,7 @@ export function createShowStartMedia({ camera, world, audio, getDoor = () => nul
     if (!active || !buffer || !context || item.video.paused || item.video.readyState < 3 || item.source || item.released) return;
     if (!item.panner) {
       item.panner = context.createPanner(); item.panner.panningModel = "HRTF";
-      item.panner.distanceModel = "inverse"; item.panner.refDistance = 5; item.panner.maxDistance = 42; item.panner.rolloffFactor = 1.8;
+      item.panner.distanceModel = "inverse"; item.panner.refDistance = 5; item.panner.maxDistance = 42; item.panner.rolloffFactor = 0;
       item.gain = context.createGain(); item.filter = context.createBiquadFilter(); item.filter.type = "lowpass";
       item.panner.connect(item.filter); item.filter.connect(item.gain); item.gain.connect(audio.output);
     }
@@ -99,22 +99,13 @@ export function createShowStartMedia({ camera, world, audio, getDoor = () => nul
         ensureSound(item);
         if (!item.panner) continue;
         const room = AUDITORIUMS.find(r => r.id === item.id), door = getDoor(item.id);
-        const px = 3 - camera.position.x;
-        const doorPlan = auditoriumDoorLayout(room);
-        const behindInnerDoor = !doorPlan.small || (camera.position.x - doorPlan.x) * doorPlan.normal[0]
-          + (camera.position.z - doorPlan.z) * doorPlan.normal[2] > .1;
-        const inside = behindInnerDoor && px >= room.bounds.xMin && px <= room.bounds.xMax && camera.position.z >= room.bounds.zMin && camera.position.z <= room.bounds.zMax;
-        // Outside listeners hear the doorway opening, rather than sound leaking
-        // through the nearest auditorium wall. Closed doors muffle the cue.
-        const source = inside ? item.screen.position : new THREE.Vector3(...(door?.center ?? item.screen.position.toArray()));
-        item.panner.setPosition(source.x, inside ? 2.4 : 1.8, source.z);
-        const closed = !inside && (door?.angle ?? 1.57) < .2;
-        const distance = camera.position.distanceTo(source);
-        const roomGain = inside ? .85 : closed ? .045 : .38;
-        item.gain.gain.setTargetAtTime(distance > 42 ? 0 : roomGain, context.currentTime, .12);
-        item.filter.frequency.setTargetAtTime(inside ? 18000 : closed ? 550 : 4800, context.currentTime, .12);
+        const sound = auditoriumAcoustics(room, camera.position, item.screen.position, door);
+        item.panner.setPosition(...sound.position);
+        item.gain.gain.setTargetAtTime(sound.gain, context.currentTime, .12);
+        item.filter.frequency.setTargetAtTime(sound.cutoff, context.currentTime, .12);
       }
     },
+    isPlaying(id) { return playing.has(id); },
     getSnapshot() { return { audioReady: Boolean(buffer), active, playing: [...playing.values()].map(i => ({ theaterId: i.id, time: i.video.currentTime, paused: i.video.paused, audio: Boolean(i.source), failed: Boolean(i.failed) })) }; },
     dispose() { disposed = true; [...playing.values()].forEach(release); },
   };

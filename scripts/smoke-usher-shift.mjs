@@ -7,6 +7,8 @@ import { AUDITORIUMS } from "../src/layout-data.js";
 import { createTheaterWorld } from "../src/world.js";
 import { createMaterialLibrary } from "../src/materials.js";
 import { AABBCollisionWorld } from "../src/player.js";
+import { createCleaningPlans } from "../src/usher-cleaning-layout.js";
+import { createShowAttendance } from "../src/show-attendance.js";
 
 class CanvasStub {
   constructor(width, height) { this.width = width; this.height = height; }
@@ -119,12 +121,7 @@ assert.ok(Math.abs(reading.elapsed - beforeSheet.elapsed - 4) < 1e-8,
   "Supplies and the schedule use the same active game-time scale");
 assert.equal(shift.interact(), true, "E folds the physical sheet before routing any underlying interaction");
 assert.equal(shift.sheet.visible, false); assert.equal(shift.heldTool, "refill:salt");
-assert.equal(shift.toggleWatch(), true); const watchTime = shift.schedule.minute;
-frames(2, { active: false }); assert.equal(shift.watch.visible, true, "Pause leaves the raised watch in place");
-frames(2); assert.equal(shift.watch.visible, true); assert.ok(shift.schedule.minute > watchTime);
-assert.equal(shift.hands.owner, "supplies", "Checking a wristwatch does not discard a carried item");
-assert.equal(shift.heldTool, null, "Watch check temporarily blocks work inputs");
-frames(3.1); assert.equal(shift.watch.visible, false, "The watch lowers after five active seconds");
+assert.equal(shift.time, shift.schedule.time, "Prominent HUD clock shares schedule time");
 frames(.3, { active: true, action: true });
 assert.ok(shift.supplies.getSnapshot().state.held.amount < reading.held.amount);
 camera.lookAt(camera.position.x, 0, camera.position.z - 1.1); camera.updateMatrixWorld(true);
@@ -185,8 +182,11 @@ for (const [index, event] of firstBreaks.entries()) {
   assert.equal(jobs.length, index + 1, `${event.theaterId} creates exactly one cleaning job at its break`);
   assert.equal(jobs.filter(j => j.id === event.theaterId).length, 1);
   const job = jobs.find(j => j.id === event.theaterId);
-  assert.equal(job.seats.length, AUDITORIUMS.find(r => r.id === event.theaterId).seats);
-  assert.ok(job.seats.every(s => s.trayOpen), `${event.theaterId}'s break opens every tray`);
+  const plan = createCleaningPlans(world).find(p => p.id === event.theaterId);
+  const attended = createShowAttendance(plan, { cycle: event.cycle }).seatIds;
+  assert.deepEqual(job.seats.map(s => s.id).sort(), [...attended].sort());
+  assert.ok(job.seats.length < AUDITORIUMS.find(r => r.id === event.theaterId).seats);
+  assert.ok(job.seats.every(s => s.trayOpen), `${event.theaterId}'s break opens occupied trays`);
   assert.equal(shift.schedule.getSnapshot().done.filter(id => id === event.id).length, 1);
   assert.equal(toasts.filter(t => t.startsWith(`Theater ${event.number} is breaking.`)).length, 1);
   assert.equal(shift.doors.getSnapshot().find(d => d.id === event.theaterId).targetOpen, true,
