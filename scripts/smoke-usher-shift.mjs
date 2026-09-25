@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { createUsherShift } from "../src/usher-shift.js";
 import { USHER_SPAWN } from "../src/usher-gameplay.js";
-import { SHIFT_START_MINUTE, SHIFT_TIME_SCALE } from "../src/usher-schedule.js";
+import { LEGACY_SHIFT_START_MINUTE as SHIFT_START_MINUTE, SHIFT_TIME_SCALE } from "../src/usher-schedule.js";
 import { AUDITORIUMS } from "../src/layout-data.js";
 import { createTheaterWorld } from "../src/world.js";
 import { createMaterialLibrary } from "../src/materials.js";

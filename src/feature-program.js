@@ -6,16 +6,19 @@ import { AUDITORIUM_SCREEN_SPEC } from "./layout-geometry.js";
 import { SHIFT_TIME_SCALE } from "./usher-schedule.js";
 import { SHOWS } from "./showtimes.js";
 import { HULA_DURATION } from "./show-start-media.js";
+import { FEATURE_FILMS, filmForShow } from "./feature-catalog.js";
 
-export const FEATURE_DURATION = 596.46;
-export function featurePhase(events, room, minute) {
+export const FEATURE_DURATION = FEATURE_FILMS[0].duration;
+export function featurePhase(events, room, minute, timing = {}) {
   const roomEvents = events.filter(e => e.theaterId === room.id);
   if (!roomEvents.length || !Number.isFinite(minute)) return null;
   const latest = roomEvents.filter(e => e.time <= minute).at(-1);
   if (latest?.kind === "break") return null;
-  const seconds = latest ? (minute - latest.time) * 60 / SHIFT_TIME_SCALE - HULA_DURATION
+  if (!latest && roomEvents[0].kind === "start") return null;
+  const seconds = latest ? (timing.secondsSince ? timing.secondsSince(latest.time) : (minute - latest.time) * 60 / (timing.timeScale ?? SHIFT_TIME_SCALE)) - HULA_DURATION
     : (minute - (roomEvents[0].time - SHOWS[room.number - 1].minutes)) * 60 / SHIFT_TIME_SCALE;
-  return seconds < 0 ? null : { offset: seconds % FEATURE_DURATION, show: latest?.id ?? `${room.id}-initial` };
+  const film = filmForShow(room, latest);
+  return seconds < 0 ? null : { offset: seconds % film.duration, show: latest?.id ?? `${room.id}-initial`, film };
 }
 
 /** Two nearby decoders at most; complete movie clocks continue logically in
@@ -53,19 +56,19 @@ export function createFeatureProgram({ world, camera, audio, schedule, getDoor =
   }
   function create(room, phase) {
     const screen = world.root.getObjectByName(`${room.id}-screen`); if (!screen) return;
-    const video = makeVideo(); video.src = `${baseUrl}media/big-buck-bunny.mp4`;
+    const video = makeVideo(); video.src = `${baseUrl}${phase.film.file}`;
     video.muted = true; video.playsInline = true; video.loop = true; video.preload = "auto";
     video.setAttribute("playsinline", ""); video.setAttribute("webkit-playsinline", "");
     const texture = new THREE.VideoTexture(video); texture.colorSpace = THREE.SRGBColorSpace;
     const material = new THREE.MeshBasicMaterial({ map: texture, toneMapped: false, side: THREE.DoubleSide });
-    const fit = AUDITORIUM_SCREEN_SPEC.aspect / (854 / 480);
+    const fit = AUDITORIUM_SCREEN_SPEC.aspect / phase.film.aspect;
     material.onBeforeCompile = shader => {
       const chunk = THREE.ShaderChunk.map_fragment.replaceAll("vMapUv", "filmUv");
       shader.fragmentShader = shader.fragmentShader.replace("#include <map_fragment>",
         `vec2 filmUv=vec2(vMapUv.x,(vMapUv.y-0.5)/${fit.toFixed(8)}+0.5);\n${chunk}\nif(filmUv.y<0.0||filmUv.y>1.0)diffuseColor.rgb=vec3(0.0);`);
     };
-    material.customProgramCacheKey = () => "feature-letterbox-v24";
-    const item = { room, video, texture, material, screen, original: screen.material, show: phase.show };
+    material.customProgramCacheKey = () => `feature-letterbox-${phase.film.id}`;
+    const item = { room, video, texture, material, screen, original: screen.material, show: phase.show, film: phase.film };
     items.set(room.id, item);
     // A VideoTexture has no usable image while the first frame is decoding.
     // Keep the existing auditorium picture until that frame can be uploaded.
@@ -73,7 +76,7 @@ export function createFeatureProgram({ world, camera, audio, schedule, getDoor =
     video.addEventListener("canplay", () => showFrame(item));
     showFrame(item);
     video.addEventListener("loadedmetadata", () => {
-      const current = featurePhase(schedule.events, room, schedule.minute);
+      const current = featurePhase(schedule.events, room, schedule.minute, schedule);
       if (items.get(room.id) === item && current?.show === item.show) video.currentTime = current.offset;
     }, { once: true });
     video.addEventListener("error", () => { if (items.get(room.id) !== item) return; blocked.set(room.id, Date.now() + 30000); release(room.id); onError(new Error("Feature movie unavailable")); }, { once: true });
@@ -85,16 +88,19 @@ export function createFeatureProgram({ world, camera, audio, schedule, getDoor =
     update(delta, isActive) {
       if (disposed) return; active = Boolean(isActive);
       if (!active) { for (const item of items.values()) item.video.pause(); return; }
+      const decoderBudget = Math.max(0, 2 - (trailer?.decoderCount ?? 0));
+      // A newly audible opening cue gets the shared budget immediately.
+      if (items.size > decoderBudget) scan = 0;
       scan -= delta;
       if (scan <= 0) {
         scan = .25;
         const candidates = AUDITORIUMS.flatMap(room => {
-          const phase = featurePhase(schedule.events, room, schedule.minute);
+          const phase = featurePhase(schedule.events, room, schedule.minute, schedule);
           if (!phase || trailer?.isPlaying(room.id) || Date.now() < (blocked.get(room.id) ?? 0)) return [];
           const door = auditoriumDoorLayout(room), distance = Math.hypot(camera.position.x - door.x, camera.position.z - door.z);
           const inside = auditoriumInteriorContains(room, camera.position);
           return inside || distance < 12 ? [{ room, phase, score: inside ? -1000 : distance }] : [];
-        }).sort((a, b) => a.score - b.score).slice(0, 2);
+        }).sort((a, b) => a.score - b.score).slice(0, decoderBudget);
         for (const [id, item] of items) if (!candidates.some(c => c.room.id === id && c.phase.show === item.show)) release(id);
         for (const candidate of candidates) if (!items.has(candidate.room.id)) create(candidate.room, candidate.phase);
       }
@@ -107,7 +113,7 @@ export function createFeatureProgram({ world, camera, audio, schedule, getDoor =
         item.filter.frequency.setTargetAtTime(sound.cutoff, audio.context.currentTime, .12);
       }
     },
-    getSnapshot() { return { active, decoders: items.size, films: [...items.values()].map(i => ({ room: i.room.id, title: "Big Buck Bunny", time: i.video.currentTime, paused: i.video.paused, audio: Boolean(i.source) })) }; },
+    getSnapshot() { return { active, decoders: items.size, films: [...items.values()].map(i => ({ room: i.room.id, title: i.film.title, time: i.video.currentTime, paused: i.video.paused, audio: Boolean(i.source) })) }; },
     dispose() { disposed = true; active = false; [...items.keys()].forEach(release); },
   };
 }

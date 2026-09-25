@@ -292,23 +292,32 @@ export function createTheaterWorld({ scene, materials }) {
     }
     const batches = new Map();
     for (const child of parent.children) {
-      if (!child.isMesh || child.isInstancedMesh || child.userData.propFallback || child.geometry !== unitBoxGeometry || Array.isArray(child.material)) continue;
+      if (!child.isMesh || child.isInstancedMesh || child.userData.propFallback || !child.visible) continue;
+      const supported = child.geometry === unitBoxGeometry || child.geometry === unitCylinderGeometry
+        || [...faceGeometryCache.values()].includes(child.geometry);
+      if (!supported) continue;
       // A casting roof must not turn every box with its material into a
       // shadow caster (and non-receiving ceilings must retain that setting).
-      const key = `${child.material.uuid}:${child.castShadow}:${child.receiveShadow}`;
+      const materialKey = (Array.isArray(child.material) ? child.material : [child.material]).map(m => m.uuid).join('/');
+      const key = `${child.geometry.uuid}:${materialKey}:${child.castShadow}:${child.receiveShadow}`;
       if (!batches.has(key)) batches.set(key, []);
       batches.get(key).push(child);
     }
     for (const meshes of batches.values()) {
       if (meshes.length < 2) continue;
-      const batch = new THREE.InstancedMesh(unitBoxGeometry, meshes[0].material, meshes.length);
+      const batch = new THREE.InstancedMesh(meshes[0].geometry, meshes[0].material, meshes.length);
       batch.name = `batched-${meshes[0].material.name || "boxes"}`;
       batch.castShadow = meshes.some((mesh) => mesh.castShadow);
       batch.receiveShadow = meshes.some((mesh) => mesh.receiveShadow);
       meshes.forEach((mesh, index) => {
         mesh.updateMatrix();
         batch.setMatrixAt(index, mesh.matrix);
-        parent.remove(mesh);
+        if (mesh.geometry === unitBoxGeometry && !Array.isArray(mesh.material)) parent.remove(mesh);
+        else {
+          // Retain named architectural source faces for layout/clearance audits.
+          // The shared instance draws the exact same vertices and finishes.
+          mesh.visible = false; mesh.userData.staticBatchSource = true;
+        }
       });
       batch.instanceMatrix.setUsage(THREE.StaticDrawUsage);
       batch.instanceMatrix.needsUpdate = true;
@@ -2933,6 +2942,11 @@ export function createTheaterWorld({ scene, materials }) {
     propAssets?.setHiddenSeatTrays(cleaningSeatTrays);
   };
   batchBoxMeshes(root);
+  root.traverse(object => {
+    // Meshes are static relative to their parent; movable gate hinges remain
+    // live groups. Avoid recomposing thousands of unchanged local matrices.
+    if (object.isMesh) { object.updateMatrix(); object.matrixAutoUpdate = false; }
+  });
   let runtimeMeshCount = 0;
   let instancedMeshCount = 0;
   root.traverse((object) => {

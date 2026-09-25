@@ -6,9 +6,19 @@ A first-person browser recreation of Consolidated Theatres Mililani 14, built fr
 
 This is an independent recreation with approximate dimensions, not an official architectural survey or ticket service.
 
-The game starts as an usher with a portable cleaning kit and a handheld break sheet. Follow the twofold shift clock through all fourteen theaters, clean trays and seats, sweep into a left-hand dustpan, move three rolling trash cans, replace full bags, service soda BIBs, refill supplies and wash kitchen trays. The [employee gameplay direction](docs/gameplay-direction.md) records the broader career and minimal-menu approach.
+The game starts as an usher with a portable cleaning kit and a handheld break sheet. Choose the shift speed and follow the clock through all fourteen theaters, clean trays and seats, sweep into a left-hand dustpan, move three rolling trash cans, replace full bags, service soda BIBs, refill supplies and wash kitchen trays. The [employee gameplay direction](docs/gameplay-direction.md) records the broader career and minimal-menu approach.
 
-## Version 0.24
+## Version 0.25
+
+- Start a quiet new day at 11:45 AM, with a complete staggered program for all 14 theaters. Choose 1×, 2×, 3× or 5× time speed.
+- Customers trickle in, open closed doors and hold them for following traffic, with smoother movement and substantially cheaper route planning.
+- Easier popcorn collection in tight rows; held bags stay held at walls. The complete break sheet pages without covering its text on phones.
+- Four complete licensed films rotate between shows, with optional offline movie downloads and a shared two-video playback limit.
+- Less startup route work, fewer rendering calls and fewer repeated NPC/matrix calculations.
+
+See [v0.25 behavior and validation](docs/v25-notes.md) and [measured customer CPU improvements](docs/v25-customer-performance.md).
+
+## Version 0.24 (historical)
 
 - Varied audiences share their occupied seats with the cleaning system. Parties walk together where there is room, avoid the player and each other, and give departing customers priority at narrow entrances.
 - Only used trays open, swinging toward the row aisle. Hold the cloth to wipe surfaces and brush chair popcorn down; floor popcorn can be swept at any time. Spills take about six broad swipes.

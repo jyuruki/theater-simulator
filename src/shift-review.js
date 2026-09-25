@@ -12,7 +12,6 @@ import { createFeatureProgram } from "./feature-program.js";
 import { createShowCustomers } from "./show-customers.js";
 import { AUDITORIUMS, LOBBY_PLAN } from "./layout-data.js";
 import { auditoriumDoorLayout } from "./auditorium-door-layout.js";
-import { SHIFT_TIME_SCALE } from "./usher-schedule.js";
 import { planToWorldX } from "./coordinates.js";
 
 const renderer = new THREE.WebGLRenderer({ canvas: document.querySelector("canvas"), antialias: true, preserveDrawingBuffer: true });
@@ -29,13 +28,18 @@ const camera = new THREE.PerspectiveCamera(67, 1, .04, 260), controls = new Orbi
 const status = document.querySelector("#status"), select = document.querySelector("#view"), roomSelect = document.querySelector("#room");
 for (const room of AUDITORIUMS) roomSelect.add(new Option(`Theater ${room.number}`, room.id)); roomSelect.value = "theater-2";
 const audio = createTheaterAudio();
-let shift, patrons, features;
+let shift, patrons, features, featurePreview = null;
 const media = createShowStartMedia({ camera, world, audio, getDoor: id => shift?.doors.getSnapshot().find(d => d.id === id), onError: error => { status.textContent = String(error); } });
 shift = createUsherShift({ scene, world, camera, collisionWorld, storage: null, seed: 23,
   showToast: message => { status.textContent = message; }, onSound: kind => audio.play(kind),
   onStart: event => { features?.suspend(event.theaterId); media.onStart(event); patrons?.onStart(event); }, onBreak: event => patrons?.onBreak(event) });
 patrons = createShowCustomers({ scene, world, camera, collisionWorld, doors: shift.doors, waste: shift.waste });
-features = createFeatureProgram({ world, camera, audio, schedule: shift.schedule, trailer: media, getDoor: id => shift.doors.getSnapshot().find(d => d.id === id) });
+const featureSchedule = {
+  get minute() { return featurePreview ? featurePreview.time + 10 : shift.schedule.minute; },
+  get events() { return featurePreview ? [featurePreview] : shift.schedule.events; },
+  secondsSince: minute => featurePreview ? 100 : shift.schedule.secondsSince(minute),
+};
+features = createFeatureProgram({ world, camera, audio, schedule: featureSchedule, trailer: media, getDoor: id => shift.doors.getSnapshot().find(d => d.id === id) });
 let action = false, capturing = false, paused = false, syntheticEvent = 0;
 const views = [];
 function add(id, label, position, target, roomId) {
@@ -122,7 +126,7 @@ document.querySelector("#confirm").onclick = () => shift.confirmPlacement();
 document.querySelector("#work").onclick = event => { action = !action; event.target.textContent = action ? "Release action" : "Hold action"; };
 document.querySelector("#pause").onclick = event => { paused = !paused; action = false; event.target.textContent = paused ? "Resume" : "Pause"; };
 document.querySelector("#advance").onclick = () => {
-  for (let i = 0; i < 8 * 60 / SHIFT_TIME_SCALE / .1; i++) shift.update(.1, { active: true });
+  for (let i = 0; i < 8 * 60 / shift.schedule.timeScale / .1; i++) shift.update(.1, { active: true });
   refreshViews(); status.textContent = `Clock advanced eight game minutes: ${shift.schedule.time}`;
 };
 function testEvent(kind) {
@@ -132,6 +136,10 @@ function testEvent(kind) {
   return { id: `review-${++syntheticEvent}-${kind}`, theaterId: room.id, number: room.number, kind, cycle: occupiedCycle, time: shift.schedule.minute };
 }
 document.querySelector("#feature-audio").onclick = () => { audio.start(); features.retry(); };
+document.querySelector("#preview-feature").onclick = () => {
+  featurePreview = { ...testEvent("start"), audienceCycle: 0 }; features.retry(); paused = false;
+  status.textContent = `Previewing feature program in Theater ${featurePreview.number}`;
+};
 document.querySelector("#start-show").onclick = () => {
   audio.start(); media.prepare(); media.retry(); paused = false;
   document.querySelector("#pause").textContent = "Pause";
@@ -169,7 +177,7 @@ renderer.setAnimationLoop(() => {
   const active = !capturing && !paused;
   world.update(active ? dt : 0, camera.position);
   for (const collider of dynamicColliders) Object.assign(collider, collider.source);
-  shift.update(dt, { active, action }); patrons.update(dt, active); media.update(dt, active); features.update(dt, active);
+  shift.update(dt, { active, action }); patrons.update(dt, active, shift.schedule); media.update(dt, active); features.update(dt, active);
   lighting.update(camera.position); renderer.render(scene, camera);
   if (now - lastState > 400) {
     lastState = now;

@@ -526,7 +526,12 @@ export function createVisitUI({
     .addEventListener("click", () => { if (!employeeMode) ticketWallet(); });
   document
     .querySelector("#settings-button")
-    .addEventListener("click", settings);
+    .addEventListener("click", () => {
+      // Touch devices have no Escape key. Keep shift speed, fresh-day and
+      // offline-film controls reachable through the common pause card.
+      if (employeeMode) controller.pause();
+      else settings();
+    });
   document
     .querySelector("#pause-settings-button")
     .addEventListener("click", settings);

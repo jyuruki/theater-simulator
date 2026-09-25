@@ -12,11 +12,10 @@ import { createTheaterWorld } from "./world.js";
 import { createTheaterLighting } from "./lighting.js";
 import { USHER_SPAWN } from "./usher-gameplay.js";
 import { createUsherShift } from "./usher-shift.js";
-import { createUsherUI } from "./usher-ui.js";
+import { createUsherUI, createShiftSetupUI } from "./usher-ui.js";
 import { createShowStartMedia, HULA_DURATION } from "./show-start-media.js";
 import { createShowCustomers } from "./show-customers.js";
 import { setupInstallApp } from "./install-app.js";
-import { SHIFT_TIME_SCALE } from "./usher-schedule.js";
 import { createFeatureProgram } from "./feature-program.js";
 
 const canvas = document.querySelector("#game-canvas");
@@ -99,11 +98,11 @@ try {
 
   const materials = createMaterialLibrary(renderer);
   const world = createTheaterWorld({ scene, materials });
-  world.loadPropAssets({
+  const propsReady = world.loadPropAssets({
     url: `${import.meta.env.BASE_URL}models/theater-props.glb`,
     onLoaded: () => { renderer.shadowMap.needsUpdate = true; },
   });
-  world.loadKioskAssets({
+  const kiosksReady = world.loadKioskAssets({
     url: `${import.meta.env.BASE_URL}models/mililani-ticket-kiosk.glb`,
     onLoaded: () => { renderer.shadowMap.needsUpdate = true; },
   });
@@ -111,7 +110,7 @@ try {
   collisionWorld.addBoxes(world.colliders);
   const doorColliders = collisionWorld.addBoxes(world.dynamicColliders);
   const crowd = createTheaterCrowd({ scene, collisionWorld, world });
-  crowd.loadAssets({ url: `${import.meta.env.BASE_URL}models/theater-npcs.glb` });
+  const crowdReady = crowd.loadAssets({ url: `${import.meta.env.BASE_URL}models/theater-npcs.glb` });
   const audio = createTheaterAudio();
   const media = createCinemaMedia({ scene, world, materials });
   let usher, patrons, features;
@@ -132,6 +131,9 @@ try {
   };
 
   const controller = new FirstPersonController({
+    // Exercise the actual touch UI in the local browser inspector. Production
+    // still chooses controls solely from the device's pointer capabilities.
+    touchMode: import.meta.env.DEV && new URLSearchParams(location.search).has("touch-review") ? true : null,
     camera,
     domElement: canvas,
     collisionWorld,
@@ -192,6 +194,7 @@ try {
     onSound: (kind) => audio.play(kind), storage: shiftStorage,
     onStart: event => { features?.suspend(event.theaterId); startMedia.onStart(event); patrons?.onStart(event); },
     onBreak: event => patrons?.onBreak(event) });
+  const shiftSetup = createShiftSetupUI({ schedule: usher.schedule, storage: shiftStorage, restart: () => window.location.reload() });
   patrons = createShowCustomers({ scene, world, camera, collisionWorld, doors: usher.doors, waste: usher.waste });
   const patronsReady = patrons.loadAssets({ url: `${import.meta.env.BASE_URL}models/theater-npcs.glb` }).then(result => {
     patrons.restoreSchedule({ ...usher.schedule.getSnapshot(), events: usher.schedule.events }); return result;
@@ -200,9 +203,8 @@ try {
     getDoor: id => usher.doors.getSnapshot().find(d => d.id === id), onError: error => console.warn(error.message) });
   // Refreshing during the opening cue resumes at the corresponding show time.
   const scheduleSnapshot = usher.schedule.getSnapshot();
-  const boarding = new Set(scheduleSnapshot.done);
   for (const event of usher.schedule.events.filter(e => e.kind === "start" && scheduleSnapshot.done.includes(e.id))) {
-    const seconds = (usher.schedule.minute - event.time) * 60 / SHIFT_TIME_SCALE;
+    const seconds = usher.schedule.secondsSince(event.time);
     if (seconds >= 0 && seconds < HULA_DURATION) startMedia.onStart(event, seconds);
   }
   const usherUI = createUsherUI({ gameplay: usher, controller, canvas,
@@ -245,21 +247,13 @@ try {
     updateHud();
     interactions.update(delta);
     usherUI.update(delta);
-    if (entered && controller.active && !document.hidden) {
-      // Give guests time to walk the real building before the usher hears the
-      // start cue and closes the doors. Exact-start dispatch deduplicates by ID.
-      for (const event of usher.schedule.events) if (event.kind === "start" && !boarding.has(event.id)
-        && event.time >= usher.schedule.minute && event.time - usher.schedule.minute <= 8) {
-        boarding.add(event.id); patrons.onStart(event);
-      }
-    }
     lighting.update(controller.position, delta);
     audio.update(controller.position, currentZoneId, entered && (controller.active || interactions.isOpen), controller.grounded);
     media.update(delta, currentZoneId, entered && controller.active && !document.hidden);
     startMedia.update(delta, entered && controller.active && !document.hidden);
     features.update(delta, entered && controller.active && !document.hidden);
     patrons.setEnabled(crowd.enabled);
-    patrons.update(delta, entered && controller.active && !document.hidden);
+    patrons.update(delta, entered && controller.active && !document.hidden, usher.schedule);
 
     camera.getWorldDirection(cameraDirection);
     if (frame % 3 === 0 && !minimapPanel.classList.contains("is-hidden")) {
@@ -292,7 +286,13 @@ try {
 
   requestAnimationFrame(async () => {
     try {
-      await patronsReady;
+      await Promise.all([patronsReady, propsReady, kiosksReady, crowdReady]);
+      loadingScreen.textContent = "PREPARING THEATER LIGHTING…";
+      // Compile loaded materials while the loading screen is still present.
+      // Previously GPU shader work spilled into the first walking/turning frames.
+      await renderer.compileAsync(scene, camera);
+      renderer.render(scene, camera);
+      await new Promise(resolve => requestAnimationFrame(resolve));
       loadingScreen.classList.add("is-hidden");
       document.body.dataset.ready = "true";
     } catch (error) { showFatalError(error); }
@@ -316,6 +316,7 @@ try {
     crowd.dispose();
     media.dispose();
     usherUI.dispose();
+    shiftSetup.dispose();
     usher.dispose();
     lighting.dispose();
     controller.dispose();
@@ -327,7 +328,7 @@ try {
     enumerable: false,
     writable: false,
     value: Object.freeze({
-      layoutVersion: "mililani-sketch-v24",
+      layoutVersion: "mililani-sketch-v25",
       validation: Object.freeze(validation),
       stats: world.stats,
       controller,

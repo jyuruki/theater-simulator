@@ -3,7 +3,7 @@ import { AUDITORIUMS } from "./layout-data.js";
 import { auditoriumDoorLayout } from "./auditorium-door-layout.js";
 import { segmentHitsBox } from "./visit-state.js";
 
-/** Manually operated auditorium doors; guests open them at the break. */
+/** Physical auditorium doors; guests can hold a closed door for nearby traffic. */
 export function createUsherDoors({ scene, camera, collisionWorld, showToast = () => {}, storage }) {
   const root = new THREE.Group(); root.name = "usher-auditorium-doors"; scene.add(root);
   const geometry = new THREE.BoxGeometry(1, 1, 1);
@@ -18,7 +18,7 @@ export function createUsherDoors({ scene, camera, collisionWorld, showToast = ()
     const previous = saved?.[room.id];
     const open = typeof previous?.open === "boolean" ? previous.open : true;
     const door = { ...spec,
-      targetOpen: open, angle: open ? Math.PI / 2 : 0, startDue: Boolean(previous?.startDue), leaves: [] };
+      targetOpen: open, trafficUntil: 0, trafficClose: Boolean(previous?.trafficClose), angle: open ? Math.PI / 2 : 0, startDue: Boolean(previous?.startDue), leaves: [] };
     for (const sign of spec.small ? [spec.hingeSide] : [-1, 1]) {
       const hinge = new THREE.Group(); hinge.name = `${room.id}-usher-door-${sign}`;
       const offset = sign * (width / 2 - (spec.small ? .065 : .15));
@@ -41,8 +41,8 @@ export function createUsherDoors({ scene, camera, collisionWorld, showToast = ()
   const colliders = doors.flatMap(d => d.leaves.flatMap(l => l.colliders));
   const own = new Set(colliders);
   const look = new THREE.Vector3(), ray = new THREE.Ray();
-  let focus = null, active = false;
-  const save = () => { try { storage?.setItem("mililani-doors-v22", JSON.stringify(Object.fromEntries(doors.map(d => [d.id, { open: d.targetOpen, startDue: d.startDue }])))); } catch {} };
+  let focus = null, active = false, clock = 0;
+  const save = () => { try { storage?.setItem("mililani-doors-v22", JSON.stringify(Object.fromEntries(doors.map(d => [d.id, { open: d.targetOpen, startDue: d.startDue, trafficClose: d.trafficClose }])))); } catch {} };
   function boxesAt(door, leaf, angle) {
     const theta = door.yaw - door.swing * leaf.direction * angle, cos = Math.cos(theta), sin = Math.sin(theta);
     const hx = Math.abs(cos) * leaf.leafWidth / 12 + Math.abs(sin) * .035;
@@ -59,12 +59,12 @@ export function createUsherDoors({ scene, camera, collisionWorld, showToast = ()
       boxesAt(door, leaf, door.angle).forEach((b, i) => Object.assign(leaf.colliders[i], b, { enabled: true }));
     }
   }
-  function blocked(boxes) {
+  function blocked(boxes, local) {
     const feet = camera.position.y - 1.68;
     for (const b of boxes) {
       const nx = THREE.MathUtils.clamp(camera.position.x, b.minX, b.maxX), nz = THREE.MathUtils.clamp(camera.position.z, b.minZ, b.maxZ);
       if (feet < b.maxY && camera.position.y > b.minY && Math.hypot(camera.position.x - nx, camera.position.z - nz) < .34) return true;
-      if (collisionWorld.colliders.some(c => !own.has(c) && c.enabled !== false
+      if (local.some(c => !own.has(c) && c.enabled !== false
         && b.maxX > c.minX + .003 && b.minX < c.maxX - .003 && b.maxZ > c.minZ + .003 && b.minZ < c.maxZ - .003
         && b.maxY > c.minY + .003 && b.minY < c.maxY - .003)) return true;
     }
@@ -89,14 +89,19 @@ export function createUsherDoors({ scene, camera, collisionWorld, showToast = ()
     update(delta, input = {}) {
       active = Boolean(input.active); if (!active) { focus = null; return; }
       const dt = Number.isFinite(delta) ? Math.min(.1, Math.max(0, delta)) : 0;
+      clock += dt;
       for (const door of doors) {
+        if (door.trafficClose && clock > door.trafficUntil) { door.targetOpen = false; door.trafficClose = false; save(); }
         const goal = door.targetOpen ? Math.PI / 2 : 0;
         if (Math.abs(goal - door.angle) < .0001) continue;
+        const reach = door.width + .6;
+        const local = collisionWorld.colliders.filter(c => c.enabled !== false && !own.has(c)
+          && c.maxX > door.x - reach && c.minX < door.x + reach && c.maxZ > door.z - reach && c.minZ < door.z + reach);
         // Small angular substeps keep a door from tunneling into a person or can.
         const target = door.angle + THREE.MathUtils.clamp(goal - door.angle, -dt * 1.4, dt * 1.4);
         const steps = Math.max(1, Math.ceil(Math.abs(target - door.angle) / .025)), step = (target - door.angle) / steps;
         for (let i = 0; i < steps; i++) {
-          if (blocked(door.leaves.flatMap(leaf => boxesAt(door, leaf, door.angle + step)))) break;
+          if (blocked(door.leaves.flatMap(leaf => boxesAt(door, leaf, door.angle + step)), local)) break;
           door.angle += step;
         }
         apply(door);
@@ -104,18 +109,28 @@ export function createUsherDoors({ scene, camera, collisionWorld, showToast = ()
       }
       findFocus();
     },
+    requestPassage(id) {
+      const door = doors.find(door => door.id === id); if (!door) return false;
+      // Only a guest-opened door returns closed. A door the usher deliberately
+      // left open remains open until the usher closes it for the show.
+      const changed = !door.targetOpen;
+      if (changed) door.trafficClose = true;
+      door.targetOpen = true; door.trafficUntil = clock + 3;
+      if (changed) save();
+      return true;
+    },
     interact() {
       if (!active || !focus) return false;
-      focus.door.targetOpen = !focus.door.targetOpen;
+      focus.door.targetOpen = !focus.door.targetOpen; focus.door.trafficClose = false;
       showToast(`${focus.door.targetOpen ? "Opening" : "Closing"} Theater ${focus.door.number} doors. Keep the swing clear.`);
       save(); return true;
     },
-    onBreak(id) { const d = doors.find(d => d.id === id); if (d) { d.targetOpen = true; d.startDue = false; save(); } },
+    onBreak(id) { const d = doors.find(d => d.id === id); if (d) { d.targetOpen = true; d.trafficClose = false; d.startDue = false; save(); } },
     onStart(id) { const d = doors.find(d => d.id === id); if (d) { d.startDue = d.angle > .002; save(); } },
     get focusedPrompt() { return focus ? `${focus.door.targetOpen ? "Close" : "Open"} Theater ${focus.door.number} doors` : ""; },
     get focusDistance() { return focus?.distance ?? Infinity; },
     get due() { return doors.filter(d => d.startDue).map(d => d.number); },
-    getSnapshot() { return doors.map(d => ({ id: d.id, angle: d.angle, targetOpen: d.targetOpen, startDue: d.startDue, center: [d.x, 1, d.z], route: d.route, single: d.small, handles: d.leaves.map(l => l.hinge.localToWorld(new THREE.Vector3(l.direction * l.leafWidth * .65, 1.05, 0)).toArray()) })); },
+    getSnapshot() { return doors.map(d => ({ id: d.id, angle: d.angle, targetOpen: d.targetOpen, trafficClose: d.trafficClose, startDue: d.startDue, center: [d.x, 1, d.z], route: d.route, single: d.small, handles: d.leaves.map(l => l.hinge.localToWorld(new THREE.Vector3(l.direction * l.leafWidth * .65, 1.05, 0)).toArray()) })); },
     dispose() { save(); root.removeFromParent(); colliders.forEach(c => collisionWorld.remove(c)); geometry.dispose(); panel.dispose(); redPanel.dispose(); metal.dispose(); },
   };
 }

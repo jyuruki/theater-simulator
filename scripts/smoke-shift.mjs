@@ -9,7 +9,7 @@ import { createTheaterWorld } from "../src/world.js";
 import { createMaterialLibrary } from "../src/materials.js";
 import { AABBCollisionWorld } from "../src/player.js";
 
-const saved = new Map(), storage = { getItem: key => saved.get(key), setItem: (key, value) => saved.set(key, value) };
+const saved = new Map([["mililani-schedule-v22", JSON.stringify({ version: 1, minute: 1020, seed: 42, started: false, done: [], clean: [] })]]), storage = { getItem: key => saved.get(key), setItem: (key, value) => saved.set(key, value) };
 const breaks = [], starts = [];
 const schedule = createUsherSchedule({ storage, seed: 42, onBreak: (event, seed) => breaks.push({ ...event, seed }), onStart: e => starts.push(e) });
 assert.deepEqual(schedule.getNextBreaks().slice(0, 3).map(e => e.number), [2, 1, 3]);

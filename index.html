@@ -33,7 +33,13 @@
           fourteen theaters. Wipe used trays and seats, sweep popcorn, roll the
           cans to upcoming breaks, and keep the fountain supplies stocked.
         </p>
+        <label class="shift-speed-label" for="shift-speed-intro">Shift speed
+          <select id="shift-speed-intro"><option value="1">1× · Real time</option><option value="2" selected>2× · Relaxed</option><option value="3">3× · Steady</option><option value="5">5× · Busy</option></select>
+        </label>
+        <p id="saved-shift-note" class="shift-save-note" hidden></p>
         <button id="enter-button" type="button">START YOUR SHIFT</button>
+        <button id="new-day-intro" type="button" class="pause-options">START NEW DAY · 11:45 AM</button>
+        <small class="new-day-note">New day replaces this device’s saved shift. First show: noon.</small>
         <button id="install-button" type="button" class="pause-options">ADD TO HOME SCREEN</button>
         <p id="install-help" hidden>On iPhone, open this page in Safari, tap Share, then Add to Home Screen. Leave Open as Web App enabled if shown. Launch the Mililani 14 icon for the full-screen app. The first visit needs an internet connection.</p>
         <div class="control-list" aria-label="Controls">
@@ -55,7 +61,13 @@
         <div class="eyebrow">SHIFT PAUSED</div>
         <h2>Ready when you are.</h2>
         <button id="resume-button" type="button">RESUME SHIFT</button>
+        <label class="shift-speed-label" for="shift-speed-pause">Shift speed
+          <select id="shift-speed-pause"><option value="1">1× · Real time</option><option value="2" selected>2× · Relaxed</option><option value="3">3× · Steady</option><option value="5">5× · Busy</option></select>
+        </label>
+        <button id="new-day-pause" class="pause-options" type="button">START NEW DAY · 11:45 AM</button>
+        <small class="new-day-note">Replaces this device’s saved shift.</small>
         <button id="pause-settings-button" class="pause-options" type="button">Sound &amp; atmosphere</button>
+        <a class="new-day-note" href="./media/credits.html" target="_blank" rel="noopener">Film credits</a>
         <button id="update-button" class="pause-options" type="button" hidden>UPDATE APP &amp; RESUME SAVED SHIFT</button>
       </section>
 
@@ -67,16 +79,16 @@
         </div>
         <div class="build-card">
           <span>USHER BUILD</span>
-          <strong>v0.24</strong>
+          <strong>v0.25</strong>
         </div>
-        <div class="shift-time"><span>SHIFT TIME</span><strong id="shift-clock" aria-label="Shift time">17:00</strong></div>
+        <div class="shift-time"><span>SHIFT TIME</span><strong id="shift-clock" aria-label="Shift time">11:45</strong></div>
         <nav class="visit-toolbar" aria-label="Shift controls">
           <button id="ticket-button" type="button" hidden>My ticket <kbd>I</kbd></button>
           <button id="breaksheet-button" type="button">Sheet <kbd>B</kbd></button>
           <button id="broom-button" type="button">Broom <kbd>1</kbd></button>
           <button id="cloth-button" type="button">Cloth <kbd>2</kbd></button>
           <button id="map-button" type="button">Map <kbd>M</kbd></button>
-          <button id="settings-button" type="button" aria-label="Sound and atmosphere settings">Options</button>
+          <button id="settings-button" type="button" aria-label="Pause and shift options">Options</button>
         </nav>
       </header>
 
@@ -104,6 +116,12 @@
       <button id="tool-action-button" type="button" hidden>HOLD TO CLEAN</button>
       <button id="tool-return-button" type="button" hidden>RETURN TOOL</button>
       <button id="tool-place-button" type="button" hidden>PLACE</button>
+      <nav id="sheet-controls" class="sheet-controls" aria-label="Break sheet pages" hidden>
+        <button id="sheet-previous" type="button" aria-label="Previous sheet page">←</button>
+        <span id="sheet-page" aria-live="polite">1 / 1</span>
+        <button id="sheet-next" type="button" aria-label="Next sheet page">→</button>
+        <button id="sheet-fold" type="button">FOLD SHEET</button>
+      </nav>
       <p id="visit-status" aria-live="polite"></p>
       <dialog id="visit-dialog" aria-labelledby="visit-heading"></dialog>
 

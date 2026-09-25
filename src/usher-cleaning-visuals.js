@@ -41,6 +41,8 @@ export function createCleaningVisuals({ scene, world, hands }) {
   const lobes = [new THREE.IcosahedronGeometry(.027, 1), new THREE.IcosahedronGeometry(.024, 0).translate(.023, .008, .01), new THREE.IcosahedronGeometry(.021, 0).translate(-.02, -.004, -.006)];
   const kernelGeometry = geo(mergeGeometries(lobes)); lobes.forEach(g => g.dispose());
   const kernels = new THREE.InstancedMesh(kernelGeometry, palette.popcorn, 4096); kernels.name = "usher-popcorn"; kernels.count = 0; root.add(kernels);
+  const kernelMatrix = new THREE.Matrix4(), kernelQuaternion = new THREE.Quaternion(), kernelEuler = new THREE.Euler();
+  const kernelPosition = new THREE.Vector3(), kernelScale = new THREE.Vector3(1, 1, 1), pourPosition = new THREE.Vector3();
   const surfaces = new Map(), trays = new Map(), jobSeeds = new Map(), cleanGroups = new Map(), trayBatches = new Map(), supportBatches = new Map();
   function releaseSurface(entry) {
     if (!entry.mesh) return;
@@ -200,22 +202,24 @@ export function createCleaningVisuals({ scene, world, hands }) {
     for (const name of ["broom", "pan", "cloth"]) tools[name].visible = hands.owner === "cleaning"
       && (name === "cloth" ? state.heldTool === "cloth" : state.heldTool === "broom") && visible[name];
     root.updateMatrixWorld(true);
-    const contents = state.particles.filter(p => ["pan", "pouring"].includes(p.mode));
-    const matrix = new THREE.Matrix4(), quaternion = new THREE.Quaternion(); let index = 0;
+    let index = 0, panIndex = 0;
     for (const job of state.jobs) for (const p of job.particles) {
       if (p.mode === "trash") continue;
       if (!["pan", "pouring"].includes(p.mode) && !cleanGroups.get(job.id).visible) continue;
-      const position = new THREE.Vector3(p.x, p.y, p.z);
+      const position = kernelPosition.set(p.x, p.y, p.z);
       if (p.mode === "chair") { const seat = job.seatsById.get(p.seatId); p.y = seat.floorY + (blenderSeats ? .601 : .646); position.y = p.y; }
       if (["pan", "pouring"].includes(p.mode)) {
         const container = state.heldTool === "broom" ? tools.pan : stored.pan;
         if (!container.visible) continue;
-        const i = contents.indexOf(p); position.set(((i % 7) - 3) * .055, .085 + Math.floor(i / 35) * .025, (Math.floor(i / 7) % 5 - 2) * .048); container.localToWorld(position);
+        // Sequential packing stays linear even after cleaning several rows.
+        // Searching the full pan for every kernel made a full pan quadratic.
+        const i = panIndex++; position.set(((i % 7) - 3) * .055, .085 + Math.floor(i / 35) * .025, (Math.floor(i / 7) % 5 - 2) * .048); container.localToWorld(position);
         if (p.mode === "pouring" && state.pourTarget) {
-          const t = Math.min(1, (.85 - state.pouring) / .7); position.lerp(new THREE.Vector3(...state.pourTarget.position), t); position.y += Math.sin(t * Math.PI) * .18;
+          const t = Math.min(1, (.85 - state.pouring) / .7); position.lerp(pourPosition.fromArray(state.pourTarget.position), t); position.y += Math.sin(t * Math.PI) * .18;
         }
       }
-      quaternion.setFromEuler(new THREE.Euler(index * .3, index, index * .7)); matrix.compose(position, quaternion, new THREE.Vector3(1, 1, 1)); kernels.setMatrixAt(index++, matrix);
+      kernelQuaternion.setFromEuler(kernelEuler.set(index * .3, index, index * .7));
+      kernelMatrix.compose(position, kernelQuaternion, kernelScale); kernels.setMatrixAt(index++, kernelMatrix);
     }
     kernels.count = index; kernels.instanceMatrix.needsUpdate = true; kernels.computeBoundingSphere();
   }
