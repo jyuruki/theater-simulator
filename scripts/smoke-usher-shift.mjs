@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { createUsherShift } from "../src/usher-shift.js";
 import { USHER_SPAWN } from "../src/usher-gameplay.js";
-import { LEGACY_SHIFT_START_MINUTE as SHIFT_START_MINUTE, SHIFT_TIME_SCALE } from "../src/usher-schedule.js";
+import { LEGACY_SHIFT_START_MINUTE as SHIFT_START_MINUTE, SHIFT_TIME_SCALE,
+  createBreakEvents, createV25BreakEvents, SCHEDULE_STORAGE_KEY } from "../src/usher-schedule.js";
 import { AUDITORIUMS } from "../src/layout-data.js";
 import { createTheaterWorld } from "../src/world.js";
 import { createMaterialLibrary } from "../src/materials.js";
@@ -183,7 +184,7 @@ for (const [index, event] of firstBreaks.entries()) {
   assert.equal(jobs.filter(j => j.id === event.theaterId).length, 1);
   const job = jobs.find(j => j.id === event.theaterId);
   const plan = createCleaningPlans(world).find(p => p.id === event.theaterId);
-  const attended = createShowAttendance(plan, { cycle: event.cycle }).seatIds;
+  const attended = createShowAttendance(plan, { cycle: event.cycle, version: event.attendanceVersion }).seatIds;
   assert.deepEqual(job.seats.map(s => s.id).sort(), [...attended].sort());
   assert.ok(job.seats.length < AUDITORIUMS.find(r => r.id === event.theaterId).seats);
   assert.ok(job.seats.every(s => s.trayOpen), `${event.theaterId}'s break opens occupied trays`);
@@ -214,4 +215,41 @@ assert.equal(resumed.waste.getSnapshot().bins.length, 3);
 resumed.dispose();
 assert.deepEqual(collisionWorld.colliders, baselineColliders);
 assert.deepEqual(scene.children, baselineChildren);
-console.log("Usher shift passed: shared physical hands, sheet/pause gating, 2x clock, 14 scheduled breaks, save/reload and complete collider disposal.");
+
+// Cross the real composed break boundary on both program generations. A v25
+// saved show must keep its occupants, while a new day uses the quieter audience.
+for (const programVersion of [25, 26]) {
+  const events = programVersion === 25 ? createV25BreakEvents() : createBreakEvents();
+  const event = events.find(event => event.kind === "break");
+  const beforeBreak = event.time - .05;
+  const progress = new Map([[SCHEDULE_STORAGE_KEY, JSON.stringify({
+    version: programVersion === 25 ? 2 : 3, programVersion, mode: "day", seed: 82,
+    minute: beforeBreak, started: true, timeScale: 50,
+    done: events.filter(event => event.time <= beforeBreak).map(event => event.id), clean: [],
+  })]]);
+  const runtimeStorage = { getItem: key => progress.get(key), setItem: (key, value) => progress.set(key, value) };
+  let boundaryShift = createUsherShift({ ...options, storage: runtimeStorage });
+  assert.equal(boundaryShift.schedule.programVersion, programVersion);
+  assert.equal(boundaryShift.cleaning.getSnapshot().state.jobs.length, 0);
+  const supplyTime = boundaryShift.supplies.getSnapshot().state.elapsed;
+  boundaryShift.update(.1, { active: true });
+  assert.ok(Math.abs(boundaryShift.schedule.minute - beforeBreak - 5 / 60) < 1e-8);
+  assert.ok(Math.abs(boundaryShift.supplies.getSnapshot().state.elapsed - supplyTime - 5) < 1e-8,
+    "Consumption and schedule both advance five game seconds at 50x, with no stale 20x cap");
+  const job = boundaryShift.cleaning.getSnapshot().state.jobs.find(job => job.id === event.theaterId);
+  assert.ok(job, "The schedule callback creates the due cleaning job in the composed runtime");
+  const plan = createCleaningPlans(world).find(plan => plan.id === event.theaterId);
+  const expectedSeats = createShowAttendance(plan, { cycle: event.audienceCycle, version: event.attendanceVersion }).seatIds;
+  assert.deepEqual(job.seats.map(seat => seat.id).sort(), expectedSeats.sort(),
+    `${programVersion}: used trays match the show's versioned visible audience`);
+  const signature = jobSignature(job);
+  boundaryShift.dispose();
+  boundaryShift = createUsherShift({ ...options, storage: runtimeStorage });
+  assert.equal(boundaryShift.schedule.programVersion, programVersion);
+  assert.deepEqual(jobSignature(boundaryShift.cleaning.getSnapshot().state.jobs.find(job => job.id === event.theaterId)), signature,
+    "Saving and reloading the new cleaning schema preserves versioned occupied seats and mess IDs");
+  boundaryShift.dispose();
+  assert.deepEqual(collisionWorld.colliders, baselineColliders);
+  assert.deepEqual(scene.children, baselineChildren);
+}
+console.log("Usher shift passed: shared physical hands, sheet/pause gating, 14 legacy breaks, versioned v25/v26 audience-to-tray matching, synchronized 50x consumption, save/reload and complete collider disposal.");

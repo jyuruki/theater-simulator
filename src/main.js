@@ -193,6 +193,7 @@ try {
   usher = createUsherShift({ scene, world, camera, collisionWorld, controller, showToast,
     onSound: (kind) => audio.play(kind), storage: shiftStorage,
     onStart: event => { features?.suspend(event.theaterId); startMedia.onStart(event); patrons?.onStart(event); },
+    getUsedSeatIds: event => patrons?.getUsedSeatIds(event),
     onBreak: event => patrons?.onBreak(event) });
   const shiftSetup = createShiftSetupUI({ schedule: usher.schedule, storage: shiftStorage, restart: () => window.location.reload() });
   patrons = createShowCustomers({ scene, world, camera, collisionWorld, doors: usher.doors, waste: usher.waste });
@@ -328,7 +329,7 @@ try {
     enumerable: false,
     writable: false,
     value: Object.freeze({
-      layoutVersion: "mililani-sketch-v25",
+      layoutVersion: "mililani-sketch-v26",
       validation: Object.freeze(validation),
       stats: world.stats,
       controller,

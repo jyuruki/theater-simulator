@@ -18,6 +18,8 @@ export function createCleaningPlans(world) {
           stand: [x, row.elevation, row.z + forward * .73], floorBounds: planToWorldBounds(row.floorBounds) });
       }
     }
+    // These apron anchors restore older, partially cleaned saves. New breaks
+    // distribute their occasional messes along the occupied seats' row aisles.
     const apron = layout.frontApronBounds, patchZ = (apron.zMin + apron.zMax) / 2, centerX = planToWorldX(layout.centerX);
     const patches = [-1, 1].map(sign => ({ x: centerX + sign * Math.min(1.7, width * .22),
       y: layout.frontElevation, z: patchZ, bounds: planToWorldBounds(apron) }));

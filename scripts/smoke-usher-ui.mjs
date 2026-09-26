@@ -239,6 +239,8 @@ assert.equal(touchVisit.isOpen, false, "Sound settings no longer intercept the t
 const touchSpeed = document.querySelector("#shift-speed-pause");
 assert.ok(pauseCard.contains(touchSpeed) && pauseCard.contains(document.querySelector("#new-day-pause")));
 touchSpeed.value = "5"; touchSpeed.dispatchEvent(new touchDom.Event("change")); assert.equal(touchSchedule.timeScale, 5);
+touchSpeed.value = "50"; touchSpeed.dispatchEvent(new touchDom.Event("change")); assert.equal(touchSchedule.timeScale, 50);
+assert.equal(document.querySelector("#shift-speed-intro").value, "50", "Mobile fast-forward selection stays synchronized with startup settings");
 document.querySelector("#pause-settings-button").click();
 assert.equal(touchVisit.isOpen, true, "Sound & atmosphere remains available from the pause card");
 assert.ok(document.querySelector("#visit-dialog input[type=range]"));
@@ -247,6 +249,6 @@ assert.equal(touchController.active, true, "Closing sound settings returns to th
 document.querySelector("#settings-button").click(); document.querySelector("#resume-button").click();
 assert.equal(touchController.active, true); assert.equal(pauseCard.hidden, true, "Touch Resume closes the pause card and restores controls");
 document.querySelector("#settings-button").click(); document.querySelector("#new-day-pause").click();
-assert.equal(newDayReloads, 1); assert.equal(JSON.parse(shiftValues.get(NEW_DAY_REQUEST_KEY)).timeScale, 5);
+assert.equal(newDayReloads, 1); assert.equal(JSON.parse(shiftValues.get(NEW_DAY_REQUEST_KEY)).timeScale, 50);
 touchSetup.dispose(); touchController.dispose(); touchDom.happyDOM.abort();
 console.log("Usher controls valid: physical E, 1/2/B and touch shortcuts, multitouch cancellation, shared hands, real charged-bag sheet/tool/pause isolation, owner labels and complete listener cleanup.");

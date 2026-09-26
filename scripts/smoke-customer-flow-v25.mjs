@@ -44,7 +44,7 @@ const pending = customers.navigation.theaterPathAsync("theater-14");
 setTimeout(() => { ticked = true; }, 0);
 const route = await pending;
 assert.ok(route?.length > 1 && ticked, "Long routes yield to input/render event loop");
-const event = { id: "day-start-test-2", theaterId: "theater-2", kind: "start", time: 720, cycle: 1, audienceCycle: 1 };
+const event = { id: "day-start-test-2", theaterId: "theater-2", kind: "start", time: 720, cycle: 1, audienceCycle: 1, attendanceVersion: 24 };
 let minute = 705, maxTurn = 0, movingSamples = 0, turns = new Map();
 async function advance(seconds) {
   for (let i = 0; i < seconds * 20; i++) {
@@ -62,7 +62,7 @@ await advance(2);
 assert.equal(customers.getSnapshot().actors.length, 0, "No party spawns before its arrival time");
 minute = 706.1; await advance(210);
 const early = customers.getSnapshot().actors.length;
-const expected = createShowAttendance(customers.navigation.seatPlans.find(plan => plan.id === "theater-2"), { cycle: 1 }).count;
+const expected = createShowAttendance(customers.navigation.seatPlans.find(plan => plan.id === "theater-2"), { cycle: 1, version: 24 }).count;
 assert.ok(early > 0 && early < expected, "Only the early party enters first");
 minute = 714; await advance(180);
 const middle = customers.getSnapshot().actors.length;

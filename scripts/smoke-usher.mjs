@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { createUsherState, beginCleaningBreak, stepUsherState, seatStage, closeCleaningTray,
+import { createUsherState, beginCleaningBreak as generateCleaningBreak, stepUsherState, seatStage, closeCleaningTray,
   theaterSummary, beginUsherPour, restoreUsherState, serializeUsherState } from "../src/usher-state.js";
 import { createCleaningPlans } from "../src/usher-cleaning-layout.js";
 import { createShowAttendance } from "../src/show-attendance.js";
@@ -11,6 +11,10 @@ import { createUsherGameplay, USHER_SPAWN } from "../src/usher-gameplay.js";
 import { createMaterialLibrary } from "../src/materials.js";
 import { createTheaterWorld } from "../src/world.js";
 import { AABBCollisionWorld } from "../src/player.js";
+// Keep the established contact fixtures stable (including front-apron stains)
+// while the v26 distribution suite checks new audience-driven aisle messes.
+const legacyRecipe = { messVersion: 24, attendanceVersion: 24 };
+const beginCleaningBreak = (state, plan, seed, options = {}) => generateCleaningBreak(state, plan, seed, { ...legacyRecipe, ...options });
 class CanvasStub {
   constructor(w,h) { this.width=w;this.height=h; }
   getContext() { const gradient={addColorStop(){}};return new Proxy({canvas:this,createLinearGradient:()=>gradient,createRadialGradient:()=>gradient,measureText:t=>({width:String(t).length*12}),getImageData:(_x,_y,w,h)=>({data:new Uint8ClampedArray(w*h*4)})},{get:(o,k)=>o[k]??(()=>{})}); }
@@ -24,7 +28,7 @@ assert.equal(plans.length,14);
 for(const plan of plans) beginCleaningBreak(state,plan,1234);
 assert.ok(state.kit,"The usher starts with the portable tools");
 for(const job of state.jobs){
-  const plan=plans.find(p=>p.id===job.id),expected=createShowAttendance(plan,{cycle:0});
+  const plan=plans.find(p=>p.id===job.id),expected=createShowAttendance(plan,{cycle:0,version:24});
   assert.deepEqual(job.seats.map(s=>s.id).sort(),expected.seatIds.sort(),"Only the actual shared audience's seats become cleaning jobs");
   assert.ok(job.seats.length<plan.seats.length&&job.seats.every(s=>s.trayOpen),"Only occupied trays open");
   assert.ok(job.seats.every(s=>s.trayAngle===seatTrayOpenAngle(s.width)),"Trays stop at the widest safe outward angle for their actual width");
@@ -164,7 +168,7 @@ assert.ok(migrated.jobs.every(j=>theaterSummary(j).complete),"A v23 completed ro
 
 const camera=new THREE.PerspectiveCamera(70,1.5,.05,200), hands={owner:null};let deposited=0;
 const game=createUsherGameplay({scene,world,camera,collisionWorld,hands,depositTrash:(_id,count)=>{const n=Math.min(2,count);deposited+=n;return n;}});
-for(const plan of plans) game.beginBreak(plan.id,1234);
+for(const plan of plans) game.beginBreak(plan.id,1234,legacyRecipe);
 function aim(position,target,action=false,delta=1/60) {camera.position.set(...position);camera.lookAt(...target);camera.updateMatrixWorld(true);game.update(delta,{active:true,action});}
 aim([24.3,1.68,52.8],[24.3,1.4,54.4]);assert.equal(game.selectTool("broom"),true);assert.equal(game.heldTool,"broom");assert.equal(hands.owner,"cleaning");
 assert.equal(game.root.getObjectByName("usher-kit-instructions"),undefined,"There is no task board");
@@ -242,7 +246,7 @@ for(const surface of floorGame.getSnapshot().state.jobs[0].surfaces.filter(s=>s.
   for(let pass=0;pass<4;pass++)for(let row=-4;row<=4;row++)for(let i=0;i<=60;i++)floorAim(pos,[surface.x-.26+i*.0087,surface.y,surface.z+row*.055],true);
 }
 assert.equal(floorGame.isTheaterReady("theater-2"),true,"Disposal plus both physically wiped floor patches complete the room");
-assert.equal(floorGame.beginBreak("theater-2","new-show"),true,"Completed theater can receive a fresh seeded show mess");
+assert.equal(floorGame.beginBreak("theater-2","new-show",legacyRecipe),true,"Completed theater can receive a fresh seeded show mess");
 assert.equal(floorGame.isTheaterReady("theater-2"),false);
 // The actual held geometry remains visible and stops against a nearby wall,
 // while the work ray cannot advance dirt behind that obstruction.

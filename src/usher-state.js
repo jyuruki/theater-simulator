@@ -8,7 +8,7 @@ export function seededRandom(seed) {
   return () => { n += 0x6d2b79f5; let t = n; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 }
 export function createUsherState() {
-  const state = { version: 24, jobs: [], heldTool: null, kit: true, pouring: 0, pourTarget: null, elapsed: 0 };
+  const state = { version: 26, jobs: [], heldTool: null, kit: true, pouring: 0, pourTarget: null, elapsed: 0 };
   Object.defineProperty(state, "particles", { get: () => state.jobs.flatMap(j => j.particles) });
   Object.defineProperty(state, "surfaces", { get: () => state.jobs.flatMap(j => j.surfaces) });
   return state;
@@ -17,12 +17,43 @@ const cells = (width, depth, count = 3) => Array.from({ length: count * count },
   x: ((i % count) / (count - 1) - .5) * width * .72,
   z: (Math.floor(i / count) / (count - 1) - .5) * depth * .72, dirt: 1,
 }));
-export function beginCleaningBreak(state, plan, seed, { cycle = 0, seatIds } = {}) {
+function popcornCount(random, allowBag = true) {
+  const amount = random();
+  if (amount < .82) return 1 + Math.floor(random() * 3);
+  if (amount < .98 || !allowBag) return 4 + Math.floor(random() * 4);
+  return 18 + Math.floor(random() * 13);
+}
+function addAisleMesses(job, random) {
+  for (const seat of job.seats) {
+    const bounds = seat.floorBounds, near = seat.z + seat.forward * .49;
+    const far = seat.forward > 0 ? bounds.zMax - .07 : bounds.zMin + .07;
+    const zMin = Math.min(near, far), zMax = Math.max(near, far);
+    if ((far - near) * seat.forward < .15) continue;
+    const x = clamp(seat.x + (random() - .5) * .24, bounds.xMin + .35, bounds.xMax - .35);
+    const z = clamp(seat.z + seat.forward * (.73 + (random() - .5) * .12), zMin + .06, zMax - .06);
+    // Debris belongs to the actual audience's row aisle. Empty shows leave
+    // nothing, and a customer usually leaves neither a floor spill nor a pile.
+    if (random() < .20) {
+      const count = popcornCount(random), spread = count > 7 ? .52 : .12 + random() * .18;
+      for (let i = 0; i < count; i++) job.particles.push({ id: `${seat.id}-aisle-${i}`, clusterId: `${seat.id}-aisle`,
+        x: clamp(x + (random() - .5) * spread, bounds.xMin + .05, bounds.xMax - .05),
+        z: clamp(z + (random() - .5) * Math.min(.20, zMax - zMin - .10), zMin + .04, zMax - .04),
+        y: seat.floorY + .035, floorY: seat.floorY, vx: 0, vz: 0, vy: 0, mode: "floor", bounds });
+    }
+    if (random() < .025) {
+      const width = .16 + random() * .30, depth = Math.min(.14 + random() * .20, zMax - zMin - .02);
+      job.surfaces.push({ id: `${seat.id}-aisle-spill`, kind: "floor", x,
+        y: seat.floorY + .008, z: clamp(z, zMin + depth / 2, zMax - depth / 2),
+        width, depth, spill: true, cells: cells(width, depth, 4) });
+    }
+  }
+}
+export function beginCleaningBreak(state, plan, seed, { cycle = 0, seatIds, attendanceVersion = 26, messVersion = 26 } = {}) {
   const existing = state.jobs.find(j => j.id === plan.id);
   if (existing && (existing.seed === String(seed) || !theaterSummary(existing).complete)) return false;
   const random = seededRandom(`${plan.id}/${seed}`);
-  const occupied = new Set(seatIds ?? createShowAttendance(plan, { cycle }).seatIds);
-  const job = { id: plan.id, number: plan.number, seed: String(seed), cycle, seats: [], surfaces: [], particles: [], completed: false };
+  const occupied = new Set(seatIds ?? createShowAttendance(plan, { cycle, version: attendanceVersion }).seatIds);
+  const job = { id: plan.id, number: plan.number, seed: String(seed), cycle, messVersion, seats: [], surfaces: [], particles: [], completed: false };
   for (const s of plan.seats) {
     if (!occupied.has(s.id)) continue;
     const openAngle = seatTrayOpenAngle(s.width);
@@ -31,12 +62,14 @@ export function beginCleaningBreak(state, plan, seed, { cycle = 0, seatIds } = {
     for (const kind of ["tray", "seat"]) job.surfaces.push({ id: `${s.id}-${kind}`, seatId: s.id, kind,
       width: kind === "tray" ? .36 : s.width * .82, depth: kind === "tray" ? .25 : .39,
       spill: random() < (kind === "tray" ? .20 : .12), cells: cells(kind === "tray" ? .36 : s.width * .82, kind === "tray" ? .25 : .39) });
-    const kernels = random() < .22 ? 2 + Math.floor(random() * 4) : 0;
+    const kernels = random() < .22 ? (messVersion < 26 ? 2 + Math.floor(random() * 4) : popcornCount(random, false)) : 0;
     for (let i = 0; i < kernels; i++) job.particles.push({ id: `${s.id}-kernel-${i}`, seatId: s.id,
       x: s.x + (random() - .5) * s.width * .55, z: s.z + (random() - .5) * .22,
       y: s.floorY + .625, floorY: s.floorY, vx: 0, vz: 0, vy: 0, mode: "chair", bounds: s.floorBounds });
   }
-  plan.patches.forEach((patch, index) => {
+  // Keep the previous recipe only for an in-progress saved job. Its particle
+  // IDs and dirt-cell grids must not change underneath partially cleaned work.
+  if (messVersion < 26) plan.patches.forEach((patch, index) => {
     job.surfaces.push({ id: `${plan.id}-floor-spill-${index}`, kind: "floor", x: patch.x + .45, y: patch.y + .008, z: patch.z,
       width: .50, depth: .50, spill: true, cells: cells(.5, .5, 4) });
     const count = 5 + Math.floor(random() * 5);
@@ -44,6 +77,7 @@ export function beginCleaningBreak(state, plan, seed, { cycle = 0, seatIds } = {
       z: patch.z + (random() - .5) * .4, y: patch.y + .035, floorY: patch.y, vx: 0, vz: 0, vy: 0,
       mode: "floor", bounds: patch.bounds });
   });
+  else addAisleMesses(job, random);
   // Keep lookup tables out of serialized state and the contact loop linear.
   Object.defineProperties(job, {
     surfacesById: { value: new Map(job.surfaces.map(s => [s.id, s])) },
@@ -175,7 +209,7 @@ export function beginUsherPour(state, target, acceptedCount) {
   state.pourTarget = target; state.pouring = .85; return true;
 }
 export function serializeUsherState(state) {
-  return JSON.stringify({ version: 24, kit: true, jobs: state.jobs.map(j => ({ id: j.id, seed: j.seed, cycle: j.cycle,
+  return JSON.stringify({ version: 26, kit: true, jobs: state.jobs.map(j => ({ id: j.id, seed: j.seed, cycle: j.cycle, messVersion: j.messVersion,
     seats: j.seats.map(s => ({ id: s.id, trayOpen: s.trayOpen })),
     surfaces: j.surfaces.map(s => ({ id: s.id, dirt: s.cells.map(c => c.dirt) })),
     particles: j.particles.map(p => ({ id: p.id, x: p.x, y: p.y, z: p.z, mode: p.mode === "pouring" ? "trash" : p.mode })),
@@ -185,11 +219,13 @@ export function restoreUsherState(raw, plans = [], { cycleForRoom = () => 0 } = 
   const state = createUsherState();
   try {
     const saved = JSON.parse(raw);
-    if (![22, 23, 24].includes(saved?.version) || !Array.isArray(saved.jobs) || saved.jobs.length > 14) return state;
+    if (![22, 23, 24, 26].includes(saved?.version) || !Array.isArray(saved.jobs) || saved.jobs.length > 14) return state;
     for (const data of saved.jobs) {
       const plan = plans.find(p => p.id === data.id); if (!plan || state.jobs.some(j => j.id === data.id) || typeof data.seed !== "string") continue;
       const job = beginCleaningBreak(state, plan, data.seed, { cycle: Number.isInteger(data.cycle) ? data.cycle : cycleForRoom(data.id),
-        seatIds: saved.version === 24 && Array.isArray(data.seats) ? data.seats.map(s => s.id) : undefined });
+        attendanceVersion: saved.version < 26 ? 24 : 26,
+        messVersion: saved.version < 26 || data.messVersion === 24 ? 24 : 26,
+        seatIds: saved.version >= 24 && Array.isArray(data.seats) ? data.seats.map(s => s.id) : undefined });
       if (!job || !Array.isArray(data.particles) || !Array.isArray(data.surfaces)) continue;
       // Completed rooms stay complete when moving older all-seat jobs to the
       // actual show's occupied-seat selection.

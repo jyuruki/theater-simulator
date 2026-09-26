@@ -5,7 +5,7 @@ import { segmentHitsBox } from "./visit-state.js";
 import { createPlacementPreview } from "./prop-placement.js";
 import { resolveHeldPose } from "./held-prop-pose.js";
 
-export const WASTE_CAPACITY = 120;
+export const WASTE_CAPACITY = 180;
 export const WASTE_BIN_RADIUS = .46;
 export const WASTE_STORAGE_KEY = "v22-waste";
 const STEP = 1 / 120, BIN_TOP = 1.12, BAG_RADIUS = .28, BAG_HALF_HEIGHT = .36;
@@ -256,6 +256,20 @@ export function createUsherWaste({ scene, world, camera, collisionWorld, control
     }
     return null;
   }
+  // A passer-by may toss from either side of a can. This is deliberately a
+  // reach test, not a request to navigate to a shared point beside the rim.
+  function getPassingDisposalTarget(position, sourceColliderId = null) {
+    const from = position?.isVector3 ? position : new THREE.Vector3(...position);
+    for (const bin of bins) {
+      if (!bin.data.lined || bin.data.fill + bin.reserved >= WASTE_CAPACITY || held?.id === bin.data.id) continue;
+      const target = new THREE.Vector3(bin.data.x, BIN_TOP, bin.data.z);
+      if (from.distanceTo(target) > 2.1) continue;
+      if (collisionWorld.colliders.some(c => c.enabled !== false && c !== bin.collider && c.id !== sourceColliderId
+        && segmentHitsBox(from, target, c))) continue;
+      return { binId: bin.data.id, position: target.toArray() };
+    }
+    return null;
+  }
   function throwCustomerTrash({ binId, from, units = 8, shape = 0, sourceColliderId = null }) {
     if (customer || !finite(units) || units <= 0) return false;
     const bin = bins.find(item => item.data.id === binId), start = from?.isVector3 ? from.clone() : new THREE.Vector3(...from);
@@ -418,11 +432,12 @@ export function createUsherWaste({ scene, world, camera, collisionWorld, control
       customerRoot.position.set(customer.start.x, 0, customer.start.z); customerRoot.lookAt(bin.data.x, 0, bin.data.z);
     }
     customer.t += dt;
-    const delay = customer.external ? 0 : .8, t = clamp((customer.t - delay) / .9, 0, 1);
+    const delay = customer.external ? 0 : .8, duration = customer.external ? .48 : .9;
+    const t = clamp((customer.t - delay) / duration, 0, 1);
     const end = new THREE.Vector3(customer.bin.data.x, .90, customer.bin.data.z);
     tossed.position.copy(customer.start).lerp(end, t); tossed.position.y += Math.sin(t * Math.PI) * .72;
     tossed.rotation.set(t * 3, t * 4, t * 2);
-    if (customer.t >= delay + .9) {
+    if (customer.t >= delay + duration) {
       customer.bin.reserved -= customer.units;
       depositTrash(customer.bin.data.id, customer.units);
       if (customer.event) {
@@ -468,14 +483,14 @@ export function createUsherWaste({ scene, world, camera, collisionWorld, control
       const b = bin.data; bin.group.position.set(b.x, 0, b.z); bin.group.rotation.y = b.yaw;
       bin.liner.visible = bin.linerBottom.visible = b.lined; bin.contents.visible = b.lined && b.fill > 0;
       bin.contents.position.y = .34 + .64 * b.fill / WASTE_CAPACITY;
-      bin.contents.children.forEach((item, i) => { item.visible = i < Math.ceil(b.fill / 10); });
+      bin.contents.children.forEach((item, i) => { item.visible = i < Math.ceil(b.fill / WASTE_CAPACITY * 12); });
       bin.roll.visible = b.spares > 0;
       const next = recommendation(bin), key = `${b.room}/${Math.floor(b.fill)}/${b.lined}/${b.spares}/${next}`;
       if (key !== bin.labelKey) {
         bin.labelKey = key; const c = bin.label.canvas.getContext("2d");
         c.fillStyle = "#e0e3df"; c.fillRect(0, 0, 512, 256); c.textAlign = "center"; c.fillStyle = "#283432"; c.font = "bold 53px sans-serif";
         c.fillText(`THEATER ${roomNumber(b.room)}`, 256, 60); c.font = "bold 36px sans-serif";
-        c.fillText(b.lined ? `${Math.round(b.fill / WASTE_CAPACITY * 100)}% FULL · ${b.fill >= 108 ? "CHANGE BAG" : "LINED"}` : "EMPTY · NEEDS LINER", 256, 112);
+        c.fillText(b.lined ? `${Math.round(b.fill / WASTE_CAPACITY * 100)}% FULL · ${b.fill >= WASTE_CAPACITY * .9 ? "CHANGE BAG" : "LINED"}` : "EMPTY · NEEDS LINER", 256, 112);
         c.fillStyle = "#344b43"; c.font = "29px sans-serif"; c.fillText(`SPARE BAGS: ${b.spares}`, 256, 161);
         c.fillText(next !== b.room ? `PUSH TO THEATER ${roomNumber(next)}` : "PARK BESIDE THE DOOR", 256, 213); bin.label.texture.needsUpdate = true;
       }
@@ -594,7 +609,7 @@ export function createUsherWaste({ scene, world, camera, collisionWorld, control
   syncVisuals();
   return {
     root, update, interact, returnTool, getBinTargets, depositTrash, onTheaterBreak,
-    getCustomerDisposalTarget, throwCustomerTrash, enableScheduledCustomers,
+    getCustomerDisposalTarget, getPassingDisposalTarget, throwCustomerTrash, enableScheduledCustomers,
     beginPlacement, togglePlacement, cancelPlacement, confirmPlacement,
     get placementActive() { return placement.active; },
     get canPlace() { return Boolean(held && held.kind !== "bin"); },
@@ -612,7 +627,7 @@ export function createUsherWaste({ scene, world, camera, collisionWorld, control
       if (focus.kind === "stock") return "Take fresh bag from trash-room stock";
       if (focus.kind === "bag") return focus.bag.tied ? "Lift tied trash bag" : "Lift bag to tie it";
       if (focus.kind === "loose-liner") return "Pick up the spare liner";
-      return !focus.bin.data.lined ? "Empty can · needs an opened liner" : focus.bin.data.fill >= 108 ? "Lift full trash bag" : `Inspect can · ${Math.round(focus.bin.data.fill / WASTE_CAPACITY * 100)}% full`;
+      return !focus.bin.data.lined ? "Empty can · needs an opened liner" : focus.bin.data.fill >= WASTE_CAPACITY * .9 ? "Lift full trash bag" : `Inspect can · ${Math.round(focus.bin.data.fill / WASTE_CAPACITY * 100)}% full`;
     },
     get hint() {
       if (placement.active) return placement.snapshot.reason;

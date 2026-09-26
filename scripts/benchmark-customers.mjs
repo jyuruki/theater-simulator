@@ -13,7 +13,10 @@ let createShowCustomers = currentCustomers;
 if (baseline) {
   const git = path => execFileSync("git", ["show", `${baseline}:${path}`], { cwd: fileURLToPath(new URL("..", import.meta.url)), encoding: "utf8" });
   const nav = moduleURL(relativeImports(git("src/show-customer-navigation.js")));
-  const customer = relativeImports(git("src/show-customers.js")).replace(new URL("../src/show-customer-navigation.js", import.meta.url).href, nav);
+  const attendance = moduleURL(relativeImports(git("src/show-attendance.js")));
+  const customer = relativeImports(git("src/show-customers.js"))
+    .replace(new URL("../src/show-customer-navigation.js", import.meta.url).href, nav)
+    .replace(new URL("../src/show-attendance.js", import.meta.url).href, attendance);
   ({ createShowCustomers } = await import(moduleURL(customer)));
 }
 import { createUsherDoors } from "../src/usher-doors.js";
@@ -41,8 +44,8 @@ await customers.loadAssets({ loadModel: () => new GLTFLoader().parseAsync(bytes.
 const startupMs = performance.now() - before;
 for (const id of ["theater-2", "theater-6"]) {
   const plan = customers.navigation.seatPlans.find(plan => plan.id === id);
-  customers.navigation.theaterSeats(id, createShowAttendance(plan, {cycle: 1}).seatIds);
-  customers.onStart({id:`bench-${id}`, theaterId:id,cycle:0});
+  customers.navigation.theaterSeats(id, createShowAttendance(plan, {cycle: 1, version: 24}).seatIds);
+  customers.onStart({id:`bench-${id}`, theaterId:id,cycle:0,attendanceVersion:24});
 }
 const samples=[];let movingSamples=0;
 for(let i=0;i<4000;i++) {

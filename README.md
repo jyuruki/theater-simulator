@@ -8,7 +8,17 @@ This is an independent recreation with approximate dimensions, not an official a
 
 The game starts as an usher with a portable cleaning kit and a handheld break sheet. Choose the shift speed and follow the clock through all fourteen theaters, clean trays and seats, sweep into a left-hand dustpan, move three rolling trash cans, replace full bags, service soda BIBs, refill supplies and wash kitchen trays. The [employee gameplay direction](docs/gameplay-direction.md) records the broader career and minimal-menu approach.
 
-## Version 0.25
+## Version 0.26
+
+- Customers wait seated until their exit route is ready, file behind one another in tight passages, and toss rubbish while passing a rolling can. They walk 40% faster; cans hold 50% more.
+- Quieter, varied audiences, including occasional empty shows and busier large rooms. Small aisle messes replace guaranteed front-of-screen spills and piles.
+- Black broom and dustpan with yellow broom bristles.
+- A mixed theater opening order based on the reference sheet, plus 20× and 50× fast-forward settings.
+- Existing shift times, occupants and partial cleanup survive the update. Choose **Start new day** for the new timetable and attendance mix.
+
+See [v0.26 behavior and validation](docs/v26-notes.md).
+
+## Version 0.25 (historical)
 
 - Start a quiet new day at 11:45 AM, with a complete staggered program for all 14 theaters. Choose 1×, 2×, 3× or 5× time speed.
 - Customers trickle in, open closed doors and hold them for following traffic, with smoother movement and substantially cheaper route planning.

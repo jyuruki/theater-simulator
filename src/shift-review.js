@@ -10,6 +10,7 @@ import { createTheaterAudio } from "./atmosphere.js";
 import { createShowStartMedia } from "./show-start-media.js";
 import { createFeatureProgram } from "./feature-program.js";
 import { createShowCustomers } from "./show-customers.js";
+import { createShowAttendance } from "./show-attendance.js";
 import { AUDITORIUMS, LOBBY_PLAN } from "./layout-data.js";
 import { auditoriumDoorLayout } from "./auditorium-door-layout.js";
 import { planToWorldX } from "./coordinates.js";
@@ -32,7 +33,8 @@ let shift, patrons, features, featurePreview = null;
 const media = createShowStartMedia({ camera, world, audio, getDoor: id => shift?.doors.getSnapshot().find(d => d.id === id), onError: error => { status.textContent = String(error); } });
 shift = createUsherShift({ scene, world, camera, collisionWorld, storage: null, seed: 23,
   showToast: message => { status.textContent = message; }, onSound: kind => audio.play(kind),
-  onStart: event => { features?.suspend(event.theaterId); media.onStart(event); patrons?.onStart(event); }, onBreak: event => patrons?.onBreak(event) });
+  onStart: event => { features?.suspend(event.theaterId); media.onStart(event); patrons?.onStart(event); },
+  getUsedSeatIds: event => patrons?.getUsedSeatIds(event), onBreak: event => patrons?.onBreak(event) });
 patrons = createShowCustomers({ scene, world, camera, collisionWorld, doors: shift.doors, waste: shift.waste });
 const featureSchedule = {
   get minute() { return featurePreview ? featurePreview.time + 10 : shift.schedule.minute; },
@@ -80,6 +82,7 @@ for (const room of AUDITORIUMS) {
 }
 function refreshViews() {
   const snapshot = shift.getSnapshot();
+  add("black-cleaning-tools", "Black broom and dustpan", [24.3, 1.68, 52.8], [24.3, 0, 51.2]);
   for (const bin of snapshot.waste.bins) add(bin.id, `Rolling can · ${bin.room}`, [bin.x + 1.1, 1.68, bin.z + 1.1], [bin.x, .68, bin.z]);
   const gondola = snapshot.waste.gondola; add("gondola", "Trash-room gondola", [20.45, 1.68, 60.4], [gondola.x, .8, gondola.z]);
   for (const anchor of snapshot.supplies.anchors) add(`supply-${anchor.id.replaceAll(":", "-")}`, anchor.id,
@@ -99,10 +102,13 @@ function refreshViews() {
       add(`${seat.id}-seat`, `${number} · ${dirty ? "selected" : "routine"} cushion wipe`, eye, anchor.seat, job.id);
     }
   }
-  const job = snapshot.cleaning.state.jobs.find(j => j.number === 2);
-  for (const surface of job.surfaces.filter(s => s.kind === "floor")) {
-    add(surface.id, "2 · floor spill", [surface.x - .85, surface.y + 1.68, surface.z], [surface.x, surface.y, surface.z], job.id);
-    add(`${surface.id}-shallow`, "2 · shallow-angle broom reach", [surface.x - 2.2, surface.y + 1.68, surface.z], [surface.x + 8, surface.y + 1.08, surface.z], job.id);
+  for (const job of snapshot.cleaning.state.jobs) {
+    const kernel = job.particles.find(p => p.mode === "floor");
+    if (kernel) add(`${job.id}-aisle-mess`, `${job.number} · sparse aisle popcorn`,
+      [kernel.x, kernel.floorY + 1.68, kernel.z + .48], [kernel.x, kernel.y, kernel.z], job.id);
+    for (const surface of job.surfaces.filter(s => s.kind === "floor")) {
+      add(surface.id, `${job.number} · occasional aisle spill`, [surface.x - .55, surface.y + 1.68, surface.z], [surface.x, surface.y, surface.z], job.id);
+    }
   }
 }
 refreshViews();
@@ -131,10 +137,19 @@ document.querySelector("#advance").onclick = () => {
 };
 function testEvent(kind) {
   const room = AUDITORIUMS.find(r => r.id === roomSelect.value);
-  const member = patrons.getSnapshot().actors.find(a => a.room === room.id);
-  const occupiedCycle = Number(member?.show?.split(":").at(-1) ?? 0);
-  return { id: `review-${++syntheticEvent}-${kind}`, theaterId: room.id, number: room.number, kind, cycle: occupiedCycle, time: shift.schedule.minute };
+  const member = patrons.actors.find(a => a.room === room.id && a.state !== "idle");
+  const occupiedCycle = member?.showCycle ?? 0;
+  return { id: `review-${++syntheticEvent}-${kind}`, theaterId: room.id, number: room.number, kind,
+    cycle: occupiedCycle, audienceCycle: occupiedCycle, attendanceVersion: 26, time: shift.schedule.minute };
 }
+
+document.querySelector("#seat-audience").onclick = () => {
+  const plan = patrons.navigation.seatPlans.find(p => p.id === roomSelect.value);
+  const busy = Array.from({ length: 32 }, (_, cycle) => createShowAttendance(plan, { cycle })).sort((a, b) => b.count - a.count)[0];
+  const event = { ...testEvent("start"), cycle: busy.cycle, audienceCycle: busy.cycle, time: shift.schedule.minute - 3 };
+  const count = patrons.restoreSchedule({ mode: "day", minute: shift.schedule.minute, events: [event], done: [event.id] });
+  status.textContent = `Seated ${count} test patrons in Theater ${event.number}`;
+};
 document.querySelector("#feature-audio").onclick = () => { audio.start(); features.retry(); };
 document.querySelector("#preview-feature").onclick = () => {
   featurePreview = { ...testEvent("start"), audienceCycle: 0 }; features.retry(); paused = false;

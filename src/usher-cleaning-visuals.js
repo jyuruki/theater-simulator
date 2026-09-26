@@ -8,8 +8,8 @@ export function createCleaningVisuals({ scene, world, hands }) {
   const geometries = new Set(), materials = new Set(), textures = new Set();
   const geo = g => (geometries.add(g), g);
   const mat = options => { const m = new THREE.MeshStandardMaterial(options); materials.add(m); return m; };
-  const palette = { dark: mat({ color: 0x233532 }), teal: mat({ color: 0x377f78 }), cloth: mat({ color: 0x73bfd0 }),
-    bristle: mat({ color: 0xd0ab63 }), metal: mat({ color: 0xb7c4c4, metalness: .7, roughness: .35 }),
+  const palette = { dark: mat({ color: 0x233532 }), teal: mat({ color: 0x377f78 }), tool: mat({ color: 0x161719, roughness: .76 }), cloth: mat({ color: 0x73bfd0 }),
+    bristle: mat({ color: 0xf2cb36 }), metal: mat({ color: 0xb7c4c4, metalness: .7, roughness: .35 }),
     tray: mat({ color: 0x211918, roughness: .52 }), popcorn: mat({ color: 0xffdb83, roughness: .9 }) };
   const cube = geo(new THREE.BoxGeometry(1, 1, 1)), cylinder = geo(new THREE.CylinderGeometry(1, 1, 1, 8));
   const box = (parent, name, p, size, material) => {
@@ -21,14 +21,14 @@ export function createCleaningVisuals({ scene, world, hands }) {
   function tool(name, kind) {
     const g = new THREE.Group(); g.name = name; root.add(g);
     if (kind === "broom") {
-      box(g, `${name}-head`, [0, .075, 0], [.40, .05, .10], palette.teal);
+      box(g, `${name}-head`, [0, .075, 0], [.40, .05, .10], palette.tool);
       for (let i = 0; i < 13; i++) box(g, `${name}-bristles-${i}`, [(i - 6) * .028, .028, 0], [.022, .054, .08], palette.bristle);
-      rod(g, [0, .64, 0], 1.18, palette.metal); box(g, `${name}-grip`, [0, 1.24, 0], [.045, .19, .045], palette.teal);
+      rod(g, [0, .64, 0], 1.18, palette.tool); box(g, `${name}-grip`, [0, 1.24, 0], [.045, .19, .045], palette.tool);
     } else if (kind === "pan") {
-      box(g, `${name}-tray`, [0, .027, 0], [.52, .035, .39], palette.teal);
-      box(g, `${name}-back`, [0, .10, .19], [.52, .15, .023], palette.teal);
-      for (const x of [-.25, .25]) box(g, `${name}-side`, [x, .08, .035], [.023, .10, .31], palette.teal);
-      rod(g, [0, .58, .17], 1.10, palette.metal); box(g, `${name}-grip`, [0, 1.14, .17], [.14, .06, .04], palette.teal);
+      box(g, `${name}-tray`, [0, .027, 0], [.52, .035, .39], palette.tool);
+      box(g, `${name}-back`, [0, .10, .19], [.52, .15, .023], palette.tool);
+      for (const x of [-.25, .25]) box(g, `${name}-side`, [x, .08, .035], [.023, .10, .31], palette.tool);
+      rod(g, [0, .58, .17], 1.10, palette.tool); box(g, `${name}-grip`, [0, 1.14, .17], [.14, .06, .04], palette.tool);
     } else box(g, name, [0, .012, 0], [.25, .022, .22], palette.cloth);
     g.visible = false; return g;
   }
