@@ -13,7 +13,8 @@ export function createUsherShift(options) {
   let cleaning, waste, doors;
   const schedule = createUsherSchedule({ storage, seed: options.seed, timeScale: newDay?.timeScale,
     onBreak(event, seed) {
-      cleaning.beginBreak(event.theaterId, seed, { cycle: event.cycle });
+      cleaning.beginBreak(event.theaterId, seed, { cycle: event.cycle, attendanceVersion: event.attendanceVersion,
+        seatIds: options.getUsedSeatIds?.(event) });
       waste.onTheaterBreak(event.theaterId);
       doors.onBreak(event.theaterId);
       options.onBreak?.(event);
@@ -36,7 +37,7 @@ export function createUsherShift(options) {
     const event = schedule.currentBreak(room.id);
     if (schedule.hasBroken(room.id) && !cleaning.getTheaterSummary(room.id).active) {
       const seed = (schedule.seed ^ Math.imul(room.number, 2654435761) ^ Math.imul(event.cycle + 1, 1597334677)) >>> 0;
-      cleaning.beginBreak(room.id, seed, { cycle: event.cycle });
+      cleaning.beginBreak(room.id, seed, { cycle: event.cycle, attendanceVersion: event.attendanceVersion });
     }
   }
   function chooseFocus() {

@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { Window } from "happy-dom";
 import * as THREE from "three";
-import { createBreakEvents, createUsherSchedule, consumeNewUsherDay, requestNewUsherDay,
-  SHIFT_START_MINUTE, SCHEDULE_STORAGE_KEY, NEW_DAY_REQUEST_KEY } from "../src/usher-schedule.js";
+import { createBreakEvents, createV25BreakEvents, createUsherSchedule, consumeNewUsherDay, requestNewUsherDay,
+  SHIFT_SPEEDS, SHIFT_START_MINUTE, SCHEDULE_STORAGE_KEY, NEW_DAY_REQUEST_KEY } from "../src/usher-schedule.js";
 import { createShiftSetupUI } from "../src/usher-ui.js";
 import { createUsherBreaksheet } from "../src/usher-breaksheet.js";
 
@@ -12,6 +12,9 @@ assert.equal(events.length, 14 * 4 * 2);
 assert.ok(events.every(event => event.time % 5 === 0), "Every printed start and break rounds to five minutes");
 assert.ok(events.slice(0, 14).every(event => event.kind === "start"), "The entire initial wave is bold starts");
 assert.equal(new Set(events.slice(0, 14).map(event => event.theaterId)).size, 14);
+assert.deepEqual(events.slice(0, 14).map(event => event.number), [13, 14, 8, 5, 9, 4, 6, 3, 12, 1, 11, 2, 10, 7],
+  "Opening follows the mixed-room order of the reference sheet");
+assert.ok(events.every(event => event.attendanceVersion === 26));
 const breaks = events.filter(event => event.kind === "break");
 for (let i = 1; i < breaks.length; i++) assert.ok(breaks[i].time - breaks[i - 1].time >= 10, "One usher never receives simultaneous scheduled breaks");
 for (let number = 1; number <= 14; number++) {
@@ -31,6 +34,7 @@ const startsSeen = [], breaksSeen = [];
 let schedule = createUsherSchedule({ storage, seed: 53, onStart: event => startsSeen.push(event), onBreak: event => breaksSeen.push(event) });
 assert.equal(schedule.minute, SHIFT_START_MINUTE);
 assert.equal(schedule.mode, "day");
+assert.equal(schedule.programVersion, 26);
 assert.equal(schedule.started, false);
 schedule.update(.1, false); assert.equal(schedule.minute, SHIFT_START_MINUTE);
 schedule.begin(); schedule.update(0, true);
@@ -56,10 +60,53 @@ schedule.dispose(); schedule = createUsherSchedule({ storage });
 assert.equal(schedule.restored, true); assert.equal(schedule.timeScale, 3);
 assert.ok(Math.abs(schedule.secondsSince(initialMinute) - 120) < 1e-6, "Media time segments survive reload");
 
+// Continue existing opening-day saves without moving show times or changing the
+// audience that left their used trays behind. Saving again retains that program.
+const previousEvents = createV25BreakEvents();
+assert.deepEqual(previousEvents.slice(0, 14).map(event => event.number), [2, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
+assert.equal(previousEvents[0].time, 720); assert.equal(previousEvents[13].time, 785);
+const previousMinute = previousEvents.find(event => event.kind === "break").time + 2;
+const previousDone = previousEvents.filter(event => event.time <= previousMinute).map(event => event.id);
+const previousClean = previousEvents.filter(event => event.kind === "break" && event.time <= previousMinute).map(event => event.id);
+values.set(SCHEDULE_STORAGE_KEY, JSON.stringify({ version: 2, mode: "day", seed: 91, minute: previousMinute,
+  started: true, timeScale: 3, done: previousDone, clean: previousClean }));
+let previous = createUsherSchedule({ storage });
+assert.equal(previous.restored, true); assert.equal(previous.programVersion, 25);
+assert.deepEqual(previous.events, previousEvents);
+assert.ok(previous.events.every(event => event.attendanceVersion === 24));
+assert.equal(previous.minute, previousMinute); assert.deepEqual(previous.getSnapshot().clean, previousClean);
+previous.dispose(); previous = createUsherSchedule({ storage });
+assert.equal(previous.programVersion, 25); assert.deepEqual(previous.events, previousEvents);
+assert.deepEqual(previous.getSnapshot().done, previousDone);
+
+// Fast-forward remains a real schedule: every event fires in chronological
+// order exactly once, including after a mid-program save/reload at 50x.
+const fastValues = new Map(), fastStorage = { getItem: key => fastValues.get(key), setItem: (key, value) => fastValues.set(key, value) };
+const delivered = [], record = event => delivered.push(event.id);
+let fast = createUsherSchedule({ storage: fastStorage, timeScale: 20, onStart: record, onBreak: record });
+assert.deepEqual(SHIFT_SPEEDS, [1, 2, 3, 5, 20, 50]);
+fast.begin();
+for (let i = 0; i < 600; i++) fast.update(.1, true);
+assert.ok(Math.abs(fast.minute - SHIFT_START_MINUTE - 20) < 1e-6);
+assert.equal(fast.setTimeScale(50), true);
+for (let i = 0; i < 600; i++) fast.update(.1, true);
+assert.ok(Math.abs(fast.minute - SHIFT_START_MINUTE - 70) < 1e-6);
+assert.ok(Math.abs(fast.secondsSince(SHIFT_START_MINUTE) - 120) < 1e-6);
+while (delivered.length < 40) fast.update(.1, true);
+fast.dispose(); fast = createUsherSchedule({ storage: fastStorage, onStart: record, onBreak: record });
+assert.equal(fast.timeScale, 50); assert.equal(fast.programVersion, 26);
+while (fast.minute < events.at(-1).time + .5) fast.update(.1, true);
+assert.deepEqual(delivered, events.map(event => event.id));
+assert.equal(new Set(delivered).size, events.length);
+for (let i = 0; i < 10; i++) fast.update(.1, true);
+assert.equal(delivered.length, events.length, "End-of-day fast-forward never replays events");
+
 // Old progress is preserved verbatim until the explicit new-day action.
 values.set(SCHEDULE_STORAGE_KEY, JSON.stringify({ version: 1, seed: 82, minute: 1070, started: true, done: ["theater-2-0-break"], clean: ["theater-2-0-break"] }));
 const legacy = createUsherSchedule({ storage });
 assert.equal(legacy.mode, "legacy"); assert.equal(legacy.minute, 1070);
+assert.equal(legacy.programVersion, 22);
+assert.ok(legacy.events.every(event => event.attendanceVersion === 24));
 assert.ok(legacy.getSnapshot().clean.includes("theater-2-0-break"));
 for (const key of ["v22-cleaning", "v22-waste", "mililani-v22-supplies", "mililani-doors-v22"]) values.set(key, "saved work");
 assert.equal(requestNewUsherDay(storage, { timeScale: 5 }), true);
@@ -135,7 +182,11 @@ introSpeed.value = "3"; introSpeed.dispatchEvent(new dom.Event("change"));
 assert.equal(legacy.timeScale, 3); assert.equal(pauseSpeed.value, "3");
 pauseSpeed.value = "5"; pauseSpeed.dispatchEvent(new dom.Event("change"));
 assert.equal(legacy.timeScale, 5); assert.equal(introSpeed.value, "5");
+introSpeed.value = "20"; introSpeed.dispatchEvent(new dom.Event("change"));
+assert.equal(legacy.timeScale, 20); assert.equal(pauseSpeed.value, "20");
+pauseSpeed.value = "50"; pauseSpeed.dispatchEvent(new dom.Event("change"));
+assert.equal(legacy.timeScale, 50); assert.equal(introSpeed.value, "50");
 dom.document.querySelector("#new-day-pause").click(); assert.equal(restarts, 1);
-assert.equal(JSON.parse(values.get(NEW_DAY_REQUEST_KEY)).timeScale, 5);
+assert.equal(JSON.parse(values.get(NEW_DAY_REQUEST_KEY)).timeScale, 50);
 setup.dispose(); dom.happyDOM.abort();
-console.log("Opening-day schedule passed: all fourteen screens, five-minute times, staggered breaks, complete sheet pages, legacy continuation, deliberate reset and persistent 1/2/3/5x clock with continuous media time.");
+console.log("Opening-day schedule passed: mixed fourteen-screen openings, five-minute times, staggered breaks, complete sheet pages, preserved v25/legacy programs, deliberate reset and persistent 1/2/3/5/20/50x clock with continuous media time and exactly-once fast-forward delivery.");

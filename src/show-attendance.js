@@ -11,11 +11,19 @@ export function attendanceCycle(event, kind = event?.kind) {
   const cycle = Number.isInteger(event?.cycle) ? event.cycle : 0;
   return cycle + (kind === "start" ? 1 : 0);
 }
-export function createShowAttendance(plan, { cycle = 0 } = {}) {
+export function createShowAttendance(plan, { cycle = 0, version = 26 } = {}) {
   const random = randomFrom(`${plan.id}:audience-v24:${cycle}`), seats = plan.seats;
   const popularity = random(), capacity = Math.min(MAX_SHOW_AUDIENCE, Math.max(7, Math.round(seats.length * .34)));
-  const count = Math.min(seats.length, popularity < .2 ? 2 + Math.floor(random() * 4)
-    : Math.max(5, Math.round(capacity * (.45 + popularity * .55))));
+  // Keep the original random draws for an existing show's saved occupants.
+  // New shows have a long quiet tail, occasional empty screenings, and a
+  // smaller busy tail. A larger auditorium can host a larger party mix.
+  const requested = version <= 24
+    ? (popularity < .2 ? 2 + Math.floor(random() * 4) : Math.max(5, Math.round(capacity * (.45 + popularity * .55))))
+    : popularity < .035 ? 0
+    : popularity < .40 ? 1 + Math.floor(random() * (seats.length >= 100 ? 5 : 4))
+    : popularity < .86 ? 3 + Math.floor(random() * Math.max(2, Math.round(capacity * .45) - 2))
+    : Math.round(capacity * (.72 + random() * .28));
+  const count = Math.min(seats.length, requested);
   const rows = [...new Set(seats.map(seat => seat.row))].map(row => seats.filter(seat => seat.row === row).sort((a, b) => a.column - b.column));
   const used = new Set(), groups = [];
   while (used.size < count) {

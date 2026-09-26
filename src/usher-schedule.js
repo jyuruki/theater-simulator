@@ -2,13 +2,16 @@ import { AUDITORIUMS } from "./layout-data.js";
 import { SHOWS } from "./showtimes.js";
 
 export const SHIFT_TIME_SCALE = 2;
-export const SHIFT_SPEEDS = Object.freeze([1, 2, 3, 5]);
+export const SHIFT_SPEEDS = Object.freeze([1, 2, 3, 5, 20, 50]);
 export const SHIFT_START_MINUTE = 11 * 60 + 45;
 export const LEGACY_SHIFT_START_MINUTE = 17 * 60;
 export const SCHEDULE_STORAGE_KEY = "mililani-schedule-v22";
 export const NEW_DAY_REQUEST_KEY = "mililani-new-day-v25";
 export const SHEET_PAGE_SIZE = 24;
-const ORDER = [2, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
+const PREVIOUS_ORDER = [2, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
+// The reference sheet mixes rooms throughout the opening wave. Keep this
+// program deterministic so a saved sheet never changes underneath the usher.
+const OPENING_ORDER = [13, 14, 8, 5, 9, 4, 6, 3, 12, 1, 11, 2, 10, 7];
 const sortEvents = (a, b) => a.time - b.time || (a.kind === b.kind ? 0 : a.kind === "break" ? -1 : 1) || a.number - b.number;
 export function formatShiftTime(minutes) {
   const whole = Math.floor(minutes + 1e-7);
@@ -24,8 +27,16 @@ const roundFive = minute => Math.round(minute / 5) * 5;
  * Reserve break slots globally: two rooms never finish less than ten minutes
  * apart, including across rounds. Fictional runtimes may include pre-show time. */
 export function createBreakEvents(cycles = 4) {
+  return createDayBreakEvents(cycles, OPENING_ORDER, 26);
+}
+
+export function createV25BreakEvents(cycles = 4) {
+  return createDayBreakEvents(cycles, PREVIOUS_ORDER, 24);
+}
+
+function createDayBreakEvents(cycles, order, attendanceVersion) {
   const events = [], reservedBreaks = [];
-  let shows = ORDER.map((number, index) => ({ number, start: 12 * 60 + index * 5 }));
+  let shows = order.map((number, index) => ({ number, start: 12 * 60 + index * 5 }));
   for (let cycle = 0; cycle < cycles; cycle++) {
     const next = [];
     for (const entry of shows.sort((a, b) => (a.start + SHOWS[a.number - 1].minutes) - (b.start + SHOWS[b.number - 1].minutes) || a.number - b.number)) {
@@ -35,7 +46,7 @@ export function createBreakEvents(cycles = 4) {
       reservedBreaks.push(end);
       for (const [kind, time] of [["start", start], ["break", end]]) events.push({
         id: `theater-${number}-${cycle}-${kind}`, theaterId: `theater-${number}`, number,
-        title: show.title, kind, time, cycle, audienceCycle: cycle,
+        title: show.title, kind, time, cycle, audienceCycle: cycle, attendanceVersion,
       });
       next.push({ number, start: end + 30 });
     }
@@ -48,13 +59,13 @@ export function createBreakEvents(cycles = 4) {
  * deliberately starts a new day, so partial cleaning and attendance stay valid. */
 export function createLegacyBreakEvents(cycles = 8) {
   const events = [];
-  for (const [index, number] of ORDER.entries()) {
+  for (const [index, number] of PREVIOUS_ORDER.entries()) {
     const show = SHOWS[number - 1];
     for (let cycle = 0; cycle < cycles; cycle++) {
       const time = LEGACY_SHIFT_START_MINUTE + index * 8 + cycle * (show.minutes + 28);
       for (const kind of ["break", "start"]) events.push({
         id: `theater-${number}-${cycle}-${kind}`, theaterId: `theater-${number}`, number,
-        title: show.title, kind, time: time + (kind === "start" ? 28 : 0), cycle,
+        title: show.title, kind, time: time + (kind === "start" ? 28 : 0), cycle, attendanceVersion: 24,
       });
     }
   }
@@ -80,19 +91,24 @@ export function consumeNewUsherDay(storage) {
 
 export function createUsherSchedule({ storage, onBreak = () => {}, onStart = () => {}, seed = Date.now() >>> 0,
   timeScale: initialScale = SHIFT_TIME_SCALE } = {}) {
-  let events = createBreakEvents(), mode = "day", minute = SHIFT_START_MINUTE, started = false;
+  let events = createBreakEvents(), mode = "day", programVersion = 26, minute = SHIFT_START_MINUTE, started = false;
   let done = new Set(), clean = new Set(), elapsedSave = 0, timeScale = SHIFT_SPEEDS.includes(initialScale) ? initialScale : SHIFT_TIME_SCALE;
   let speedHistory = [{ minute, timeScale }], restored = false;
   try {
     const saved = JSON.parse(storage?.getItem(SCHEDULE_STORAGE_KEY));
-    const candidateEvents = saved?.version === 1 || saved?.mode === "legacy" ? createLegacyBreakEvents() : events;
+    const savedProgram = saved?.version === 1 ? 22
+      : saved?.version === 2 ? (saved.mode === "legacy" ? 22 : 25) : saved?.programVersion;
+    const candidateEvents = savedProgram === 22 ? createLegacyBreakEvents()
+      : savedProgram === 25 ? createV25BreakEvents() : events;
     const validIds = new Set(candidateEvents.map(e => e.id));
-    const lowerBound = saved?.version === 1 || saved?.mode === "legacy" ? LEGACY_SHIFT_START_MINUTE : SHIFT_START_MINUTE;
-    if ([1, 2].includes(saved?.version) && Number.isFinite(saved.minute) && saved.minute >= lowerBound
+    const lowerBound = savedProgram === 22 ? LEGACY_SHIFT_START_MINUTE : SHIFT_START_MINUTE;
+    if ([1, 2, 3].includes(saved?.version) && [22, 25, 26].includes(savedProgram)
+      && Number.isFinite(saved.minute) && saved.minute >= lowerBound
       && saved.minute < candidateEvents.at(-1).time + 1 && Number.isInteger(saved.seed)
       && Array.isArray(saved.done) && saved.done.every(id => validIds.has(id))
       && Array.isArray(saved.clean) && saved.clean.every(id => validIds.has(id))) {
       events = candidateEvents; mode = lowerBound === LEGACY_SHIFT_START_MINUTE ? "legacy" : "day";
+      programVersion = savedProgram;
       minute = saved.minute; seed = saved.seed >>> 0; started = Boolean(saved.started); restored = true;
       done = new Set(saved.done); clean = new Set(saved.clean);
       timeScale = SHIFT_SPEEDS.includes(saved.timeScale) ? saved.timeScale : SHIFT_TIME_SCALE;
@@ -103,7 +119,7 @@ export function createUsherSchedule({ storage, onBreak = () => {}, onStart = () 
         ? saved.speedHistory : [{ minute: lowerBound, timeScale }];
     }
   } catch { /* Local saves are optional. */ }
-  const save = () => { try { storage?.setItem(SCHEDULE_STORAGE_KEY, JSON.stringify({ version: 2, mode, minute, seed, started, timeScale, speedHistory, done: [...done], clean: [...clean] })); } catch {} };
+  const save = () => { try { storage?.setItem(SCHEDULE_STORAGE_KEY, JSON.stringify({ version: 3, mode, programVersion, minute, seed, started, timeScale, speedHistory, done: [...done], clean: [...clean] })); } catch {} };
   const lastBreaks = new Map(), firstBreaks = new Map(), pages = new Map();
   for (const event of events) if (event.kind === "break") {
     if (!firstBreaks.has(event.theaterId)) firstBreaks.set(event.theaterId, event);
@@ -117,6 +133,7 @@ export function createUsherSchedule({ storage, onBreak = () => {}, onStart = () 
     events, pageCount,
     get minute() { return minute; }, get seed() { return seed; }, get started() { return started; },
     get mode() { return mode; }, get restored() { return restored; }, get timeScale() { return timeScale; },
+    get programVersion() { return programVersion; },
     get time() { return formatShiftTime(minute); },
     begin() { started = true; save(); },
     setTimeScale(value) {
@@ -174,7 +191,7 @@ export function createUsherSchedule({ storage, onBreak = () => {}, onStart = () 
     },
     currentBreak,
     hasBroken(id) { return lastBreaks.has(id); },
-    getSnapshot() { return { minute, time: formatShiftTime(minute), mode, startOfDay: mode === "day", timeScale, started, seed, done: [...done], clean: [...clean], next: this.getNextBreaks(), rows: this.sheetRows() }; },
+    getSnapshot() { return { minute, time: formatShiftTime(minute), mode, programVersion, startOfDay: mode === "day", timeScale, started, seed, done: [...done], clean: [...clean], next: this.getNextBreaks(), rows: this.sheetRows() }; },
     dispose: save,
   };
 }

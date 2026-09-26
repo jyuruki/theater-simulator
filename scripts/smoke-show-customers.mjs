@@ -6,7 +6,7 @@ import { createShowAttendance, MAX_SHOW_AUDIENCE } from "../src/show-attendance.
 import { PATRON_LOBBY, PATRON_EXIT } from "../src/show-customer-navigation.js";
 import { createShowCustomers } from "../src/show-customers.js";
 import { createUsherDoors } from "../src/usher-doors.js";
-import { createUsherWaste } from "../src/usher-waste.js";
+import { createUsherWaste, WASTE_CAPACITY } from "../src/usher-waste.js";
 import { AABBCollisionWorld } from "../src/player.js";
 import { createMaterialLibrary } from "../src/materials.js";
 import { createTheaterWorld } from "../src/world.js";
@@ -84,7 +84,7 @@ customers.onBreak({ id: "break-initial-6", theaterId: "theater-6", time: 1100 })
 await advance(280);
 assert.equal(customers.getSnapshot().stats.exited, count2 + count6, JSON.stringify(customers.getSnapshot()));
 assert.ok(customers.getSnapshot().stats.tossed >= 3, "Departing customers carry packaging to the actual rolling can");
-assert.ok(waste.getSnapshot().bins.every(bin => bin.fill <= 120), "Physical rubbish cannot overflow the can");
+assert.ok(waste.getSnapshot().bins.every(bin => bin.fill <= WASTE_CAPACITY), "Physical rubbish cannot overflow the can");
 // Adjacent-room turnover reproduces the reported opposing streams. T14's next
 // audience yields until its outgoing audience has cleared; T13 boards at once.
 customers.onBreak({ id: "break-14-initial", theaterId: "theater-14", cycle: 0 }); doors.onBreak("theater-14");
@@ -104,7 +104,7 @@ for (const number of [13, 14]) {
 assert.equal(customers.getSnapshot().stats.exited, count2 + count6 + createShowAttendance(nav.seatPlans.find(plan => plan.id === "theater-14")).count,
   "The earlier T14 audience must leave before its next audience uses the cubby");
 const restoring = performance.now(), restored = customers.restoreSchedule({ minute: 0, done: [], events: [] });
-assert.ok(restored > 100, "Already-running initial shows are populated when a shift loads");
+assert.ok(restored > 35, "Already-running initial shows are populated when a shift loads");
 assert.equal(customers.restoreSchedule({ minute: 0, done: [], events: [] }), 0, "Restoring twice never duplicates seated customers");
 if (process.env.CROWD_DEBUG) console.log({ prepareMs, restoreMs: performance.now() - restoring,
   meanUpdateMs: updateMs / updateCount, maxUpdateMs });

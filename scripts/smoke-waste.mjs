@@ -64,6 +64,10 @@ assert.equal(afterPaused.bins[0].x, JSON.parse(paused).bins[0].x); assert.equal(
 game.update(1 / 120, { active: true }); assert.equal(game.returnTool(), true);
 const releaseZ = bin().z; update(.1); assert.ok(bin().z >= releaseZ, "Released can retains short rolling momentum"); update(1);
 assert.ok(Math.hypot(bin().vx, bin().vz) < .02, "Caster resistance brings released can to rest");
+const moved = bin();
+const passBy = game.getPassingDisposalTarget(new THREE.Vector3(moved.x, 1.3, moved.z + 1.2));
+assert.equal(passBy?.binId, moved.id, "Passing guests use the can's new physical location after pushing");
+assert.deepEqual(passBy.position, [moved.x, 1.12, moved.z], "The disposal target follows the actual rolling can");
 
 // Overflow is rejected; full liner is removed as a real object, never erased.
 b = bin(); assert.equal(game.depositTrash(b.id, 1000), WASTE_CAPACITY - b.fill);
@@ -73,7 +77,7 @@ aim([b.x, 1.68, b.z + 1.4], [b.x, 1.02, b.z]);
 assert.equal(game.getSnapshot().focus, "mouth"); game.interact();
 assert.equal(game.heldTool, "untied trash bag"); assert.equal(bin().lined, false);
 assert.equal(game.depositTrash(b.id, 5), 0, "An unlined can refuses new waste");
-assert.equal(game.getSnapshot().bags[0].units, 120);
+assert.equal(game.getSnapshot().bags[0].units, WASTE_CAPACITY);
 update(1.7); update(.03, false); update(1.2, true);
 assert.equal(game.heldTool, "tied trash bag", `Physical tie completes: ${JSON.stringify(game.getSnapshot().bags)} ${toasts}`);
 assert.equal(game.getSnapshot().depositedBags, 0);
