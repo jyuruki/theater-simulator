@@ -45,8 +45,8 @@ import {
 } from "../src/coordinates.js";
 
 const EXPECTED_CAPACITIES = Object.freeze({
-  1: 38, 2: 38, 3: 148, 4: 58, 5: 58, 6: 148, 7: 153, 8: 152,
-  9: 50, 10: 50, 11: 50, 12: 50, 13: 50, 14: 50,
+  1: 32, 2: 32, 3: 148, 4: 58, 5: 58, 6: 148, 7: 153, 8: 152,
+  9: 34, 10: 34, 11: 34, 12: 34, 13: 34, 14: 34,
 });
 
 const EXPECTED_PRESET_GROUPS = Object.freeze({
@@ -148,9 +148,9 @@ for (const [preset, expectedNumbers] of Object.entries(EXPECTED_PRESET_GROUPS)) 
   assert.deepEqual(actual, expectedNumbers, `${preset} theater grouping is incorrect.`);
 }
 
-assert.equal(EXPECTED_SEAT_TOTAL, 1093);
-assert.equal(AUDITORIUMS.reduce((sum, room) => sum + room.seats, 0), 1093);
-assert.equal(validation.seatTotal, 1093);
+assert.equal(EXPECTED_SEAT_TOTAL, 985);
+assert.equal(AUDITORIUMS.reduce((sum, room) => sum + room.seats, 0), 985);
+assert.equal(validation.seatTotal, 985);
 
 const baseRooms = [...PUBLIC_SPACES, ...SERVICE_ROOMS, ...AUDITORIUMS];
 assertUnique(baseRooms.map(({ id }) => id), "Base room IDs");
@@ -587,12 +587,12 @@ assert.deepEqual(
 for (const [number, baseline, xShift] of [
   [7, {
     bounds: { xMin: 79.5, xMax: 97, zMin: 62.2, zMax: 89.2 },
-    nook: { xMin: 82, xMax: 85, zMin: 62.2, zMax: 66.5 },
+    nook: { xMin: 82, xMax: 82.76, zMin: 65.1, zMax: 66.95 },
     ramp: { xMin: 79.5, xMax: 82, zMin: 66.5, zMax: 84.7 },
   }, -15],
   [8, {
     bounds: { xMin: 110, xMax: 127.5, zMin: 62.2, zMax: 89.2 },
-    nook: { xMin: 112.5, xMax: 115.5, zMin: 62.2, zMax: 66.5 },
+    nook: { xMin: 112.5, xMax: 113.26, zMin: 65.1, zMax: 66.95 },
     ramp: { xMin: 110, xMax: 112.5, zMin: 66.5, zMax: 84.7 },
   }, -27],
 ]) {
@@ -604,14 +604,14 @@ for (const [number, baseline, xShift] of [
 for (const number of [7, 8]) {
   const auditorium = auditoriumByNumber.get(number);
   const nook = auditorium.entry.usherNookBounds;
-  assert.ok(nook, `Theater ${number} needs the drawn usher waiting nook.`);
+  assert.ok(nook, `Theater ${number} needs the photographed recessed service cabinet.`);
   assert.equal(auditorium.entry.routeSide, "west");
-  assert.equal(nook.zMin, auditorium.bounds.zMin, `Theater ${number} nook must begin at its hall door.`);
-  assert.equal(nook.zMax, auditorium.entry.ramp.bounds.zMin, `Theater ${number} nook must meet the start of the incline.`);
+  assert.ok(nook.zMin > auditorium.entry.entranceDoorZ + 1.2, `Theater ${number} cabinet must clear the open double-door leaves.`);
+  assert.equal(nook.zMax, 66.95, `Theater ${number} cabinet recess has its own end wall.`);
   assert.equal(nook.xMin, auditorium.entry.ramp.bounds.xMax, `Theater ${number} nook must open directly beside its route.`);
   assert.ok(auditorium.entry.center < nook.xMin, `Theater ${number} nook must sit to the right of the entering usher.`);
-  assertNear(boundsWidth(nook), 3, `Theater ${number} usher-nook width`);
-  assertNear(boundsDepth(nook), 4.3, `Theater ${number} usher-nook depth`);
+  assertNear(boundsWidth(nook), .76, `Theater ${number} cabinet recess depth`);
+  assertNear(boundsDepth(nook), 1.85, `Theater ${number} cabinet recess opening width`);
 }
 
 assert.equal(LOBBY_PLAN.customerCounter.length, 5, "Bent concession/bar counter must preserve every sketched vertex.");
@@ -1450,7 +1450,7 @@ assert.ok(worldBounds.xMin < worldBounds.xMax);
 assert.equal(worldBounds.xMax - worldBounds.xMin, MAP_BOUNDS.xMax - MAP_BOUNDS.xMin);
 
 console.log(
-  `Layout valid: v19 · six single-plane double-door assemblies + physical-left windows · four flush kiosks + three showtime screens · lobby/stair retained · 135.386m hall · 14 theaters · 1,093 seats.`,
+  `Layout valid: v19 · six single-plane double-door assemblies + physical-left windows · four flush kiosks + three showtime screens · lobby/stair retained · 135.386m hall · 14 theaters · 985 seats.`,
 );
 
 function publicById(id) {

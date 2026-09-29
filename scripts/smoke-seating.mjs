@@ -29,10 +29,16 @@ for (const room of AUDITORIUMS) {
     if (room.entry.type === "trash-cubby") {
       const cubbyFront = room.entry.cubbyBounds?.zMin ?? room.bounds.zMax - room.entry.cubbyDepth;
       const actualGap = cubbyFront - 0.09 - (layout.backRowZ + 0.39);
-      close(actualGap, layout.rearEntryClearance.original * 2, `${room.id} doubled rear entry clearance`);
-      close(layout.rowPitch, layout.preset.rowPitch, `${room.id} preserved row pitch`);
-      close(layout.frontRowZ, room.bounds.zMin + room.stadium.screenApronDepth, `${room.id} original screen apron retained`);
-      close(layout.rearEntryClearance.seatBankShift, 0, `${room.id} seat bank stays fixed`);
+      close(actualGap, .91, `${room.id} clear ground-level passage behind accessible seats`);
+      assert.ok(layout.rowPitch >= 2.1, `${room.id} wider row passages`);
+      assert.equal(layout.rows.length, 4, `${room.id} three stadium rows and accessible landing`);
+      const rear = layout.rows.at(-1);
+      assert.equal(rear.accessible, true);
+      assert.equal(rear.elevation, 0);
+      assert.equal(rear.seatCount, 4);
+      assert.deepEqual(rear.seatGroups.map(group => group.count), [2, 2]);
+      assert.ok(rear.seatCentersX[2] - rear.seatCentersX[1] - rear.spacing > 2.8, `${room.id} wheelchair circulation gap`);
+      assert.ok(rear.z - .39 - layout.stairTransitions.at(-1).endZ >= 1.2, `${room.id} clear landing before stairs`);
       assert.ok(room.entry.innerDoorCenter - 1.025 >= cubbyFront + 0.2 - 1e-6,
         `${room.id} inner door front jamb fits inside the shallower cubby`);
       assert.ok(room.entry.innerDoorCenter + 1.025 <= room.bounds.zMax - 0.2 + 1e-6,
@@ -221,6 +227,9 @@ for (const room of AUDITORIUMS) {
     close(passage.maximumDrop, 0, `${room.id} row ${row.label}: no sideways drop while crossing`);
   }
   if (layout.rearEntryClearance) {
+    const centerPassage = walk(layout.centerX, layout.backRowZ + .8, 0, 25);
+    assert.ok(centerPassage.z < layout.backRowZ - .8, `${room.id}: accessible center gap must be walkable`);
+    close(centerPassage.y, 0, `${room.id}: accessible center gap remains at entry level`);
     const rearWalkZ = layout.backRowZ + 0.39 + layout.rearEntryClearance.current / 2;
     const crossing = walk(layout.sideAisles.west.centerX, rearWalkZ, Math.PI / 2, 210);
     assert.ok(crossing.x >= layout.sideAisles.east.centerX - 0.15, `${room.id}: widened rear entry must allow a full cross-aisle walk`);
@@ -248,4 +257,4 @@ for (const room of AUDITORIUMS) {
 }
 world.dispose();
 materials.dispose();
-console.log(`Seating valid: ${rowPassageSamples} rendered single-level row-passage samples and complete cross-row walks · A/B separately lowered, C at ground · eight rear-entry routes · 14 raised screens · ${stairWalks} complete A–H stair climbs · ${storageSamples} storage-clearance samples · all 1,093 seats retained.`);
+console.log(`Seating valid: ${rowPassageSamples} rendered single-level row-passage samples and complete cross-row walks · A/B separately lowered, C at ground · eight rear-entry routes · 14 raised screens · ${stairWalks} complete A–H stair climbs · ${storageSamples} storage-clearance samples · all 985 seats retained.`);

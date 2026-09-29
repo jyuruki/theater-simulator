@@ -1,6 +1,6 @@
 import { withRearEntryClearance } from "./seating-profiles.js";
 
-export const EXPECTED_SEAT_TOTAL = 1093;
+export const EXPECTED_SEAT_TOTAL = 985;
 
 const rect = (xMin, xMax, zMin, zMax) => ({ xMin, xMax, zMin, zMax });
 
@@ -324,6 +324,10 @@ export const AUDITORIUMS = Object.freeze([
     entry: {
       type: "right-then-left", center: 31.2, routeSide: "east", routeWidth: 2.5, storageId: "under-storage-6",
       ceilingHeight: 3.48,
+      entranceDoorZ: 64.2, entrancePortalWidth: 2.5,
+      upstairsCubbyBounds: rect(28.8, 29.7, 62.45, 64.05),
+      serviceCabinet: { x: 37.725, z: 68.9, yaw: Math.PI,
+        recessBounds: rect(36.8, 38.65, 68.5, 69.26) },
       vestibuleBounds: rect(29.7, 32.55, 62.2, 65.5),
       transverseBounds: rect(29.7, 47.2, 65.5, 68.5),
       longRouteBounds: rect(44.7, 47.2, 68.5, 85.5), arrivalZ: 84.7,
@@ -335,7 +339,10 @@ export const AUDITORIUMS = Object.freeze([
     stadium: bottomEntryStadium(0.24),
     entry: {
       type: "straight-side", center: 65.8, routeSide: "west", arrivalZ: 84.7,
-      usherNookBounds: rect(67, 70, 62.2, 66.5),
+      entranceDoorZ: 63.8, entrancePortalWidth: 2.3,
+      usherNookBounds: rect(67, 67.76, 65.1, 66.95),
+      serviceCabinet: { x: 67.4, z: 66.025, yaw: Math.PI / 2,
+        recessBounds: rect(67, 67.76, 65.1, 66.95) },
       ramp: { bounds: rect(64.5, 67, 66.5, 84.7), startHeight: 0, endHeight: 0.24 },
     },
   },
@@ -345,7 +352,10 @@ export const AUDITORIUMS = Object.freeze([
     stadium: bottomEntryStadium(0.24),
     entry: {
       type: "straight-side", center: 84.3, routeSide: "west", arrivalZ: 84.7,
-      usherNookBounds: rect(85.5, 88.5, 62.2, 66.5),
+      entranceDoorZ: 63.8, entrancePortalWidth: 2.3,
+      usherNookBounds: rect(85.5, 86.26, 65.1, 66.95),
+      serviceCabinet: { x: 85.9, z: 66.025, yaw: Math.PI / 2,
+        recessBounds: rect(85.5, 86.26, 65.1, 66.95) },
       ramp: { bounds: rect(83, 85.5, 66.5, 84.7), startHeight: 0, endHeight: 0.24 },
     },
   },
@@ -430,7 +440,7 @@ export const SERVICE_ROOMS = Object.freeze([
     kind: "office",
   },
   { id: "electrical-room", name: "Electrical Room", short: "ELEC", detail: "Closed service room behind the former provisional restroom door", bounds: shiftedRect(12.1, 17.7, 34, 43), kind: "electrical", entrySide: "west", doorCenter: shiftedZ(39), closed: true },
-  { id: "future-upstairs-stair", name: "Future Upstairs Stair", short: "STAIR", detail: "Closed future staircase entered from the left wall of Theater 6's short vestibule", bounds: rect(25, 29.7, 62.2, 68.5), kind: "electrical", entrySide: "east", doorCenter: 63.25, doorWidth: 1.8, closed: true },
+  { id: "future-upstairs-stair", name: "Future Upstairs Stair", short: "STAIR", detail: "Closed future staircase in the left-hand mini cubby before Theater 6's double doors", bounds: rect(25, 29.7, 62.2, 68.5), kind: "electrical", entrySide: "east", doorCenter: 63.25, doorWidth: 1.1, doorInset: 0.9, closed: true },
   { id: "trash-room", name: "Trash Room", short: "TRASH", detail: "Waste and cleaning support; the door is at the right end and the room opens left", bounds: T3_MEN_PLAN.trash, kind: "trash", entrySide: "south", doorCenter: -14.77, doorPlacement: "right", opensToward: "west" },
   {
     id: "boys-restroom", name: "Men's Restroom", short: "BB",

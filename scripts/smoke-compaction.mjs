@@ -58,8 +58,8 @@ for (const [key, baseline] of Object.entries({
 assert.equal(t6.entry.type, "right-then-left");
 assert.equal(t6.entry.routeSide, "east");
 for (const [number, nook, ramp, shift] of [
-  [7, rect(67, 70, 62.2, 66.5), rect(64.5, 67, 66.5, 84.7), -7.4],
-  [8, rect(85.5, 88.5, 62.2, 66.5), rect(83, 85.5, 66.5, 84.7), -8.1],
+  [7, rect(67, 67.76, 65.1, 66.95), rect(64.5, 67, 66.5, 84.7), -7.4],
+  [8, rect(85.5, 86.26, 65.1, 66.95), rect(83, 85.5, 66.5, 84.7), -8.1],
 ]) {
   moved(auditoriums.get(number).entry.usherNookBounds, nook, shift, `T${number} usher nook`);
   moved(auditoriums.get(number).entry.ramp.bounds, ramp, shift, `T${number} entry corridor`);

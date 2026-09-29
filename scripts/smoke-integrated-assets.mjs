@@ -38,8 +38,8 @@ const counts = Object.fromEntries(PROP_MODEL_NAMES.map((name) => [name, placemen
 const architecturalOrUnused = new Set(["stanchion", "counter_blue", "counter_white"]);
 for (const name of PROP_MODEL_NAMES.filter((name) => !architecturalOrUnused.has(name))) check(counts[name] > 0, `Missing model family: ${name}`);
 check(counts.counter_blue === 0 && counts.counter_white === 0, "Continuous architectural counters must not regain tiled cabinet replacements");
-check(counts.recliner === 1093, `Expected 1093 recliners, got ${counts.recliner}`);
-const expectedArms = [...world.auditoriumLayouts.values()].reduce((sum, layout) => sum + layout.rows.reduce((n, row) => n + row.seatCount + 1, 0), 0);
+check(counts.recliner === 985, `Expected 985 recliners, got ${counts.recliner}`);
+const expectedArms = [...world.auditoriumLayouts.values()].reduce((sum, layout) => sum + layout.rows.reduce((n, row) => n + row.armCentersX.length, 0), 0);
 check(counts.shared_armrest === expectedArms, `Expected ${expectedArms} shared armrests, got ${counts.shared_armrest}`);
 check(counts.candy_display === 1 && counts.water_display === 1, "Both concession selection bays must be modeled");
 const originalVisibility = new Map();
@@ -106,11 +106,13 @@ for (const auditorium of AUDITORIUMS) {
   const roomBatches = batches.filter((batch) => batch.userData.propModel === "recliner" && batch.parent.name === `${auditorium.id}-interior`);
   check(roomBatches.length === 4, `${auditorium.id} recliners should use exactly four material batches`);
   for (const row of layout.rows) {
-    const collider = world.colliders.find(({ id }) => id === `${auditorium.id}-seat-row-${row.index}`);
-    check(collider, `Missing collider ${auditorium.id} row ${row.index}`);
+    const colliders = row.seatGroups.map(group => world.colliders.find(({ id }) => id === group.colliderId));
+    check(colliders.every(Boolean), `Missing collider ${auditorium.id} row ${row.index}`);
     const inRow = placements.filter((placement) => placement.id.startsWith(`${auditorium.id}-recliner-${row.index}-`) || placement.id.startsWith(`${auditorium.id}-shared-arm-${row.index}-`));
     for (const placement of inRow) {
       const box = actual.get(placement.id);
+      const collider = colliders.find(collider => collider && box?.min.x >= collider.minX - .002 && box?.max.x <= collider.maxX + .002);
+      check(collider, `Rendered chair must fit one physical seat group: ${placement.id}`);
       if (!box || !collider) continue;
       check(box.min.x >= collider.minX - .002 && box.max.x <= collider.maxX + .002 && box.min.z >= collider.minZ - .002 && box.max.z <= collider.maxZ + .002 && box.max.y <= collider.maxY + .002,
         `Rendered chair exceeds row collider: ${placement.id}`);
@@ -120,7 +122,9 @@ for (const auditorium of AUDITORIUMS) {
     for (let index = 1; index < byX.length; index++) {
       check(byX[index - 1].box.max.x <= byX[index].box.min.x + .001,
         `Neighboring seat bodies/arms overlap: ${byX[index - 1].id} / ${byX[index].id}`);
-      check(near(byX[index - 1].box.max.x, byX[index].box.min.x, .001),
+      const accessibleGap = row.accessible && byX[index].box.min.x - byX[index - 1].box.max.x > 2.8
+        && byX[index - 1].id.includes("shared-arm") && byX[index].id.includes("shared-arm");
+      check(accessibleGap || near(byX[index - 1].box.max.x, byX[index].box.min.x, .001),
         `Upholstered seat body must meet the shared armrest: ${byX[index - 1].id} / ${byX[index].id}`);
     }
     testedRows++;

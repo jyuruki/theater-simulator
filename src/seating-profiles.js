@@ -31,7 +31,7 @@ export function seatingProfileFor(auditorium) {
   return profile;
 }
 
-/** Retain the seat bank and screen apron while widening its rear entry gap. */
+/** Keep the measured entry recess while fitting the photographed rear landing. */
 export function withRearEntryClearance(auditorium, preset) {
   if (auditorium.stadium.access !== "top" || auditorium.entry.type !== "trash-cubby") return auditorium;
   const { entry, bounds, stadium } = auditorium;
@@ -45,6 +45,12 @@ export function withRearEntryClearance(auditorium, preset) {
   if (depth < 2.5) throw new RangeError(`${auditorium.id} rear cubby would be too shallow for its side doorway.`);
   return {
     ...auditorium,
+    // The input rows remain the measured v26 bank used to locate its entry
+    // recess. The new reference trades rear capacity for a real landing and
+    // wider row spacing inside the unchanged room footprint.
+    rows: [...auditorium.rows.slice(0, 3), 4],
+    seats: auditorium.rows.slice(0, 3).reduce((sum, count) => sum + count, 0) + 4,
+    stadium: { ...stadium, accessibleLanding: true },
     entry: {
       ...entry,
       ...(entry.cubbyBounds ? { cubbyBounds: { ...entry.cubbyBounds, zMin: cubbyFront } } : { cubbyDepth: depth }),

@@ -244,7 +244,8 @@ export function buildAuditoriumLayout(auditorium, presets = AUDITORIUM_PRESETS) 
   }
 
   const seatingProfile = seatingProfileFor(auditorium);
-  const rowPitch = seatingProfile
+  const accessibleLanding = auditorium.stadium.accessibleLanding === true;
+  const rowPitch = accessibleLanding ? (auditorium.preset === "compact38" ? 2.1 : 2.35) : seatingProfile
     ? Math.min(finite(preset.rowPitch, `${auditorium.preset}.rowPitch`), seatingProfile.maximumRowPitch)
     : finite(preset.rowPitch, `${auditorium.preset}.rowPitch`);
   const rise = seatingProfile?.rowRise ?? finite(preset.rise, `${auditorium.preset}.rise`);
@@ -261,7 +262,7 @@ export function buildAuditoriumLayout(auditorium, presets = AUDITORIUM_PRESETS) 
   const backElevation = auditorium.stadium.access === "top" ? 0 : corridorRise + rearRise;
   const direction = auditorium.screenSide === "north" ? -1 : 1;
   // Arrival is at B/C for the new profile, so it must not determine row A.
-  const frontRowZ = seatingProfile
+  const frontRowZ = accessibleLanding ? bounds.zMin + (auditorium.preset === "compact38" ? 2.25 : 1.85) : seatingProfile
     ? (auditorium.screenSide === "north"
       ? bounds.zMax - seatingProfile.screenApronDepth
       : bounds.zMin + seatingProfile.screenApronDepth)
@@ -269,12 +270,14 @@ export function buildAuditoriumLayout(auditorium, presets = AUDITORIUM_PRESETS) 
   let rearEntryClearance = null;
   if (auditorium.stadium.access === "top" && auditorium.entry.type === "trash-cubby") {
     const cubbyFrontZ = auditorium.entry.cubbyBounds?.zMin ?? bounds.zMax - (auditorium.entry.cubbyDepth ?? 2.2);
-    const originalBackZ = frontRowZ + direction * rowTransitions * rowPitch;
+    const originalBackZ = accessibleLanding ? cubbyFrontZ - 1.39 : frontRowZ + direction * rowTransitions * rowPitch;
     const clearance = cubbyFrontZ - 0.09 - (originalBackZ + 0.39);
     rearEntryClearance = Object.freeze({ original: auditorium.entry.rearClearanceBefore ?? clearance,
       current: clearance, seatBankShift: 0, cubbyWallRetreat: auditorium.entry.cubbyWallRetreat ?? 0 });
   }
-  const rowDistance = (index) => index * rowPitch
+  const rowDistance = (index) => accessibleLanding && index === rowTransitions
+    ? (auditorium.entry.cubbyBounds?.zMin ?? bounds.zMax - auditorium.entry.cubbyDepth) - 1.39 - frontRowZ
+    : index * rowPitch
     + (seatingProfile && index > seatingProfile.crossAisleAfterRow ? seatingProfile.crossAisleDepth : 0);
   const backRowZ = frontRowZ + direction * rowDistance(rowTransitions);
   if (frontRowZ < bounds.zMin - EPSILON || frontRowZ > bounds.zMax + EPSILON
@@ -333,10 +336,26 @@ export function buildAuditoriumLayout(auditorium, presets = AUDITORIUM_PRESETS) 
       + (seatingProfile ? seatingProfile.rearWallOffset - 0.09 : rowPitch / 2 - SEATING_RISER_DEPTH / 2);
     const firstZ = frontRowZ + direction * frontDistance;
     const secondZ = frontRowZ + direction * rearDistance;
+    const accessible = accessibleLanding && index === rowTransitions;
+    const spacing = accessible ? .76 : Math.min(.76, (seatBounds.xMax - seatBounds.xMin - .14) / seatCount);
+    const centerX = (seatBounds.xMin + seatBounds.xMax) / 2;
+    const seatCentersX = accessible
+      ? [seatBounds.xMin + .48, seatBounds.xMin + .48 + spacing,
+        seatBounds.xMax - .48 - spacing, seatBounds.xMax - .48]
+      : Array.from({ length: seatCount }, (_, column) => centerX + (column - (seatCount - 1) / 2) * spacing);
+    const seatGroups = (accessible ? [[0, 2], [2, 2]] : [[0, seatCount]]).map(([firstColumn, count], groupIndex) => {
+      const firstX = seatCentersX[firstColumn], lastX = seatCentersX[firstColumn + count - 1];
+      return Object.freeze({ firstColumn, count, groupIndex, centerX: (firstX + lastX) / 2,
+        width: lastX - firstX + spacing + .095,
+        colliderId: `${auditorium.id}-seat-row-${index}${accessible ? `-group-${groupIndex}` : ""}`,
+        armCentersX: Object.freeze(Array.from({ length: count + 1 }, (_, divider) => firstX - spacing / 2 + divider * spacing)) });
+    });
     return Object.freeze({
       index,
       label: String.fromCharCode(65 + index),
       seatCount,
+      accessible, spacing, seatCentersX: Object.freeze(seatCentersX), seatGroups: Object.freeze(seatGroups),
+      armCentersX: Object.freeze(seatGroups.flatMap(group => group.armCentersX)),
       z,
       elevation,
       floorBounds: freezeBounds({
@@ -443,6 +462,7 @@ export function buildAuditoriumLayout(auditorium, presets = AUDITORIUM_PRESETS) 
     rearEntryClearance,
     steppedRowTransitions,
     seatingProfile,
+    accessibleLanding,
     rowTransitions,
     totalRise,
     corridorRise,
@@ -634,6 +654,7 @@ export function buildRouteSurfaceDescriptors(auditorium, layout) {
     ["longRouteBounds", "long-route"],
     ["vestibuleBounds", "vestibule"],
     ["usherNookBounds", "usher-nook"],
+    ["upstairsCubbyBounds", "upstairs-cubby"],
   ]) {
     if (entry[field]) {
       const height = field === "usherNookBounds" && entry.ramp

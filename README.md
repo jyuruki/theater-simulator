@@ -2,13 +2,23 @@
 
 [Play the published theater](https://jyuruki.github.io/theater-simulator/)
 
-A first-person browser recreation of Consolidated Theatres Mililani 14, built from Jacob's employee floor plans, corrections, and location photos. The existing 14 auditoriums, 1,093 seats, service routes, two original murals, and exposed lobby pipework remain the foundation.
+A first-person browser recreation of Consolidated Theatres Mililani 14, built from Jacob's employee floor plans, corrections, and location photos. The existing 14 auditoriums, 985 seats, service routes, two original murals, and exposed lobby pipework remain the foundation.
 
 This is an independent recreation with approximate dimensions, not an official architectural survey or ticket service.
 
 The game starts as an usher with a portable cleaning kit and a handheld break sheet. Choose the shift speed and follow the clock through all fourteen theaters, clean trays and seats, sweep into a left-hand dustpan, move three rolling trash cans, replace full bags, service soda BIBs, refill supplies and wash kitchen trays. The [employee gameplay direction](docs/gameplay-direction.md) records the broader career and minimal-menu approach.
 
-## Version 0.26
+## Version 0.27
+
+- Recessed entrances for Theaters 6–8, including Theater 6’s separate upstairs-door cubby.
+- Burgundy single and double auditorium doors with square vision windows and reference hardware.
+- Recessed broom closets and tray/trash returns in 6–8, with independently opening closet and lower access doors.
+- Larger ground-level landings in all small theaters, with four accessible recliners arranged in two pairs, wider row passages, and short stair pairs. The footprint now accommodates 32 seats in 1–2 and 34 in 9–14.
+- Shared seating geometry keeps customer routes, cleaning targets, collisions and saved cleanup aligned.
+
+See [v0.27 layout and validation](docs/v27-notes.md).
+
+## Version 0.26 (historical)
 
 - Customers wait seated until their exit route is ready, file behind one another in tight passages, and toss rubbish while passing a rolling can. They walk 40% faster; cans hold 50% more.
 - Quieter, varied audiences, including occasional empty shows and busier large rooms. Small aisle messes replace guaranteed front-of-screen spills and piles.

@@ -216,7 +216,7 @@ const publicById = new Map(PUBLIC_SPACES.map((room) => [room.id, room]));
 const auditoriumByNumber = new Map(AUDITORIUMS.map((auditorium) => [auditorium.number, auditorium]));
 
 assert.equal(world.stats.auditoriumCount, 14);
-assert.equal(world.stats.seatCount, 1093);
+assert.equal(world.stats.seatCount, 985);
 assert.equal(world.stats.equipmentAnchors, 13);
 assert.equal(world.stats.layoutVersion, "mililani-sketch-v22");
 assert.ok(world.stats.meshCount > 0);
@@ -1363,7 +1363,7 @@ const expectedT6Underside = theater6.entry.ceilingHeight - 0.1;
 const futureUpstairs = serviceById.get("future-upstairs-stair");
 const stairLeaf = boxById("future-upstairs-stair-closed-leaf");
 assert.equal(futureUpstairs.entrySide, "east");
-assertNear(stairLeaf.x, planToWorldX(theater6.bounds.xMin), "future stair door shared-wall x");
+assertNear(stairLeaf.x, planToWorldX(theater6.bounds.xMin - futureUpstairs.doorInset), "future stair door sits inside its left recess");
 assertNear(stairLeaf.z, futureUpstairs.doorCenter, "future stair door z in T6 vestibule");
 boxById("theater-6-west-wall-header-0");
 boxById("future-upstairs-stair-closed-bar");

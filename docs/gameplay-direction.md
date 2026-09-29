@@ -52,7 +52,7 @@ remain accessible with keyboard and touch as well as mouse input.
 
 ## Current implementation boundary
 
-Version 0.26 supplies all fourteen theaters with seeded audiences and used-seat
+Version 0.27 supplies all fourteen theaters with seeded audiences and used-seat
 cleanup. Only seats occupied by that show's customers leave their trays open;
 trays swing outward toward the row aisle. Wipe the tray and cushion, brush any
 chair popcorn onto the floor using the cloth/hand action, then close the tray.
@@ -95,8 +95,14 @@ yet a realistic full-capacity audience.
 The visitor ticket/order prototype remains disabled. Bathroom cleaning, ICEE
 servicing, sound/picture checks, career progression, food preparation and physical
 POS workflows remain future work. Preserve the minimal-menu approach while
-extending the complete physical tasks. See [v0.26 notes](v26-notes.md).
+extending the complete physical tasks. See [v0.27 notes](v27-notes.md).
 
 Theater 3's full-height anteroom leads through doors to legitimately lower
 under-seat storage. The lower inner ceiling is intentional, per the user's
 clarification; do not shrink that storage or raise it through the seating deck.
+
+The September 28 layout revision gives 6–8 recessed entrances and service cabinets,
+with a separate upstairs mini-cubby in 6. Small rooms 1–2 and 9–14 have four
+ground-level accessible recliners in two separated pairs, larger rear landings,
+wider row passages and paired short steps. Their capacities are 32 and 34 seats
+respectively, for 985 seats in the building. Preserve these reference corrections.

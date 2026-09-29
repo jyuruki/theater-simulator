@@ -5,6 +5,7 @@ import { createUsherSupplies } from "./usher-supplies.js";
 import { createUsherSchedule, consumeNewUsherDay } from "./usher-schedule.js";
 import { createUsherBreaksheet } from "./usher-breaksheet.js";
 import { createUsherDoors } from "./usher-doors.js";
+import { createUsherCabinets } from "./usher-cabinets.js";
 
 export function createUsherShift(options) {
   const { scene, camera, collisionWorld, storage, showToast = () => {} } = options;
@@ -23,6 +24,7 @@ export function createUsherShift(options) {
     onStart(event) { doors.onStart(event.theaterId); options.onStart?.(event); showToast(`Theater ${event.number} starts at ${schedule.time}. Close its doors.`, 3500); },
   });
   doors = createUsherDoors({ scene, camera, collisionWorld, storage, showToast });
+  const cabinets = createUsherCabinets({ scene, camera, collisionWorld, storage, showToast });
   waste = createUsherWaste({ ...options, hands, getNextBreaks: () => schedule.getNextBreaks(),
     getRoomReady: id => cleaning?.isTheaterReady(id) ?? false });
   const supplies = createUsherSupplies({ ...options, hands, timeScale: () => schedule.timeScale });
@@ -44,11 +46,11 @@ export function createUsherShift(options) {
     if (sheet.visible) return null;
     const owner = modules[hands.owner];
     if (owner) return owner.focusedPrompt ? owner : null;
-    return [cleaning, waste, supplies, doors].filter(m => m.focusedPrompt)
+    return [cleaning, waste, supplies, doors, cabinets].filter(m => m.focusedPrompt)
       .sort((a, b) => (a.focusDistance ?? Infinity) - (b.focusDistance ?? Infinity))[0] ?? null;
   }
   return {
-    cleaning, waste, supplies, schedule, doors, sheet, hands,
+    cleaning, waste, supplies, schedule, doors, cabinets, sheet, hands,
     update(delta, input = {}) {
       if (disposed) return;
       active = Boolean(input.active);
@@ -59,6 +61,7 @@ export function createUsherShift(options) {
       for (const [owner, module] of Object.entries(modules)) module.update(delta, { active, action: action && (!hands.owner || hands.owner === owner), cancelAction: cancelAction || Boolean(input.cancelAction) || reading });
       cancelAction = false;
       doors.update(delta, { active });
+      cabinets.update(delta, { active });
       for (const room of AUDITORIUMS) if (cleaning.isTheaterReady(room.id)) {
         if (schedule.markReady(room.id)) showToast(`Theater ${room.number} ready. Roll its can to the next unserved break.`, 3200);
       }
@@ -102,7 +105,7 @@ export function createUsherShift(options) {
       const next = schedule.getNextBreaks()[0];
       return `${schedule.time} · ${next ? `Next break: Theater ${next.number}` : "Shift complete"} · B sheet · 1 broom / 2 cloth · Q holster or release`;
     },
-    getSnapshot() { return { schedule: schedule.getSnapshot(), cleaning: cleaning.getSnapshot(), waste: waste.getSnapshot(), supplies: supplies.getSnapshot(), doors: doors.getSnapshot(), heldTool: this.heldTool, sheetVisible: sheet.visible, placementActive: this.placementActive, hands: { ...hands } }; },
-    dispose() { if (disposed) return; disposed = true; sheet.dispose(); Object.values(modules).forEach(m => m.dispose()); doors.dispose(); schedule.dispose(); },
+    getSnapshot() { return { schedule: schedule.getSnapshot(), cleaning: cleaning.getSnapshot(), waste: waste.getSnapshot(), supplies: supplies.getSnapshot(), doors: doors.getSnapshot(), cabinets: cabinets.getSnapshot(), heldTool: this.heldTool, sheetVisible: sheet.visible, placementActive: this.placementActive, hands: { ...hands } }; },
+    dispose() { if (disposed) return; disposed = true; sheet.dispose(); Object.values(modules).forEach(m => m.dispose()); doors.dispose(); cabinets.dispose(); schedule.dispose(); },
   };
 }

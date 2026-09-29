@@ -83,6 +83,31 @@ assert.deepEqual(migrated.jobs[0].particles, oldJob.particles);
 const migratedRaw = serializeUsherState(migrated);
 assert.equal(serializeUsherState(restoreUsherState(migratedRaw, plans)), migratedRaw);
 
+// Old small-room particles must not retain coordinates under newly moved
+// seats. Keep dirt and collection progress while rebuilding physical anchors.
+const changedPlan = plans.find(plan => plan.number === 9), changedState = createUsherState();
+const changedJob = beginCleaningBreak(changedState, changedPlan, "v27-layout-migration", { seatIds: changedPlan.seats.map(seat => seat.id) });
+const oldGeometry = JSON.parse(serializeUsherState(changedState));
+delete oldGeometry.jobs[0].geometryVersion;
+for (const surface of oldGeometry.jobs[0].surfaces) surface.dirt.fill(.35);
+oldGeometry.jobs[0].seats.push({ id: "theater-9-recliner-4-9", trayOpen: true });
+for (const [index, particle] of oldGeometry.jobs[0].particles.entries()) {
+  particle.x = changedPlan.bounds.xMin + .2; particle.z = changedPlan.bounds.zMax - .2;
+  particle.mode = index === 0 ? "trash" : index === 1 ? "pan" : "floor";
+}
+const moved = restoreUsherState(JSON.stringify(oldGeometry), plans).jobs[0];
+assert.equal(moved.geometryVersion, 27);
+assert.equal(moved.seats.length, changedJob.seats.length, "Removed rows are safely retired from old cleaning jobs");
+assert.ok(moved.surfaces.every(surface => surface.cells.every(cell => cell.dirt === .35)), "Wiping progress survives the layout update");
+assert.equal(moved.particles[0].mode, "trash"); assert.equal(moved.particles[1].mode, "pan");
+for (const particle of moved.particles.slice(2)) {
+  assert.equal(particle.mode, "floor");
+  assert.equal(particle.y, particle.floorY + .035);
+  assert.ok(particle.z < changedPlan.bounds.zMax - 2, "Old debris is reanchored to its new row aisle");
+  assert.ok(particle.x >= particle.bounds.xMin && particle.x <= particle.bounds.xMax);
+  assert.ok(particle.z >= particle.bounds.zMin && particle.z <= particle.bounds.zMax);
+}
+
 const visuals = createCleaningVisuals({ scene, world, hands: { owner: "cleaning" } });
 for (const group of [visuals.tools.broom, visuals.tools.pan, visuals.stored.broom, visuals.stored.pan]) {
   group.traverse(o => { if (o.isMesh) assert.equal(o.material.color.getHex(), /bristles/.test(o.name) ? 0xf2cb36 : 0x161719); });

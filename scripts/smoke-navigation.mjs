@@ -768,10 +768,11 @@ assert.equal(
 assertBlockedPlanSegment("T6 west wall north of future stair leaf", {
   xMin: theater6.bounds.xMin,
   xMax: theater6.bounds.xMin,
-  zMin: futureUpstairs.doorCenter + futureUpstairs.doorWidth / 2,
+  zMin: theater6.entry.upstairsCubbyBounds.zMax,
   zMax: theater6.entry.vestibuleBounds.zMax,
 }, 0.15);
-assert.equal(isBlocked(theater6.bounds.xMin, futureUpstairs.doorCenter), true, "Closed future stair leaf must block its portal.");
+assert.equal(isBlocked(theater6.bounds.xMin, futureUpstairs.doorCenter), false, "T6 upstairs recess must be reachable from the vestibule.");
+assert.equal(isBlocked(theater6.bounds.xMin - futureUpstairs.doorInset, futureUpstairs.doorCenter), true, "Closed future stair leaf must block the recessed portal.");
 navigationTargets.push({
   id: "theater-6-future-stair-leaf-vestibule-side",
   x: theater6.bounds.xMin + 0.7,
@@ -786,7 +787,8 @@ for (const center of storage6.doorCenters) {
 }
 
 for (const number of [7, 8]) {
-  addBoundsTarget(`theater-${number}-usher-nook`, auditoriumByNumber.get(number).entry.usherNookBounds);
+  const cabinet = auditoriumByNumber.get(number).entry.serviceCabinet;
+  navigationTargets.push({ id: `theater-${number}-cabinet-approach`, x: cabinet.recessBounds.xMin - .75, z: cabinet.z });
 }
 
 const trash = serviceById.get("trash-room");

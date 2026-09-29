@@ -24,7 +24,10 @@ export function createShowAttendance(plan, { cycle = 0, version = 26 } = {}) {
     : popularity < .86 ? 3 + Math.floor(random() * Math.max(2, Math.round(capacity * .45) - 2))
     : Math.round(capacity * (.72 + random() * .28));
   const count = Math.min(seats.length, requested);
-  const rows = [...new Set(seats.map(seat => seat.row))].map(row => seats.filter(seat => seat.row === row).sort((a, b) => a.column - b.column));
+  // The accessible landing has two separate pairs. A party cannot be seated
+  // as one contiguous block across its wide wheelchair circulation space.
+  const rowKey = seat => `${seat.row}:${seat.groupIndex ?? 0}`;
+  const rows = [...new Set(seats.map(rowKey))].map(key => seats.filter(seat => rowKey(seat) === key).sort((a, b) => a.column - b.column));
   const used = new Set(), groups = [];
   while (used.size < count) {
     let size = Math.min(count - used.size, 1 + Math.floor(random() * 5));

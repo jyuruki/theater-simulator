@@ -496,6 +496,7 @@ function routeSegmentsFor(auditorium) {
   if (entry.transverseBounds || entry.longRouteBounds) {
     return [
       ...(entry.vestibuleBounds ? [{ kind: "vestibule", bounds: entry.vestibuleBounds }] : []),
+      ...(entry.upstairsCubbyBounds ? [{ kind: "vestibule", bounds: entry.upstairsCubbyBounds }] : []),
       ...(entry.transverseBounds ? [{ kind: "transverse", bounds: entry.transverseBounds }] : []),
       ...(entry.longRouteBounds ? [{ kind: "route", bounds: entry.longRouteBounds }] : []),
     ];

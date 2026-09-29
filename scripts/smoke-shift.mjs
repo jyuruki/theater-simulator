@@ -77,7 +77,7 @@ for (const door of doors.doors) {
     const center = leaf.hinge.localToWorld(new THREE.Vector3(leaf.direction * leaf.leafWidth / 2, 1, 0));
     assert.ok((center.x - door.x) * door.normal[0] + (center.z - door.z) * door.normal[2] < -.3,
       `${door.id}: single leaf swings outward into the cubby`);
-    assert.equal(leaf.hinge.children[0].material.color.getHex(), 0x971d2b, `${door.id}: red door finish`);
+    assert.equal(leaf.hinge.children[0].material.color.getHex(), 0x642836, `${door.id}: reference burgundy door finish`);
     for (const direction of [1, -1]) {
       const from = direction === 1 ? door.route.outside : door.route.inside;
       const to = direction === 1 ? door.route.inside : door.route.outside;
