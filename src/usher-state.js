@@ -53,7 +53,8 @@ export function beginCleaningBreak(state, plan, seed, { cycle = 0, seatIds, atte
   if (existing && (existing.seed === String(seed) || !theaterSummary(existing).complete)) return false;
   const random = seededRandom(`${plan.id}/${seed}`);
   const occupied = new Set(seatIds ?? createShowAttendance(plan, { cycle, version: attendanceVersion }).seatIds);
-  const job = { id: plan.id, number: plan.number, seed: String(seed), cycle, messVersion, seats: [], surfaces: [], particles: [], completed: false };
+  const job = { id: plan.id, number: plan.number, geometryVersion: plan.geometryVersion ?? 26,
+    seed: String(seed), cycle, messVersion, seats: [], surfaces: [], particles: [], completed: false };
   for (const s of plan.seats) {
     if (!occupied.has(s.id)) continue;
     const openAngle = seatTrayOpenAngle(s.width);
@@ -210,6 +211,7 @@ export function beginUsherPour(state, target, acceptedCount) {
 }
 export function serializeUsherState(state) {
   return JSON.stringify({ version: 26, kit: true, jobs: state.jobs.map(j => ({ id: j.id, seed: j.seed, cycle: j.cycle, messVersion: j.messVersion,
+    geometryVersion: j.geometryVersion,
     seats: j.seats.map(s => ({ id: s.id, trayOpen: s.trayOpen })),
     surfaces: j.surfaces.map(s => ({ id: s.id, dirt: s.cells.map(c => c.dirt) })),
     particles: j.particles.map(p => ({ id: p.id, x: p.x, y: p.y, z: p.z, mode: p.mode === "pouring" ? "trash" : p.mode })),
@@ -245,6 +247,18 @@ export function restoreUsherState(raw, plans = [], { cycleForRoom = () => 0 } = 
       for (const p of job.particles) {
         const source = data.particles.find(d => d.id === p.id);
         if (!source || ![source.x, source.y, source.z].every(Number.isFinite) || !["floor", "chair", "falling", "pan", "trash"].includes(source.mode)) continue;
+        if ((data.geometryVersion ?? 26) < job.geometryVersion) {
+          // A v26 seat may now be several meters away, on another tier. Keep
+          // cleaning progress, but place surviving debris on its current seat
+          // or aisle instead of restoring coordinates inside a moved chair.
+          p.mode = source.mode === "falling" ? "floor" : source.mode;
+          if (p.mode === "floor") {
+            const seat = p.seatId && job.seatsById.get(p.seatId);
+            if (seat) { p.x = seat.x; p.z = seat.z + seat.forward * .49; }
+            p.y = p.floorY + .035;
+          }
+          continue;
+        }
         if (source.x < plan.bounds.xMin || source.x > plan.bounds.xMax || source.z < plan.bounds.zMin || source.z > plan.bounds.zMax || Math.abs(source.y - p.floorY) > 1) continue;
         Object.assign(p, source);
         if (p.mode === "floor" && p.seatId) {

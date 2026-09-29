@@ -102,17 +102,16 @@ export function createPropPlacements({ root, auditoriumLayouts, furnishings = []
   for (const auditorium of AUDITORIUMS) {
     const layout = auditoriumLayouts.get(auditorium.id);
     const originals = ["cushions", "backs", "bases", "arms", "trays"].map(name => named(`${auditorium.id}-seat-${name}`));
-    const width = layout.seatBounds.xMax - layout.seatBounds.xMin;
     for (const row of layout.rows) {
-      const spacing = Math.min(0.76, (width - 0.14) / row.seatCount), rowWidth = spacing * (row.seatCount - 1);
+      const spacing = row.spacing;
       const yaw = auditorium.screenSide === "north" ? 0 : Math.PI;
       for (let column = 0; column < row.seatCount; column++) {
-        const x = layout.centerX - rowWidth / 2 + column * spacing;
+        const x = row.seatCentersX[column];
         put(`${auditorium.id}-recliner-${row.index}-${column}`, "recliner", [planToWorldX(x), row.elevation, row.z],
           [spacing - 0.095, 1.36, 0.74], yaw, originals, { parent: named(`${auditorium.id}-interior`) });
       }
-      for (let divider = 0; divider <= row.seatCount; divider++) {
-        const x = layout.centerX - rowWidth / 2 - spacing / 2 + divider * spacing;
+      for (let divider = 0; divider < row.armCentersX.length; divider++) {
+        const x = row.armCentersX[divider];
         put(`${auditorium.id}-shared-arm-${row.index}-${divider}`, "shared_armrest", [planToWorldX(x), row.elevation + 0.28, row.z],
           [0.095, 0.545, 0.621], yaw, originals, { parent: named(`${auditorium.id}-interior`) });
       }

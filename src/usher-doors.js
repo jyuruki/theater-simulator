@@ -2,14 +2,12 @@ import * as THREE from "three";
 import { AUDITORIUMS } from "./layout-data.js";
 import { auditoriumDoorLayout } from "./auditorium-door-layout.js";
 import { segmentHitsBox } from "./visit-state.js";
+import { createAuditoriumDoorArt } from "./auditorium-door-art.js";
 
 /** Physical auditorium doors; guests can hold a closed door for nearby traffic. */
 export function createUsherDoors({ scene, camera, collisionWorld, showToast = () => {}, storage }) {
   const root = new THREE.Group(); root.name = "usher-auditorium-doors"; scene.add(root);
-  const geometry = new THREE.BoxGeometry(1, 1, 1);
-  const panel = new THREE.MeshStandardMaterial({ color: 0x30212a, roughness: .85 });
-  const redPanel = new THREE.MeshStandardMaterial({ color: 0x971d2b, roughness: .74 });
-  const metal = new THREE.MeshStandardMaterial({ color: 0xc8c9c9, metalness: .65, roughness: .36 });
+  const art = createAuditoriumDoorArt();
   let saved;
   try { saved = JSON.parse(storage?.getItem("mililani-doors-v22")); } catch {}
   const doors = AUDITORIUMS.map(room => {
@@ -24,12 +22,7 @@ export function createUsherDoors({ scene, camera, collisionWorld, showToast = ()
       const offset = sign * (width / 2 - (spec.small ? .065 : .15));
       hinge.position.set(x + Math.cos(spec.yaw) * offset, 0, z - Math.sin(spec.yaw) * offset); root.add(hinge);
       const leafWidth = spec.small ? width - .15 : width / 2 - .175, direction = -sign;
-      const box = (name, position, size, mat) => {
-        const mesh = new THREE.Mesh(geometry, mat); mesh.name = `${hinge.name}-${name}`;
-        mesh.position.set(...position); mesh.scale.set(...size); hinge.add(mesh); return mesh;
-      };
-      box("panel", [direction * leafWidth / 2, height / 2, 0], [leafWidth, height - .10, .045], spec.small ? redPanel : panel);
-      for (const side of [-1, 1]) box(`pushbar-${side}`, [direction * leafWidth * .6, 1.03, side * .04], [leafWidth * .55, .045, .045], metal);
+      art.build(hinge, { width: leafWidth, height, direction, small: spec.small });
       const colliders = Array.from({ length: 6 }, (_, i) => collisionWorld.addBox({
         id: `${hinge.name}-${i}`, minX: x, maxX: x + .1, minY: .05, maxY: height - .05,
         minZ: z, maxZ: z + .1, enabled: false,
@@ -131,6 +124,6 @@ export function createUsherDoors({ scene, camera, collisionWorld, showToast = ()
     get focusDistance() { return focus?.distance ?? Infinity; },
     get due() { return doors.filter(d => d.startDue).map(d => d.number); },
     getSnapshot() { return doors.map(d => ({ id: d.id, angle: d.angle, targetOpen: d.targetOpen, trafficClose: d.trafficClose, startDue: d.startDue, center: [d.x, 1, d.z], route: d.route, single: d.small, handles: d.leaves.map(l => l.hinge.localToWorld(new THREE.Vector3(l.direction * l.leafWidth * .65, 1.05, 0)).toArray()) })); },
-    dispose() { save(); root.removeFromParent(); colliders.forEach(c => collisionWorld.remove(c)); geometry.dispose(); panel.dispose(); redPanel.dispose(); metal.dispose(); },
+    dispose() { save(); root.removeFromParent(); colliders.forEach(c => collisionWorld.remove(c)); art.dispose(); },
   };
 }

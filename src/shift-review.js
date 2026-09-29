@@ -3,7 +3,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { createTheaterWorld } from "./world.js";
 import { createMaterialLibrary } from "./materials.js";
-import { AABBCollisionWorld } from "./player.js";
+import { AABBCollisionWorld, FirstPersonController } from "./player.js";
 import { createTheaterLighting } from "./lighting.js";
 import { createUsherShift } from "./usher-shift.js";
 import { createTheaterAudio } from "./atmosphere.js";
@@ -80,8 +80,36 @@ for (const room of AUDITORIUMS) {
       [planToWorldX(layout.centerX), -.15, layout.rows[0].z], room.id);
   }
 }
+// Explicit reference views are shared by manual review and evidence captures.
+for (const room of AUDITORIUMS) {
+  const layout = world.auditoriumLayouts.get(room.id), door = auditoriumDoorLayout(room);
+  if (room.entry.serviceCabinet) {
+    const c = room.entry.serviceCabinet, x = planToWorldX(c.x), normal = [Math.sin(c.yaw), Math.cos(c.yaw)];
+    add(room.id + "-cabinet", room.number + " · recessed tray / trash / broom cabinet",
+      [x + normal[0] * 1.7, 1.68, c.z + normal[1] * 1.7], [x, 1.12, c.z], room.id);
+  }
+  if ([6,7,8].includes(room.number)) add(room.id + "-recess", room.number + " · recessed entrance from hall",
+    [door.route.hall[0], 1.68, door.route.hall[2]], [door.x, 1.25, door.z], room.id);
+  if (door.small) {
+    const rear = layout.rows.at(-1);
+    add(room.id + "-landing", room.number + " · four accessible seats and entry landing",
+      [planToWorldX(layout.centerX), 1.68, room.bounds.zMax - .65],
+      [planToWorldX(layout.centerX), -.25, rear.z - 2], room.id);
+    add(room.id + "-accessible-front", room.number + " · accessible pairs from the landing front",
+      [planToWorldX(layout.centerX), 1.68, rear.z - 1.1],
+      [planToWorldX(layout.centerX), .65, rear.z + .8], room.id);
+    const aisle = Object.values(layout.sideAisles)[0];
+    if (aisle) add(room.id + "-stairs", room.number + " · stair pairs and broad row passages",
+      [planToWorldX(aisle.centerX), 1.68, rear.z - .65],
+      [planToWorldX(aisle.centerX), layout.rows[0].elevation + .2, layout.rows[0].z], room.id);
+  }
+}
 function refreshViews() {
   const snapshot = shift.getSnapshot();
+  for (const cabinet of snapshot.cabinets ?? []) for (const door of cabinet.doors) {
+    add(cabinet.id + "-cabinet-" + door.id, cabinet.number + " · operate " + door.id + " cabinet door",
+      [cabinet.stand[0], 1.68, cabinet.stand[2]], door.handle, cabinet.id);
+  }
   add("black-cleaning-tools", "Black broom and dustpan", [24.3, 1.68, 52.8], [24.3, 0, 51.2]);
   for (const bin of snapshot.waste.bins) add(bin.id, `Rolling can · ${bin.room}`, [bin.x + 1.1, 1.68, bin.z + 1.1], [bin.x, .68, bin.z]);
   const gondola = snapshot.waste.gondola; add("gondola", "Trash-room gondola", [20.45, 1.68, 60.4], [gondola.x, .8, gondola.z]);
@@ -122,6 +150,24 @@ function setView(index) {
 select.onchange = () => { action = false; document.querySelector("#work").textContent = "Hold action"; setView(+select.value); };
 const resize = () => { const stage = document.querySelector("#stage"); camera.aspect = stage.clientWidth / stage.clientHeight; camera.updateProjectionMatrix(); renderer.setSize(stage.clientWidth, stage.clientHeight, false); };
 new ResizeObserver(resize).observe(document.querySelector("#stage")); resize(); setView(0);
+document.querySelector("#door-toggle").onclick = () => {
+  const door = shift.doors.doors.find(d => d.id === roomSelect.value);
+  door.targetOpen = !door.targetOpen; door.trafficClose = false;
+  for (let i = 0; i < 40; i++) shift.doors.update(.05, {active:true});
+  status.textContent = "Theater " + door.number + " door angle: " + (door.angle * 180 / Math.PI).toFixed(1);
+};
+for (const button of document.querySelectorAll("[data-walk]")) button.onclick = () => {
+  const look = camera.getWorldDirection(new THREE.Vector3()), position = camera.position.clone(); position.y -= 1.68;
+  const dom = {addEventListener(){},removeEventListener(){},ownerDocument:{addEventListener(){},removeEventListener(){},getElementById(){return null;},defaultView:{addEventListener(){},removeEventListener(){}}}};
+  const motor = new FirstPersonController({camera,domElement:dom,collisionWorld,spawn:position,
+    groundSampler:(x,z,y)=>world.groundHeight(x,z,y),ceilingSampler:(x,z,y)=>world.ceilingHeight(x,z,y),
+    initialYaw:Math.atan2(-look.x,-look.z),initialPitch:Math.asin(look.y),walkSpeed:1.5});
+  motor.active = true; motor._keys.add(button.dataset.walk);
+  for(let i=0;i<36;i++) motor.update(1/60);
+  const traveled=position.distanceTo(motor.position);
+  controls.target.copy(camera.position).add(look); controls.update(); motor.dispose();
+  status.textContent="Player walked " + traveled.toFixed(2) + " m · feet " + (camera.position.y-1.68).toFixed(2) + " m";
+};
 document.querySelector("#use").onclick = () => shift.interact();
 document.querySelector("#broom").onclick = () => shift.selectTool("broom");
 document.querySelector("#cloth").onclick = () => shift.selectTool("cloth");
@@ -196,7 +242,7 @@ renderer.setAnimationLoop(() => {
   lighting.update(camera.position); renderer.render(scene, camera);
   if (now - lastState > 400) {
     lastState = now;
-    document.querySelector("#state").textContent = `${shift.focusedPrompt || shift.hint} · ${shift.schedule.time} · ${renderer.info.render.calls} draw calls · held: ${shift.heldTool ?? "none"} · place: ${shift.placementActive}\nMedia: ${JSON.stringify(media.getSnapshot())}\nFeature: ${JSON.stringify(features.getSnapshot())}\nCustomers: ${JSON.stringify(patrons.getSnapshot())}`;
+    document.querySelector("#state").textContent = `${shift.focusedPrompt || shift.hint} · ${shift.schedule.time} · ${renderer.info.render.calls} draw calls · held: ${shift.heldTool ?? "none"} · place: ${shift.placementActive}\nCabinets: ${JSON.stringify(shift.cabinets?.getSnapshot().map(c => ({room:c.number,doors:c.doors.map(d=>({id:d.id,angle:d.angle}))})))}\nMedia: ${JSON.stringify(media.getSnapshot())}\nFeature: ${JSON.stringify(features.getSnapshot())}\nCustomers: ${JSON.stringify(patrons.getSnapshot())}`;
   }
 });
 const loaded = await Promise.all([world.loadKioskAssets({ url: "./models/mililani-ticket-kiosk.glb" }), world.loadPropAssets({ url: "./models/theater-props.glb" }), patrons.loadAssets({ url: "./models/theater-npcs.glb" })]);

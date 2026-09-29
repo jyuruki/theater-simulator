@@ -4,6 +4,14 @@ import { createShowAttendance, MAX_SHOW_AUDIENCE } from "../src/show-attendance.
 import { createCleaningPlans } from "../src/usher-cleaning-layout.js";
 
 const plans = createCleaningPlans(), shows = [], legacy = [];
+// The v25 digest is tied to its released chair IDs and capacities, not a later
+// architectural revision. Keep that fixture explicit as small rooms change.
+const legacyPlans = plans.map(plan => {
+  const counts = [1, 2].includes(plan.number) ? [8, 10, 10, 10]
+    : plan.number >= 9 ? [10, 10, 10, 10, 10] : null;
+  return counts ? { ...plan, seats: counts.flatMap((count, row) => Array.from({ length: count }, (_, column) =>
+    ({ id: `${plan.id}-recliner-${row}-${column}`, row, column }))) } : plan;
+});
 for (let cycle = 0; cycle < 100; cycle++) for (const plan of plans) {
   const show = createShowAttendance(plan, { cycle });
   assert.deepEqual(show, createShowAttendance(plan, { cycle }), "Reload preserves the audience");
@@ -14,10 +22,11 @@ for (let cycle = 0; cycle < 100; cycle++) for (const plan of plans) {
     assert.ok(group.seatIds.length >= 1 && group.seatIds.length <= 5);
     const seats = group.seatIds.map(id => plan.seats.find(seat => seat.id === id));
     assert.ok(seats.every(seat => seat && seat.row === seats[0].row));
+    assert.ok(seats.every(seat => seat.groupIndex === seats[0].groupIndex), "Parties never straddle the accessible center gap");
     assert.ok(seats.every((seat, i) => !i || seat.column === seats[i - 1].column + 1), "Parties share adjacent seats");
   }
   shows.push({ capacity: plan.seats.length, ...show });
-  legacy.push(createShowAttendance(plan, { cycle, version: 24 }));
+  legacy.push(createShowAttendance(legacyPlans.find(legacy => legacy.id === plan.id), { cycle, version: 24 }));
 }
 // Captured from the released v0.25 recipe for the same 1,400 shows. A schedule
 // upgraded in place must retain its occupants, including every seat and party.

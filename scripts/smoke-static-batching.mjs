@@ -65,13 +65,21 @@ for (const source of reference.filter(mesh => /(?:wall|ceiling|hall|pipe)/.test(
   for (const localAxis of [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)]) {
     direction.copy(localAxis).transformDirection(source.matrixWorld);
     origin.copy(center).addScaledVector(direction, 30); ray.set(origin, direction.negate());
-    const expected = ray.intersectObjects(reference, false)[0], rendered = ray.intersectObjects(actualMeshes, false)[0];
+    const expectedHits = ray.intersectObjects(reference, false), renderedHits = ray.intersectObjects(actualMeshes, false);
+    const expected = expectedHits[0], rendered = renderedHits[0];
     assert.equal(Boolean(rendered), Boolean(expected), `${source.name} visibility matches the authored geometry`);
     if (!expected) continue;
     assert.ok(Math.abs(expected.distance - rendered.distance) < .0001, `${source.name} surface distance preserved: ${expected.object.name} ${expected.distance} / ${rendered.object.name} ${rendered.distance}; ray ${origin.toArray()} / ${direction.toArray()}`);
-    const expectedMaterial = arrays(expected.object.material)[expected.face.materialIndex ?? 0];
-    const actualMaterial = arrays(rendered.object.material)[rendered.face.materialIndex ?? 0];
-    assert.equal(actualMaterial, expectedMaterial, `${source.name} viewed surface retains the correct finish`);
+    // A ceiling top and its supporting wall header can be exactly coplanar.
+    // Float32 instance matrices change their intersection order by nanometres;
+    // insertion order does not define which of those tied faces is visible.
+    // Require every nearest finish to survive on both sides of the comparison,
+    // rather than accepting whichever material happens to sort first.
+    const nearestFinishes = hits => [...new Set(hits
+      .filter(hit => hit.distance - hits[0].distance < .00001)
+      .map(hit => arrays(hit.object.material)[hit.face.materialIndex ?? 0].uuid))].sort();
+    assert.deepEqual(nearestFinishes(renderedHits), nearestFinishes(expectedHits),
+      `${source.name} viewed surface retains all nearest coplanar finishes`);
     probes++;
   }
 }

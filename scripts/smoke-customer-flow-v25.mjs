@@ -44,7 +44,14 @@ const pending = customers.navigation.theaterPathAsync("theater-14");
 setTimeout(() => { ticked = true; }, 0);
 const route = await pending;
 assert.ok(route?.length > 1 && ticked, "Long routes yield to input/render event loop");
-const event = { id: "day-start-test-2", theaterId: "theater-2", kind: "start", time: 720, cycle: 1, audienceCycle: 1, attendanceVersion: 24 };
+// Exercise three distinct arrival waves. Architecture changes may alter a
+// particular cycle's party count, so find a seeded three-party fixture first.
+const plan = customers.navigation.seatPlans.find(plan => plan.id === "theater-2");
+const fixture = Array.from({ length: 32 }, (_, cycle) => createShowAttendance(plan, { cycle, version: 24 }))
+  .find(show => show.groups.length === 3);
+assert.ok(fixture, "A deterministic three-party screening must be available");
+const event = { id: "day-start-test-2", theaterId: "theater-2", kind: "start", time: 720,
+  cycle: fixture.cycle, audienceCycle: fixture.cycle, attendanceVersion: 24 };
 let minute = 705, maxTurn = 0, movingSamples = 0, turns = new Map();
 async function advance(seconds) {
   for (let i = 0; i < seconds * 20; i++) {
@@ -62,11 +69,12 @@ await advance(2);
 assert.equal(customers.getSnapshot().actors.length, 0, "No party spawns before its arrival time");
 minute = 706.1; await advance(210);
 const early = customers.getSnapshot().actors.length;
-const expected = createShowAttendance(customers.navigation.seatPlans.find(plan => plan.id === "theater-2"), { cycle: 1, version: 24 }).count;
-assert.ok(early > 0 && early < expected, "Only the early party enters first");
+const expected = fixture.count;
+assert.equal(early, fixture.groups[0].seatIds.length, "Only the early party enters first");
 minute = 714; await advance(180);
 const middle = customers.getSnapshot().actors.length;
-assert.ok(middle > early && middle < expected, "Another party arrives separately before the show");
+assert.equal(middle, fixture.groups[0].seatIds.length + fixture.groups[1].seatIds.length,
+  "Another party arrives separately before the show while the late party waits");
 minute = 721.2; await advance(180);
 const final = customers.getSnapshot().actors.filter(actor => actor.state === "seated").length;
 assert.equal(final, expected, "Late party enters through automatically reopened doors during the start window");
@@ -75,7 +83,7 @@ assert.ok(doors.doors.find(door => door.id === "theater-2").angle < .002, "Last 
 console.log(JSON.stringify({ startupSearches: 1, early, middle, final, maxTurn, navigation: customers.navigation.stats }));
 customers.dispose();
 const preShow = createShowCustomers({ scene, world, camera, collisionWorld, doors, waste });
-assert.equal(preShow.restoreSchedule({ mode: "day", minute: 714, events: [event], done: [] }), 8, "Pre-show reload restores due parties but not the late party");
+assert.equal(preShow.restoreSchedule({ mode: "day", minute: 714, events: [event], done: [] }), middle, "Pre-show reload restores due parties but not the late party");
 preShow.syncSchedule({ minute: 714, events: [event] });
 assert.equal(preShow.getSnapshot().queued.length, 1, "Live schedule object without done does not duplicate restored queue");
 assert.equal(preShow.onStart(event), false);

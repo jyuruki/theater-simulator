@@ -191,11 +191,12 @@ for (const room of AUDITORIUMS) {
   const arms = world.root.getObjectByName(`${room.id}-seat-arms`);
   assert.equal(backs.count, room.seats);
   let seatIndex = 0, armIndex = 0;
-  for (const count of room.rows) {
-    const armBoxes = boxes(arms, armIndex, count + 1);
+  for (const row of world.auditoriumLayouts.get(room.id).rows) {
+    const count = row.seatCount;
+    const armBoxes = boxes(arms, armIndex, row.armCentersX.length);
     separated([...boxes(backs, seatIndex, count), ...armBoxes], `${room.id} backrests/arms`);
     separated([...boxes(cushions, seatIndex, count), ...armBoxes], `${room.id} cushions/arms`);
-    seatIndex += count; armIndex += count + 1;
+    seatIndex += count; armIndex += row.armCentersX.length;
   }
   assert.equal(armIndex, arms.count, "Each row has one shared armrest at each seat boundary");
   seats += backs.count;
@@ -205,7 +206,7 @@ for (const room of AUDITORIUMS) {
       room.id, `${room.id} bowl must select its screen/location`);
   }
 }
-assert.equal(seats, 1093);
+assert.equal(seats, 985);
 assert.equal(zoneAt(-5.5, 80, 0).id, "theater-3-entry");
 for (const storage of SERVICE_ROOMS.filter(r => r.kind === "storage-lower")) {
   const x = (storage.bounds.xMin + storage.bounds.xMax) / 2;
@@ -240,4 +241,4 @@ for (const [x, z] of [[-22.2, 2.9], [-24.7, 13], [-22.3, 18.1]]) {
   assert.ok(firstSurface?.object.castShadow, `Light leaks through the room shell at ${x}, ${z}`);
 }
 world.dispose(); materials.dispose();
-console.log(`Enclosure regression valid: ${enclosureApproaches} elevated-edge walks blocked · ${stairClosureRays} solid risers and ${wallMarginRays} closed wall margins · ${cubbyRearSeals} rear-cubby floor seals · ${wallHugChecks} reachable capsule margins match the floor · T2 cleaning sky leaks closed · T3 upper shell closed · 1,093 seats without adjacent mesh overlap · stacked zones, visible signs and interior shadow occlusion correct.`);
+console.log(`Enclosure regression valid: ${enclosureApproaches} elevated-edge walks blocked · ${stairClosureRays} solid risers and ${wallMarginRays} closed wall margins · ${cubbyRearSeals} rear-cubby floor seals · ${wallHugChecks} reachable capsule margins match the floor · T2 cleaning sky leaks closed · T3 upper shell closed · 985 seats without adjacent mesh overlap · stacked zones, visible signs and interior shadow occlusion correct.`);
